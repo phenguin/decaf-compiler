@@ -1,6 +1,3 @@
-class Program {
-  void main() {
-    int callout;	// callout is a reserved word
-  }
+void main ( ) {
+  int callout; // callout is a reserved word
 }
-

@@ -1,11 +1,10 @@
-class Program {
-  void bar(int a) {
-    for (i = 0; a) {
-      callout("printf", "%d\n", i);
-    }
+callout printf;
+void bar ( int a ) {
+  int i;
+  for ( i = 0; a ) {
+    printf ( "%d\n", i );
   }
-
-  void main() {
-    bar(10);
-  }
+}
+void main ( ) {
+  bar ( 10 );
 }

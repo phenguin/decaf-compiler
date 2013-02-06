@@ -1,4 +1,1 @@
-class Program {
-  int i	// missing semicolon
-}
-
+int i // missing semicolon

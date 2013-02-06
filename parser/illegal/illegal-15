@@ -1,6 +1,4 @@
-class Program {
-  int main(int a) {
-    foo(int);	// type in function call
-  }
+int main ( int a ) {
+  foo ( int );
+  // type in function call
 }
-

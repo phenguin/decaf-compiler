@@ -1,3 +1,2 @@
-class Program {
-  void main() {
-} // missing closing brace
+void main ( ) {
+// missing closing brace

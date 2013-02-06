@@ -1,7 +1,6 @@
-class Program {
-  void main() {
-    int char;
-    char = 'a';
-    callout("printf", "%c\n", char);
-  }
+callout printf;
+void main ( ) {
+  int char;
+  char = 'a';
+  printf ( "%c\n", char );
 }

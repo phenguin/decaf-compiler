@@ -1,15 +1,11 @@
-class Program {
-  int abs(int a) {
-    if (a < 0) {
-      int b;
-      b = -a;
-      return b;
-    }
-
-    return a;
+int abs ( int a ) {
+  if ( a < 0 ) {
+    int b;
+    b = -a;
+    return b;
   }
-
-  void main() {
-    abs(-5);
-  }
+  return a;
+}
+void main ( ) {
+  abs ( -5 );
 }

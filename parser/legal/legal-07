@@ -1,17 +1,13 @@
-class Program {
-  int abs(int a) {
-    int b;
-    if (a < 0) {
-      b = -a;
-    }
-    else {
-      b = a;
-    }
-
-    return b;
+int abs ( int a ) {
+  int b;
+  if ( a < 0 ) {
+    b = -a;
   }
-
-  int main() {
-    return abs(-2);
+  else {
+    b = a;
   }
+  return b;
+}
+int main ( ) {
+  return abs ( -2 );
 }

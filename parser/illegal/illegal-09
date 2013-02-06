@@ -1,6 +1,4 @@
-class Program {
-  void main() {
-    Int b;	// should be int
-  }
+void main ( ) {
+  Int b;
+  // should be int
 }
-
