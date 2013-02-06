@@ -1,0 +1,6 @@
+class Program {
+  void main() {
+    0xcafe();	// bad identifier
+  }
+}
+

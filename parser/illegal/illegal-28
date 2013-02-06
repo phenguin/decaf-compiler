@@ -1,0 +1,19 @@
+class Program {
+    boolean main() {
+        if (true) {
+            if (false) {
+            } else if (4==5) { // This is incorrect in our grammar
+                callout("printf");
+                if (test == test2[45]) {
+                    foo();
+                }
+            }
+            else {
+                callout("printf", 5);
+            }
+        }
+    }
+
+    boolean void foo() {
+    }
+}

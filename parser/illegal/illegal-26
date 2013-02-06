@@ -1,0 +1,19 @@
+class Program {
+    void main() {
+        int boolean;
+        int break;
+        int callout;
+        int class;
+        int continue;
+        int else;
+        int false;
+        int for;
+        int if;
+        int int;
+        int return;
+        int true;
+        int void;
+        int while;
+    }
+    int global;
+}

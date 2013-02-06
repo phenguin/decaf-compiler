@@ -1,0 +1,5 @@
+class Program {
+    int a = '5';
+}
+
+

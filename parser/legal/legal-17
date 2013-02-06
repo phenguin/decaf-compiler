@@ -1,0 +1,6 @@
+class Program {
+  void main() {
+    int a;
+    int a;	// semanitcally bad, but gramatically ok
+  }
+}

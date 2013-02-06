@@ -1,0 +1,6 @@
+class Program {
+  void main() {
+    callout(5);	// first arg must be a string
+  }
+}
+

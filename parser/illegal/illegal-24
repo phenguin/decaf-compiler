@@ -1,0 +1,5 @@
+class Program {
+    int a,b,c;
+    boolean false;
+    boolean true;
+}

@@ -1,0 +1,4 @@
+class Program {
+  int i[];	// missing array size
+}
+

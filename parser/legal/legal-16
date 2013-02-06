@@ -1,0 +1,7 @@
+class Program {
+  void main() {
+    int char;
+    char = 'a';
+    callout("printf", "%c\n", char);
+  }
+}
