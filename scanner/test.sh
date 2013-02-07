@@ -1,9 +1,8 @@
 #!/bin/sh
 
 runscanner() {
-  cd `dirname $1`;
   java -jar `dirname $0`/../../dist/Compiler.jar \
-    -target scan -compat `basename $1`
+    -target scan -compat $1
 }
 
 fail=0
@@ -16,6 +15,7 @@ for file in `dirname $0`/input/*; do
     fail=1
   fi
   rm $output;
+  break
 done
 
 exit $fail;

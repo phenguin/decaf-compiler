@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 runparser() {
   java -jar `dirname $0`/../../dist/Compiler.jar -target parse $1
