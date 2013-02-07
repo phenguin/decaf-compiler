@@ -1,7 +1,7 @@
 #!/bin/bash
 
 runparser() {
-  java -jar `dirname $0`/../../dist/Compiler.jar -target parse $1
+  java -jar `dirname $0`/../../dist/Compiler.jar --target=parse $1
 }
 
 fail=0

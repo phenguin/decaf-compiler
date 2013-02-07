@@ -2,7 +2,7 @@
 
 runscanner() {
   java -jar `dirname $0`/../../dist/Compiler.jar \
-    -target scan -compat $1
+    --target=scan -compat $1
 }
 
 fail=0
