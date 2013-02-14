@@ -7,3 +7,6 @@
 *.hi
 *.o
 dist/
+
+# Decaf output files
+*.scan
