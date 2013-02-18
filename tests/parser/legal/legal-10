@@ -1,7 +1,7 @@
 callout printf;
 void bar ( int a ) {
   int i;
-  for ( i = 0; a ) {
+  for ( i = 0, a ) {
     printf ( "%d\n", i );
     if ( a == 4 ) {
       break;

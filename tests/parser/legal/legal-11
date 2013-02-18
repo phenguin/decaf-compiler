@@ -1,7 +1,7 @@
 int A[10];
 void bar ( ) {
   int i;
-  for ( i = 0; 10 ) {
+  for ( i = 0, 10 ) {
     A[i] = i;
   }
 }
