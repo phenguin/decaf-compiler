@@ -17,7 +17,7 @@ int foo ( ) {
 }
 boolean baz ( int a, int b, boolean c ) {
   if ( true ) {
-    for ( i = 5; 3+4 ) {
+    for ( i = 5, 3+4 ) {
       printf ( "woot" );
     }
   }
