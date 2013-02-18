@@ -11,5 +11,5 @@ int func1 ( int a ) {
     b = 45 + ( !!!--true );
   }
   return 0x45;
-  return ( 0xBB + 0b11 );
+  return ( 0xBB + 3 );
 }
