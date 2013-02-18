@@ -1,13 +1,13 @@
 #!/bin/bash
 
 runparser() {
-  java -jar `dirname $0`/../../dist/Compiler.jar --target=parse $1
+  $(git rev-parse --show-toplevel)/run.sh -t parse $1
 }
 
 fail=0
 
 for file in `dirname $0`/illegal/*; do
-  if runparser $file; then
+  if runparser > /dev/null 2>&1 $file; then
     echo "Illegal file $file parsed successfully.";
     fail=1
   fi
