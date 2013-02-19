@@ -95,7 +95,7 @@ tokens :-
   false { \posn s -> scannedToken posn $ BoolLiteral False }
 
   -- String literals
-  \" ( (\\ $escapeChars)? | ($printable # [\\ \' \"])? )* \"   { \posn s -> scannedToken posn $ StringLiteral $ unescapeString s }
+  \" ( (\\ $escapeChars)? | ($printable # [\\ \' \"])? )* \"   { \posn s -> scannedToken posn $ StringLiteral $ unescapeString $ init $ tail s }
 
 
   \{        { \posn _ -> scannedToken posn LCurly }
@@ -114,6 +114,7 @@ tokens :-
 ----------------------------- Representing tokens -----------------------------
 
 {
+
 -- | A token with position information.
 data ScannedToken = ScannedToken { line :: Int
                                  , column :: Int
@@ -121,37 +122,42 @@ data ScannedToken = ScannedToken { line :: Int
                                  } deriving (Eq)
 
 
-data ArithOpType = Add | Subtract | Multiply | Divide | Modulo deriving (Eq, Show)
+data ArithOpType = Add | Subtract | Multiply | Divide | Modulo deriving (Eq)
 
--- instance Show ArithOpType where
---     show Add = "+"
---     show Subtract = "-"
---     show Multiply = "*"
---     show Divide = "/"
---     show Modulo = "%"
+instance Show ArithOpType where
+    show Add = "+"
+    show Subtract = "-"
+    show Multiply = "*"
+    show Divide = "/"
+    show Modulo = "%"
 
-data RelOpType = LessT | LessTE | GreaterT | GreaterTE deriving (Eq, Ord, Show)
+data RelOpType = LessT | LessTE | GreaterT | GreaterTE deriving (Eq, Ord)
 
-data AssignOpType = SetOp | SetPlusOp | SetMinusOp deriving (Eq, Show)
+instance Show RelOpType where
+    show LessT = "<"
+    show LessTE = "<="
+    show GreaterT = ">="
+    show GreaterTE = ">"
+ 
+data AssignOpType = SetOp | SetPlusOp | SetMinusOp deriving (Eq)
 
--- instance Show RelOpType where
---     show LessT = "<"
---     show LessTE = "<="
---     show GreaterT = ">="
---     show GreaterTE = ">"
--- 
-data EqOpType = Equal | NEqual deriving (Eq, Ord, Show)
+instance Show AssignOpType where
+    show SetOp = "="
+    show SetPlusOp = "+="
+    show SetMinusOp = "-="
+ 
+data EqOpType = Equal | NEqual deriving (Eq, Ord)
 
---instance Show EqOpType where
---    show Equal = "=="
---    show NEqual = "!="
---
-data CondOpType = And | Or deriving (Eq, Show)
+instance Show EqOpType where
+    show Equal = "=="
+    show NEqual = "!="
 
--- instance Show CondOpType where
---     show And = "&&"
---     show Or = "||"
--- 
+data CondOpType = And | Or deriving (Eq)
+
+instance Show CondOpType where
+    show And = "&&"
+    show Or = "||"
+
 -- | A token.
 data Token = Keyword String
            | Identifier String
@@ -185,16 +191,22 @@ data Token = Keyword String
            | SemiColon
            deriving (Eq)
 
+showOrigChar :: Char -> String
+showOrigChar '\t' = "\\t"
+showOrigChar '\\' = "\\\\"
+showOrigChar '\'' = "\\\'"
+showOrigChar '\"' = "\\\""
+showOrigChar '\n' = "\\n"
+showOrigChar x = [x]
+
 instance Show Token where
   show (Keyword k) = k
   show (StatementMarker k) = k
-  show (Identifier s) = "IDENTIFIER: " ++ s
-  show (CharLiteral '\t') = "CHAR: " ++ "<TAB>"
-  show (CharLiteral '\n') = "CHAR: " ++ "<NEWLINE>"
-  show (CharLiteral c) = "CHAR: " ++ [c]
-  show (BoolLiteral b) = show b
-  show (StringLiteral s) = "STRING: " ++ s
-  show (Number n) = "NUM: " ++ show n
+  show (Identifier s) = "IDENTIFIER " ++ s
+  show (CharLiteral c) = "CHARLITERAL \'" ++ showOrigChar c ++ "\'"
+  show (BoolLiteral b) = "BOOLEANLITERAL " ++ (map toLower . show) b
+  show (StringLiteral s) = "STRINGLITERAL \"" ++ (concat . map showOrigChar) s ++ "\""
+  show (Number n) = "INTLITERAL " ++ show n
   show (ArithOp o) = show o
   show (RelOp o) = show o
   show (EqOp o) = show o
@@ -208,16 +220,16 @@ instance Show Token where
   show RSquare = "]"
   show SemiColon = ";"
   show Not = "!"
-  show (DataType t) = "Type: " ++ t
+  show (DataType t) = t
   show If = "If"
-  show For = "For"
-  show While = "While"
-  show Return = "Return"
-  show Break = "Break"
-  show Continue = "Continue"
-  show Else = "Else"
-  show Void = "Void"
-  show Callout = "Callout"
+  show For = "for"
+  show While = "while"
+  show Return = "return"
+  show Break = "break"
+  show Continue = "continue"
+  show Else = "else"
+  show Void = "void"
+  show Callout = "callout"
 
 {-| Smart constructor to create a 'ScannedToken' by extracting the line and
 column numbers from an 'AlexPosn'. -}
