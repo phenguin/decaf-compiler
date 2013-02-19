@@ -81,14 +81,14 @@ tokens :-
   boolean { \posn s -> scannedToken posn $ DataType s } 
 
   -- Character literals
-  \' $printable # $escapeChars \'  { \posn s -> scannedToken posn $ CharLiteral (s !! 1) }
+  \' $printable # [\' \" \\] \'  { \posn s -> scannedToken posn $ CharLiteral (s !! 1) }
   \' \\ $escapeChars \'  { \posn s -> scannedToken posn $ CharLiteral $ parseEscapeChar (s !! 2) }
 
   -- Hex literals
-  \-? 0x $hexDigit+ / $literalTrailers     { \posn s -> scannedToken posn $ Number (read s) } 
+  0x $hexDigit+ / $literalTrailers     { \posn s -> scannedToken posn $ Number (read s) } 
 
   -- Number literals
-  \-? $digit+ / $literalTrailers  { \posn s -> scannedToken posn $ Number (read s) } 
+  $digit+ / $literalTrailers  { \posn s -> scannedToken posn $ Number (read s) } 
 
   -- Bool Literals
   true { \posn s -> scannedToken posn $ BoolLiteral True }
