@@ -221,7 +221,7 @@ instance Show Token where
   show SemiColon = ";"
   show Not = "!"
   show (DataType t) = t
-  show If = "If"
+  show If = "if"
   show For = "for"
   show While = "while"
   show Return = "return"
