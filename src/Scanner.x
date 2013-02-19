@@ -23,47 +23,92 @@ module Scanner ( ScannedToken(..)
 
 ----------------------------------- Tokens ------------------------------------
 
-$alpha = [a-zA-Z]
-$digits = [0-9]
-$hexdigits = [0-9A-Fa-f]
-$escapechars = [\" \' \\]
+$digit = [0-9]
+$alpha = [a-zA-Z_]
+$alphanum = [$alpha $digit]
+$hexDigit = [0-9A-Fa-f]
+$escapeChars = [t n \' \\ \"] 
+$opchars = []
+$eqchars = []
+$symbols = [\* \+ \- \/ \% = ! \< \> \[ \] \( \) \;]
+$literalTrailers = [$white $symbols]
+-- "
+@keywords = class | boolean | break | callout | continue | else | false | for | while | if | int | return | true | void
+@statementMarker = if | for | while | return | break | continue
 
 tokens :-
   $white+ ;
   "//".*  ;                     -- comment
 
   -- Reserved words
-  class     { \posn s -> scannedToken posn $ Keyword s }
-  boolean   { \posn s -> scannedToken posn $ Keyword s }
-  break     { \posn s -> scannedToken posn $ Keyword s }
-  callout   { \posn s -> scannedToken posn $ Keyword s }
-  continue  { \posn s -> scannedToken posn $ Keyword s }
-  else      { \posn s -> scannedToken posn $ Keyword s }
-  false     { \posn s -> scannedToken posn $ Keyword s }
-  for       { \posn s -> scannedToken posn $ Keyword s }
-  while     { \posn s -> scannedToken posn $ Keyword s }
-  if        { \posn s -> scannedToken posn $ Keyword s }
-  int       { \posn s -> scannedToken posn $ Keyword s }
-  return    { \posn s -> scannedToken posn $ Keyword s }
-  true      { \posn s -> scannedToken posn $ Keyword s }
-  void      { \posn s -> scannedToken posn $ Keyword s }
+
+  if { \posn s -> scannedToken posn If }
+  for { \posn s -> scannedToken posn For }
+  while { \posn s -> scannedToken posn While }
+  return { \posn s -> scannedToken posn Return }
+  break { \posn s -> scannedToken posn Break }
+  continue { \posn s -> scannedToken posn Continue }
+  else { \posn s -> scannedToken posn Else }
+  void { \posn s -> scannedToken posn Void }
+  callout { \posn s -> scannedToken posn Callout }
+
+  -- @statementMarker   { \posn s -> scannedToken posn $ StatementMarker s }
+
+  -- Operators of various types
+  == { \posn s -> scannedToken posn $ EqOp Equal }
+  != { \posn s -> scannedToken posn $ EqOp NEqual }
+
+  && { \posn s -> scannedToken posn $ CondOp And }
+  \| \| { \posn s -> scannedToken posn $ CondOp Or }
+
+  = { \posn s -> scannedToken posn $ AssignOp SetOp }
+  \+ ={ \posn s -> scannedToken posn $ AssignOp SetPlusOp }
+  \- ={ \posn s -> scannedToken posn $ AssignOp SetMinusOp }
+
+  \< { \posn s -> scannedToken posn $ RelOp LessT }
+  \> { \posn s -> scannedToken posn $ RelOp GreaterT }
+  \< = { \posn s -> scannedToken posn $ RelOp LessTE }
+  \> = { \posn s -> scannedToken posn $ RelOp GreaterTE }
+
+  \+  { \posn s -> scannedToken posn $ ArithOp Add }
+  \- { \posn s -> scannedToken posn $ ArithOp Subtract }
+  \* { \posn s -> scannedToken posn $ ArithOp Multiply }
+  \/ { \posn s -> scannedToken posn $ ArithOp Divide }
+  \% { \posn s -> scannedToken posn $ ArithOp Modulo }
+
+  -- The only two types supported: boolean and int
+  int { \posn s -> scannedToken posn $ DataType s } 
+  boolean { \posn s -> scannedToken posn $ DataType s } 
 
   -- Character literals
-  \' $printable # $escapechars \'  { \posn s -> scannedToken posn $ CharLiteral (s !! 1) }
-  \' \\ [t n \' \\ \"] \'  { \posn s -> scannedToken posn $ CharLiteral $ parseEscapeChar (s !! 2) }
-
-  -- Hex number literals
+  \' $printable # $escapeChars \'  { \posn s -> scannedToken posn $ CharLiteral (s !! 1) }
+  \' \\ $escapeChars \'  { \posn s -> scannedToken posn $ CharLiteral $ parseEscapeChar (s !! 2) }
 
   -- Hex literals
-  \-? 0x $hexdigits+    { \posn s -> scannedToken posn $ Number (read s) } 
+  \-? 0x $hexDigit+ / $literalTrailers     { \posn s -> scannedToken posn $ Number (read s) } 
 
   -- Number literals
-  \-? $digits+    { \posn s -> scannedToken posn $ Number (read s) } 
+  \-? $digit+ / $literalTrailers  { \posn s -> scannedToken posn $ Number (read s) } 
+
+  -- Bool Literals
+  true { \posn s -> scannedToken posn $ BoolLiteral True }
+  false { \posn s -> scannedToken posn $ BoolLiteral False }
+
+  -- String literals
+  \" ( (\\ $escapeChars)? | ($printable # [\\ \' \"])? )* \"   { \posn s -> scannedToken posn $ StringLiteral $ unescapeString s }
 
 
   \{        { \posn _ -> scannedToken posn LCurly }
+  \;        { \posn _ -> scannedToken posn SemiColon }
+  \!        { \posn _ -> scannedToken posn Not }
   \}        { \posn _ -> scannedToken posn RCurly }
-  $alpha+   { \posn s -> scannedToken posn $ Identifier s }
+  \[        { \posn _ -> scannedToken posn LSquare }
+  \]        { \posn _ -> scannedToken posn RSquare }
+  \(        { \posn _ -> scannedToken posn LParen }
+  \)        { \posn _ -> scannedToken posn RParen }
+
+  -- Identifiers
+  $alpha $alphanum*  { \posn s -> scannedToken posn $ Identifier s }
 
 
 ----------------------------- Representing tokens -----------------------------
@@ -75,26 +120,104 @@ data ScannedToken = ScannedToken { line :: Int
                                  , extractRawToken :: Token
                                  } deriving (Eq)
 
+
+data ArithOpType = Add | Subtract | Multiply | Divide | Modulo deriving (Eq, Show)
+
+-- instance Show ArithOpType where
+--     show Add = "+"
+--     show Subtract = "-"
+--     show Multiply = "*"
+--     show Divide = "/"
+--     show Modulo = "%"
+
+data RelOpType = LessT | LessTE | GreaterT | GreaterTE deriving (Eq, Ord, Show)
+
+data AssignOpType = SetOp | SetPlusOp | SetMinusOp deriving (Eq, Show)
+
+-- instance Show RelOpType where
+--     show LessT = "<"
+--     show LessTE = "<="
+--     show GreaterT = ">="
+--     show GreaterTE = ">"
+-- 
+data EqOpType = Equal | NEqual deriving (Eq, Ord, Show)
+
+--instance Show EqOpType where
+--    show Equal = "=="
+--    show NEqual = "!="
+--
+data CondOpType = And | Or deriving (Eq, Show)
+
+-- instance Show CondOpType where
+--     show And = "&&"
+--     show Or = "||"
+-- 
 -- | A token.
 data Token = Keyword String
            | Identifier String
+           | DataType String
            | CharLiteral Char
            | StringLiteral String
+           | BoolLiteral Bool
+           | Not
            | Number Integer
+           | StatementMarker String
+           | If
+           | For
+           | While
+           | Return
+           | Break
+           | Continue
+           | Else
+           | Void
+           | Callout
+           | ArithOp ArithOpType
+           | AssignOp AssignOpType
+           | EqOp EqOpType
+           | RelOp RelOpType
+           | CondOp CondOpType
            | LCurly
            | RCurly
+           | LParen
+           | RParen
+           | LSquare
+           | RSquare
+           | SemiColon
            deriving (Eq)
 
 instance Show Token where
   show (Keyword k) = k
+  show (StatementMarker k) = k
   show (Identifier s) = "IDENTIFIER: " ++ s
   show (CharLiteral '\t') = "CHAR: " ++ "<TAB>"
   show (CharLiteral '\n') = "CHAR: " ++ "<NEWLINE>"
   show (CharLiteral c) = "CHAR: " ++ [c]
+  show (BoolLiteral b) = show b
   show (StringLiteral s) = "STRING: " ++ s
   show (Number n) = "NUM: " ++ show n
+  show (ArithOp o) = show o
+  show (RelOp o) = show o
+  show (EqOp o) = show o
+  show (AssignOp o) = show o
+  show (CondOp o) = show o
   show LCurly = "{"
   show RCurly = "}"
+  show LParen = "("
+  show RParen = ")"
+  show LSquare = "["
+  show RSquare = "]"
+  show SemiColon = ";"
+  show Not = "!"
+  show (DataType t) = "Type: " ++ t
+  show If = "If"
+  show For = "For"
+  show While = "While"
+  show Return = "Return"
+  show Break = "Break"
+  show Continue = "Continue"
+  show Else = "Else"
+  show Void = "Void"
+  show Callout = "Callout"
 
 {-| Smart constructor to create a 'ScannedToken' by extracting the line and
 column numbers from an 'AlexPosn'. -}
@@ -106,6 +229,11 @@ parseEscapeChar 't' = '\t'
 parseEscapeChar 'n' = '\n'
 parseEscapeChar c = c
 
+unescapeString :: String -> String
+unescapeString [] = []
+unescapeString ('\\':c:cs) = (parseEscapeChar c):(unescapeString cs)
+unescapeString (c1:c2:cs) = c1:(unescapeString (c2:cs))
+unescapeString [c] = [c]
 
 
 ---------------------------- Scanning entry point -----------------------------

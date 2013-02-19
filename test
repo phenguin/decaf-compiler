@@ -1,0 +1,11 @@
+boolean my_bool = true;
+int i = 100;
+
+while (i<100) {
+   i -= 1;
+   if (i % 6 > 2) {
+       my_bool = false;
+   }
+}
+
+i = i && my_bool
