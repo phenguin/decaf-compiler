@@ -85,10 +85,13 @@ tokens :-
   \' \\ $escapeChars \'  { \posn s -> scannedToken posn $ CharLiteral $ parseEscapeChar (s !! 2) }
 
   -- Hex literals
-  0x $hexDigit+ / $literalTrailers     { \posn s -> scannedToken posn $ Number (read s) } 
+  0x $hexDigit+ / $literalTrailers     { \posn s -> scannedToken posn $ Number s } 
 
   -- Number literals
-  $digit+ / $literalTrailers  { \posn s -> scannedToken posn $ Number (read s) } 
+  $digit+ / $literalTrailers  { \posn s -> scannedToken posn $ Number s } 
+
+  -- Unary minus symbol 
+  \- { \posn s -> scannedToken posn $ MinusSymbol } 
 
   -- Bool Literals
   true { \posn s -> scannedToken posn $ BoolLiteral True }
@@ -166,7 +169,7 @@ data Token = Keyword String
            | StringLiteral String
            | BoolLiteral Bool
            | Not
-           | Number Integer
+           | Number String
            | StatementMarker String
            | If
            | For
@@ -189,6 +192,7 @@ data Token = Keyword String
            | LSquare
            | RSquare
            | SemiColon
+           | MinusSymbol
            deriving (Eq)
 
 showOrigChar :: Char -> String
@@ -206,7 +210,7 @@ instance Show Token where
   show (CharLiteral c) = "CHARLITERAL \'" ++ showOrigChar c ++ "\'"
   show (BoolLiteral b) = "BOOLEANLITERAL " ++ (map toLower . show) b
   show (StringLiteral s) = "STRINGLITERAL \"" ++ (concat . map showOrigChar) s ++ "\""
-  show (Number n) = "INTLITERAL " ++ show n
+  show (Number s) = "INTLITERAL " ++ s
   show (ArithOp o) = show o
   show (RelOp o) = show o
   show (EqOp o) = show o
@@ -219,6 +223,7 @@ instance Show Token where
   show LSquare = "["
   show RSquare = "]"
   show SemiColon = ";"
+  show MinusSymbol = "-"
   show Not = "!"
   show (DataType t) = t
   show If = "if"
