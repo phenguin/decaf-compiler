@@ -80,21 +80,14 @@ import Scanner (ScannedToken(..), Token(..))
 
 %% -------------------------------- Grammar -----------------------------------
 
-MethodCall : MethodName "(" CommaExprs ")" { ExprParamMethodCall $1 $3 }
+MethodCall : MethodName "(" ")" { ParamlessMethodCall $1 }
+        | MethodName "(" CommaExprs ")" { ExprParamMethodCall $1 $3 }
         | MethodName "(" CommaCalloutArgs ")" { CalloutParamMethodCall $1 $3 }
 
 MethodName : id { MethodName $1 }
 
 Location : id { Location $1 }
         | id "[" Expr "]" { IndexedLocation $1 $3 }
-
--- Expr : Literal { LiteralExpr $1 }
---         | Expr BinOp Expr { CombinedExpr $2 $1 $3  }
---         | "-" Expr { NegatedExpr $2 }
---         | MethodCall { MethodCallExpr $1 }
---         | Location { LocationExpr $1 }
---         | "!" Expr { NotExpr $2 }
---         | "(" Expr ")" { ParenExpr $2 }
 
 Expr : Expr "||" Expr1 { OrExpr $1 $3 }
      | Expr1 { Expr1 $1 }
@@ -151,7 +144,8 @@ Literal : int { Int $1 }
 ----------------------------------- Haskell -----------------------------------
 {
 
-data MethodCall = ExprParamMethodCall MethodName CommaExprs
+data MethodCall = ParamlessMethodCall MethodName
+                | ExprParamMethodCall MethodName CommaExprs
                 | CalloutParamMethodCall MethodName CommaCalloutArgs
 
 data CalloutArg = ExprCalloutArg Expr
