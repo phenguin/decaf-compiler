@@ -89,6 +89,7 @@ MethodName : id { MethodName $1 }
 Location : id { Location $1 }
         | id "[" Expr "]" { IndexedLocation $1 $3 }
 
+-- Order of operations stuff
 Expr : Expr "||" Expr1 { OrExpr $1 $3 }
      | Expr1 { Expr1 $1 }
 
