@@ -18,4 +18,4 @@ add () {
 cd $(git rev-parse --show-toplevel)
 add -f ghc
 cabal --package-db=clear --package-db=$PLATFORM_PACKAGE_DB configure
-cabal --alex-options="--ghc --template=\"$(git rev-parse --show-toplevel)/alex\""  build
+cabal --happy-options="-ad" --alex-options="--ghc --template=\"$(git rev-parse --show-toplevel)/alex\""  build
