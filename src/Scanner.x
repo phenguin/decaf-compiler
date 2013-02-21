@@ -30,7 +30,7 @@ $hexDigit = [0-9A-Fa-f]
 $escapeChars = [t n \' \\ \"] 
 $opchars = []
 $eqchars = []
-$symbols = [\* \+ \- \/ \% = ! \< \> \[ \] \( \) \;]
+$symbols = [\* \+ \- \/ \% = ! \< \> \[ \] \( \) \; \,]
 $literalTrailers = [$white $symbols]
 -- "
 @keywords = class | boolean | break | callout | continue | else | false | for | while | if | int | return | true | void
@@ -100,6 +100,7 @@ tokens :-
 
   \{        { \posn _ -> scannedToken posn LCurly }
   \;        { \posn _ -> scannedToken posn SemiColon }
+  \,        { \posn _ -> scannedToken posn Comma }
   \!        { \posn _ -> scannedToken posn Not }
   \}        { \posn _ -> scannedToken posn RCurly }
   \[        { \posn _ -> scannedToken posn LSquare }
@@ -186,6 +187,7 @@ data Token = Identifier String
            | LSquare
            | RSquare
            | SemiColon
+           | Comma
            | MinusSymbol
            deriving (Eq)
 
@@ -215,6 +217,7 @@ instance Show Token where
   show LSquare = "["
   show RSquare = "]"
   show SemiColon = ";"
+  show Comma = ","
   show MinusSymbol = "-"
   show Not = "!"
   show (DataType t) = t

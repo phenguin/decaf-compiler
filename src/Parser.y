@@ -39,6 +39,7 @@ import Scanner (ScannedToken(..), Token(..))
   ';'        { ScannedToken _ _ SemiColon }
   '!'        { ScannedToken _ _ Not }
   '-'        { ScannedToken _ _ MinusSymbol }
+  ','        { ScannedToken _ _ Comma }
 
   bool { ScannedToken _ _ (BoolLiteral $$) }
   string { ScannedToken _ _ (StringLiteral $$) }
@@ -64,11 +65,33 @@ import Scanner (ScannedToken(..), Token(..))
 
 %% -------------------------------- Grammar -----------------------------------
 
+MethodCall : MethodName '(' CommaExprs ')' { ExprParamMethodCall $1 $3 }
+        | MethodName '(' CommaCalloutArgs ')' { CalloutParamMethodCall $1 $3 }
+
+MethodName : id { MethodName $1 }
+
+Location : id { Location $1 }
+        | id '[' Expr ']' { IndexedLocation $1 $3 }
+
 Expr : Literal { LiteralExpr $1 }
         | Expr BinOp Expr { CombinedExpr $2 $1 $3  }
         | '-' Expr { NegatedExpr $2 }
+        | MethodCall { MethodCallExpr $1 }
+        | Location { LocationExpr $1 }
         | '!' Expr { NotExpr $2 }
         | '(' Expr ')' { ParenExpr $2 }
+
+-- Maybe flip the recursion direction on this for constant stack space
+CommaExprs : Expr { [$1] }
+        | Expr ',' { [$1] }
+        | Expr ',' CommaExprs { $1 : $3 }
+
+CommaCalloutArgs : CalloutArg { [$1] }
+        | CalloutArg ',' { [$1] }
+        | CalloutArg ',' CommaCalloutArgs { $1 : $3 }
+
+CalloutArg : Expr { ExprCalloutArg $1 }
+        | string { StringCalloutArg $1}
 
 
 BinOp : arith_op { BinOp (show $1) }
@@ -86,12 +109,31 @@ Literal : int { Int $1 }
 ----------------------------------- Haskell -----------------------------------
 {
 
+data MethodCall = ExprParamMethodCall MethodName CommaExprs
+                | CalloutParamMethodCall MethodName CommaCalloutArgs
+
+data CalloutArg = ExprCalloutArg Expr
+                | StringCalloutArg String
+
+data MethodName = MethodName String
+
+
+data Location = Location String
+          | IndexedLocation String Expr
+
 data Expr = LiteralExpr Literal
           | CombinedExpr BinOp Expr Expr
           | NegatedExpr Expr
+          | MethodCallExpr MethodCall
+          | LocationExpr Location
           | NotExpr Expr
           | ParenExpr Expr
+
+type CommaExprs = [Expr]
+type CommaCalloutArgs = [CalloutArg]
+
 data BinOp = BinOp String
+
 data Literal = Bool Bool | Int String | Char Char
 
 parseError :: [ScannedToken] -> Either String a

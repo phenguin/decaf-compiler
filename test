@@ -1,12 +1,12 @@
 boolean my_bool = true;
-int i = 100;
+int i = -100;
 a = "BOOyah! \t";
 mychar = '\t';
 myotherchar = 'a';
 
 while (i<100) {
    i -= 1;
-   if (i % 6 > 2) {
+   if (i % 6 > -2) {
        my_bool = false;
    }
 }
