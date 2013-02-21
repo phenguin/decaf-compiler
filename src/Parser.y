@@ -88,13 +88,47 @@ MethodName : id { MethodName $1 }
 Location : id { Location $1 }
         | id "[" Expr "]" { IndexedLocation $1 $3 }
 
-Expr : Literal { LiteralExpr $1 }
-        | Expr BinOp Expr { CombinedExpr $2 $1 $3  }
-        | "-" Expr { NegatedExpr $2 }
-        | MethodCall { MethodCallExpr $1 }
-        | Location { LocationExpr $1 }
-        | "!" Expr { NotExpr $2 }
-        | "(" Expr ")" { ParenExpr $2 }
+-- Expr : Literal { LiteralExpr $1 }
+--         | Expr BinOp Expr { CombinedExpr $2 $1 $3  }
+--         | "-" Expr { NegatedExpr $2 }
+--         | MethodCall { MethodCallExpr $1 }
+--         | Location { LocationExpr $1 }
+--         | "!" Expr { NotExpr $2 }
+--         | "(" Expr ")" { ParenExpr $2 }
+
+Expr : Expr "||" Expr1 { OrExpr $1 $3 }
+     | Expr1 { Expr1 $1 }
+
+Expr1 : Expr1 "&&" Expr2 { AndExpr $1 $3 }
+     | Expr2 { Expr2 $1 }
+
+Expr2 : Expr2 "==" Expr3 { EqualExpr $1 $3 }
+     | Expr2 "!=" Expr3 { NotEqualExpr $1 $3 } 
+     | Expr3 { Expr3 $1 }
+
+Expr3 : Expr3 "<" Expr4 { LTExpr $1 $3 }
+     | Expr3 "<=" Expr4 { LTEExpr $1 $3 } 
+     | Expr3 ">" Expr4 { GTExpr $1 $3 } 
+     | Expr3 ">=" Expr4 { GTEExpr $1 $3 } 
+     | Expr4 { Expr4 $1 }
+
+Expr4 : Expr4 "+" Expr5 { AddExpr $1 $3 }
+     | Expr4 "-" Expr5 { SubtractExpr $1 $3 } 
+     | Expr5 { Expr5 $1 }
+
+Expr5 : Expr5 "*" Expr6 { MultiplyExpr $1 $3 }
+     | Expr5 "/" Expr6 { DivideExpr $1 $3 } 
+     | Expr5 "%" Expr6 { ModuloExpr $1 $3 } 
+     | Expr6 { Expr6 $1 }
+
+Expr6 : "-" Expr7 { NegateExpr $2 }
+     | "!" Expr7 { NotExpr $2 } 
+     | Expr7 { Expr7 $1 }
+
+Expr7 : Literal { LiteralExpr $1 $3 }
+     | Location { LocationExpr $1 $3 } 
+     | MethodCall { MethodCallExpr $1 }
+     | "(" Expr ")" { ParenExpr $1 }
 
 -- Maybe flip the recursion direction on this for constant stack space
 CommaExprs : Expr { [$1] }
@@ -108,21 +142,6 @@ CommaCalloutArgs : CalloutArg { [$1] }
 CalloutArg : Expr { ExprCalloutArg $1 }
         | string { StringCalloutArg $1}
 
-
-
-BinOp : "<" { BinOp $1 }
-      | "<=" { BinOp $1 }
-      | ">" { BinOp $1 }
-      | ">=" { BinOp $1 }
-      | "+" { BinOp $1 }
-      | "-" { BinOp $1 }
-      | "*" { BinOp $1 }
-      | "/" { BinOp $1 }
-      | "-" { BinOp $1 }
-      | "&&" { BinOp $1 }
-      | "||" { BinOp $1 }
-      | "==" { BinOp $1 }
-      | "!=" { BinOp $1 }
 
 Literal : int { Int $1 }
         | bool { Bool $1 }
@@ -144,12 +163,38 @@ data MethodName = MethodName String
 data Location = Location String
           | IndexedLocation String Expr
 
-data Expr = LiteralExpr Literal
-          | CombinedExpr BinOp Expr Expr
-          | NegatedExpr Expr
-          | MethodCallExpr MethodCall
+data Expr = OrExpr Expr Expr1
+          | Expr1 Expr1
+
+data Expr1 = AndExpr Expr1 Expr2
+          | Expr2 Expr2
+
+data Expr2 = EqualExpr Expr2 Expr3
+          | NotEqualExpr Expr2 Expr3
+          | Expr3 Expr3
+
+data Expr3 = LTExpr Expr3 Expr4
+          | LTEExpr Expr3 Expr4
+          | GTExpr Expr3 Expr4
+          | GTEExpr Expr3 Expr4
+          | Expr4 Expr4
+
+data Expr4 = AddExpr Expr4 Expr5
+          | SubtractExpr Expr4 Expr5
+          | Expr5 Expr5
+
+data Expr5 = MultiplyExpr Expr5 Expr6
+          | DivideExpr Expr5 Expr6
+          | ModuloExpr Expr5 Expr6
+          | Expr6 Expr6
+
+data Expr6 = NegateExpr Expr7
+          | NotExpr Expr7
+          | Expr7 Expr7
+
+data Expr7 = LiteralExpr Literal
           | LocationExpr Location
-          | NotExpr Expr
+          | MethodCallExpr MethodCall
           | ParenExpr Expr
 
 type CommaExprs = [Expr]
