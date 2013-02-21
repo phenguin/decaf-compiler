@@ -125,10 +125,10 @@ Expr6 : "-" Expr7 { NegateExpr $2 }
      | "!" Expr7 { NotExpr $2 } 
      | Expr7 { Expr7 $1 }
 
-Expr7 : Literal { LiteralExpr $1 $3 }
-     | Location { LocationExpr $1 $3 } 
+Expr7 : Literal { LiteralExpr $1 }
+     | Location { LocationExpr $1 } 
      | MethodCall { MethodCallExpr $1 }
-     | "(" Expr ")" { ParenExpr $1 }
+     | "(" Expr ")" { ParenExpr $2 }
 
 -- Maybe flip the recursion direction on this for constant stack space
 CommaExprs : Expr { [$1] }
