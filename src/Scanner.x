@@ -52,8 +52,6 @@ tokens :-
   void { \posn s -> scannedToken posn Void }
   callout { \posn s -> scannedToken posn Callout }
 
-  -- @statementMarker   { \posn s -> scannedToken posn $ StatementMarker s }
-
   -- Operators of various types
   == { \posn s -> scannedToken posn $ EqOp Equal }
   != { \posn s -> scannedToken posn $ EqOp NEqual }
@@ -71,7 +69,6 @@ tokens :-
   \> = { \posn s -> scannedToken posn $ RelOp GreaterTE }
 
   \+  { \posn s -> scannedToken posn $ ArithOp Add }
-  \- { \posn s -> scannedToken posn $ ArithOp Subtract }
   \* { \posn s -> scannedToken posn $ ArithOp Multiply }
   \/ { \posn s -> scannedToken posn $ ArithOp Divide }
   \% { \posn s -> scannedToken posn $ ArithOp Modulo }
@@ -125,11 +122,10 @@ data ScannedToken = ScannedToken { line :: Int
                                  } deriving (Eq)
 
 
-data ArithOpType = Add | Subtract | Multiply | Divide | Modulo deriving (Eq)
+data ArithOpType = Add | Multiply | Divide | Modulo deriving (Eq)
 
 instance Show ArithOpType where
     show Add = "+"
-    show Subtract = "-"
     show Multiply = "*"
     show Divide = "/"
     show Modulo = "%"
@@ -162,15 +158,13 @@ instance Show CondOpType where
     show Or = "||"
 
 -- | A token.
-data Token = Keyword String
-           | Identifier String
+data Token = Identifier String
            | DataType String
            | CharLiteral Char
            | StringLiteral String
            | BoolLiteral Bool
            | Not
            | Number String
-           | StatementMarker String
            | If
            | For
            | While
@@ -204,8 +198,6 @@ showOrigChar '\n' = "\\n"
 showOrigChar x = [x]
 
 instance Show Token where
-  show (Keyword k) = k
-  show (StatementMarker k) = k
   show (Identifier s) = "IDENTIFIER " ++ s
   show (CharLiteral c) = "CHARLITERAL \'" ++ showOrigChar c ++ "\'"
   show (BoolLiteral b) = "BOOLEANLITERAL " ++ (map toLower . show) b
