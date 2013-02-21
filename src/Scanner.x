@@ -53,25 +53,45 @@ tokens :-
   callout { \posn s -> scannedToken posn Callout }
 
   -- Operators of various types
-  == { \posn s -> scannedToken posn $ EqOp Equal }
-  != { \posn s -> scannedToken posn $ EqOp NEqual }
+--  == { \posn s -> scannedToken posn $ EqualSym}
+--  != { \posn s -> scannedToken posn $ NotEqualSym }
+--
+--  && { \posn s -> scannedToken posn $ AndSym }
+--  \| \| { \posn s -> scannedToken posn $ OrSym }
+--
+--  = { \posn s -> scannedToken posn $ SetSym }
+--  \+ ={ \posn s -> scannedToken posn $ SetPlusSym }
+--  \- ={ \posn s -> scannedToken posn $ SetMinusSym }
+--
+--  \< { \posn s -> scannedToken posn $ LessThanSym }
+--  \> { \posn s -> scannedToken posn $ GreaterThanSym }
+--  \< = { \posn s -> scannedToken posn $ LessThanOrESym }
+--  \> = { \posn s -> scannedToken posn $ GreaterThanOrESym }
+--
+--  \+  { \posn s -> scannedToken posn $ AddSym }
+--  \* { \posn s -> scannedToken posn $ MultiplySym }
+--  \/ { \posn s -> scannedToken posn $ DivideSym }
+--  \% { \posn s -> scannedToken posn $ ModuloSym }
 
-  && { \posn s -> scannedToken posn $ CondOp And }
-  \| \| { \posn s -> scannedToken posn $ CondOp Or }
+  == { \posn s -> scannedToken posn $ (Symbol "==")}
+  != { \posn s -> scannedToken posn $ (Symbol "!=") }
 
-  = { \posn s -> scannedToken posn $ AssignOp SetOp }
-  \+ ={ \posn s -> scannedToken posn $ AssignOp SetPlusOp }
-  \- ={ \posn s -> scannedToken posn $ AssignOp SetMinusOp }
+  && { \posn s -> scannedToken posn $ (Symbol "&&") }
+  \| \| { \posn s -> scannedToken posn $ (Symbol "||" ) }
 
-  \< { \posn s -> scannedToken posn $ RelOp LessT }
-  \> { \posn s -> scannedToken posn $ RelOp GreaterT }
-  \< = { \posn s -> scannedToken posn $ RelOp LessTE }
-  \> = { \posn s -> scannedToken posn $ RelOp GreaterTE }
+  = { \posn s -> scannedToken posn $ (Symbol "=" ) }
+  \+ ={ \posn s -> scannedToken posn $ (Symbol "+=") }
+  \- ={ \posn s -> scannedToken posn $ (Symbol "-=") }
 
-  \+  { \posn s -> scannedToken posn $ ArithOp Add }
-  \* { \posn s -> scannedToken posn $ ArithOp Multiply }
-  \/ { \posn s -> scannedToken posn $ ArithOp Divide }
-  \% { \posn s -> scannedToken posn $ ArithOp Modulo }
+  \< { \posn s -> scannedToken posn $ (Symbol "<" ) }
+  \> { \posn s -> scannedToken posn $ (Symbol ">" ) }
+  \< = { \posn s -> scannedToken posn $ (Symbol "<=" ) }
+  \> = { \posn s -> scannedToken posn $ (Symbol ">=" ) }
+
+  \+  { \posn s -> scannedToken posn $ (Symbol "+"  ) }
+  \* { \posn s -> scannedToken posn $ (Symbol "*" ) }
+  \/ { \posn s -> scannedToken posn $ (Symbol "/" ) }
+  \% { \posn s -> scannedToken posn $ (Symbol "%" ) }
 
   -- The only two types supported: boolean and int
   int { \posn s -> scannedToken posn $ DataType s } 
@@ -88,7 +108,7 @@ tokens :-
   $digit+ / $literalTrailers  { \posn s -> scannedToken posn $ Number s } 
 
   -- Unary minus symbol 
-  \- { \posn s -> scannedToken posn $ MinusSymbol } 
+  \- { \posn s -> scannedToken posn $ (Symbol "-") } 
 
   -- Bool Literals
   true { \posn s -> scannedToken posn $ BoolLiteral True }
@@ -122,42 +142,6 @@ data ScannedToken = ScannedToken { line :: Int
                                  , extractRawToken :: Token
                                  } deriving (Eq)
 
-
-data ArithOpType = Add | Multiply | Divide | Modulo deriving (Eq)
-
-instance Show ArithOpType where
-    show Add = "+"
-    show Multiply = "*"
-    show Divide = "/"
-    show Modulo = "%"
-
-data RelOpType = LessT | LessTE | GreaterT | GreaterTE deriving (Eq, Ord)
-
-instance Show RelOpType where
-    show LessT = "<"
-    show LessTE = "<="
-    show GreaterT = ">="
-    show GreaterTE = ">"
- 
-data AssignOpType = SetOp | SetPlusOp | SetMinusOp deriving (Eq)
-
-instance Show AssignOpType where
-    show SetOp = "="
-    show SetPlusOp = "+="
-    show SetMinusOp = "-="
- 
-data EqOpType = Equal | NEqual deriving (Eq, Ord)
-
-instance Show EqOpType where
-    show Equal = "=="
-    show NEqual = "!="
-
-data CondOpType = And | Or deriving (Eq)
-
-instance Show CondOpType where
-    show And = "&&"
-    show Or = "||"
-
 -- | A token.
 data Token = Identifier String
            | DataType String
@@ -175,11 +159,7 @@ data Token = Identifier String
            | Else
            | Void
            | Callout
-           | ArithOp ArithOpType
-           | AssignOp AssignOpType
-           | EqOp EqOpType
-           | RelOp RelOpType
-           | CondOp CondOpType
+           | Symbol String
            | LCurly
            | RCurly
            | LParen
@@ -188,7 +168,6 @@ data Token = Identifier String
            | RSquare
            | SemiColon
            | Comma
-           | MinusSymbol
            deriving (Eq)
 
 showOrigChar :: Char -> String
@@ -205,11 +184,6 @@ instance Show Token where
   show (BoolLiteral b) = "BOOLEANLITERAL " ++ (map toLower . show) b
   show (StringLiteral s) = "STRINGLITERAL \"" ++ (concat . map showOrigChar) s ++ "\""
   show (Number s) = "INTLITERAL " ++ s
-  show (ArithOp o) = show o
-  show (RelOp o) = show o
-  show (EqOp o) = show o
-  show (AssignOp o) = show o
-  show (CondOp o) = show o
   show LCurly = "{"
   show RCurly = "}"
   show LParen = "("
@@ -218,7 +192,7 @@ instance Show Token where
   show RSquare = "]"
   show SemiColon = ";"
   show Comma = ","
-  show MinusSymbol = "-"
+  show (Symbol s) = s
   show Not = "!"
   show (DataType t) = t
   show If = "if"

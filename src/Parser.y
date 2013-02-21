@@ -30,27 +30,42 @@ import Scanner (ScannedToken(..), Token(..))
 
 %token
   id { ScannedToken _ _ (Identifier $$) }
-  '{'        { ScannedToken _ _ LCurly }
-  '}'        { ScannedToken _ _ RCurly }
-  '('        { ScannedToken _ _ LParen }
-  ')'        { ScannedToken _ _ RParen }
-  '['        { ScannedToken _ _ LSquare }
-  ']'        { ScannedToken _ _ RSquare }
-  ';'        { ScannedToken _ _ SemiColon }
-  '!'        { ScannedToken _ _ Not }
-  '-'        { ScannedToken _ _ MinusSymbol }
-  ','        { ScannedToken _ _ Comma }
+  "{"        { ScannedToken _ _ LCurly }
+  "}"        { ScannedToken _ _ RCurly }
+  "("        { ScannedToken _ _ LParen }
+  ")"        { ScannedToken _ _ RParen }
+  "["        { ScannedToken _ _ LSquare }
+  "]"        { ScannedToken _ _ RSquare }
+  ";"        { ScannedToken _ _ SemiColon }
+  "!"        { ScannedToken _ _ Not }
+  ","        { ScannedToken _ _ Comma }
 
   bool { ScannedToken _ _ (BoolLiteral $$) }
   string { ScannedToken _ _ (StringLiteral $$) }
   char { ScannedToken _ _ (CharLiteral $$) }
   int { ScannedToken _ _ (Number $$) }
 
-  arith_op { ScannedToken _ _ (ArithOp $$) }
-  rel_op { ScannedToken _ _ (RelOp $$) }
-  eq_op { ScannedToken _ _ (EqOp $$) }
-  assign_op { ScannedToken _ _ (AssignOp $$) }
-  cond_op { ScannedToken _ _ (CondOp $$) }
+  "-"        { ScannedToken _ _ (Symbol "-") }
+
+  "+" { ScannedToken _ _ (Symbol "+") }
+  "*" { ScannedToken _ _ (Symbol "*") }
+  "/" { ScannedToken _ _ (Symbol "/") }
+  "%" { ScannedToken _ _ (Symbol "%") }
+
+  "<" { ScannedToken _ _ (Symbol "<") }
+  "<=" { ScannedToken _ _ (Symbol "<=") }
+  ">=" { ScannedToken _ _ (Symbol ">=") }
+  ">" { ScannedToken _ _ (Symbol ">") }
+
+  "==" { ScannedToken _ _ (Symbol "==") }
+  "!=" { ScannedToken _ _ (Symbol "!=") }
+
+  "=" { ScannedToken _ _ (Symbol "=") }
+  "+=" { ScannedToken _ _ (Symbol "+=") }
+  "-=" { ScannedToken _ _ (Symbol "-=") }
+
+  "&&" { ScannedToken _ _ (Symbol "&&") }
+  "||" { ScannedToken _ _ (Symbol "||") }
 
   data_type { ScannedToken _ _ (DataType $$) }
   if { ScannedToken _ _ If }
@@ -65,41 +80,49 @@ import Scanner (ScannedToken(..), Token(..))
 
 %% -------------------------------- Grammar -----------------------------------
 
-MethodCall : MethodName '(' CommaExprs ')' { ExprParamMethodCall $1 $3 }
-        | MethodName '(' CommaCalloutArgs ')' { CalloutParamMethodCall $1 $3 }
+MethodCall : MethodName "(" CommaExprs ")" { ExprParamMethodCall $1 $3 }
+        | MethodName "(" CommaCalloutArgs ")" { CalloutParamMethodCall $1 $3 }
 
 MethodName : id { MethodName $1 }
 
 Location : id { Location $1 }
-        | id '[' Expr ']' { IndexedLocation $1 $3 }
+        | id "[" Expr "]" { IndexedLocation $1 $3 }
 
 Expr : Literal { LiteralExpr $1 }
         | Expr BinOp Expr { CombinedExpr $2 $1 $3  }
-        | '-' Expr { NegatedExpr $2 }
+        | "-" Expr { NegatedExpr $2 }
         | MethodCall { MethodCallExpr $1 }
         | Location { LocationExpr $1 }
-        | '!' Expr { NotExpr $2 }
-        | '(' Expr ')' { ParenExpr $2 }
+        | "!" Expr { NotExpr $2 }
+        | "(" Expr ")" { ParenExpr $2 }
 
 -- Maybe flip the recursion direction on this for constant stack space
 CommaExprs : Expr { [$1] }
-        | Expr ',' { [$1] }
-        | Expr ',' CommaExprs { $1 : $3 }
+        | Expr "," { [$1] }
+        | Expr "," CommaExprs { $1 : $3 }
 
 CommaCalloutArgs : CalloutArg { [$1] }
-        | CalloutArg ',' { [$1] }
-        | CalloutArg ',' CommaCalloutArgs { $1 : $3 }
+        | CalloutArg "," { [$1] }
+        | CalloutArg "," CommaCalloutArgs { $1 : $3 }
 
 CalloutArg : Expr { ExprCalloutArg $1 }
         | string { StringCalloutArg $1}
 
 
-BinOp : arith_op { BinOp (show $1) }
-        | rel_op { BinOp (show $1) }
-        | eq_op { BinOp (show $1) }
-        | cond_op { BinOp (show $1) }
-        | '-' { BinOp "-"}
 
+BinOp : "<" { BinOp $1 }
+      | "<=" { BinOp $1 }
+      | ">" { BinOp $1 }
+      | ">=" { BinOp $1 }
+      | "+" { BinOp $1 }
+      | "-" { BinOp $1 }
+      | "*" { BinOp $1 }
+      | "/" { BinOp $1 }
+      | "-" { BinOp $1 }
+      | "&&" { BinOp $1 }
+      | "||" { BinOp $1 }
+      | "==" { BinOp $1 }
+      | "!=" { BinOp $1 }
 
 Literal : int { Int $1 }
         | bool { Bool $1 }
@@ -132,7 +155,7 @@ data Expr = LiteralExpr Literal
 type CommaExprs = [Expr]
 type CommaCalloutArgs = [CalloutArg]
 
-data BinOp = BinOp String
+data BinOp = BinOp ScannedToken
 
 data Literal = Bool Bool | Int String | Char Char
 
