@@ -1,0 +1,61 @@
+Writeup for Scanner/Parser Project -Justin Cullen
+
+I decided to use haskell for this project (and the class).  As recommended in
+the handout, I used Alex to implement the scanner portion and Happy to
+implement the parser portion of the project. One assumption I made for the
+project had to due with I thought was a typo in the grammar specification.  It
+says that the for statement should have the form " for ( <id> = <expr> , <expr
+) <block> ", which is what I originally implemented.  However my parser kept
+failing test cases because because all the test cases had a semicolon in place
+of the comma, so now my parser assumes that the for statement takes that form
+instead.  Additionally, a few of the legal tests used binary integer literals
+which did not occur in the grammar, so I assumed these were also mistakes and
+didn't correct for them.  
+
+As above, my design is essentially just the grammar implemented split between
+Alex and Haskell.  The way I split up the work was basically to have Alex
+handle parsing most of the terminals as well as the literal non-terminals in
+the grammar, and identifiers.  This was because these were all simple regex
+patterns and adding non-terminals in Happy involves creating new data types
+most of the time, which didn't seem worth it.  As an alternative to using
+Happy, I considered writing a top down recursive descent parser, because I
+found writing the grammar in Happy, and especially debugging it to be somewhat
+painful.  Additionally, I didn't see a way to abstract common patterns like
+making comma separated lists of non-terminals, and ended up typing alot more
+than I think might have been necessary.  I think a top down parser would have
+been nicer to work with and easier to debug, but I didn't know whether I'd be
+able to get it done in time so I decided not to do it.  
+
+The project was fairly straightforward conceptually.  The primary work was
+learning how to use Alex and Happy effectively and debugging from the
+not-so-verbose output they gave you when things went wrong. I also wasn't sure
+initially how to implement the order of operations for operators requirement,
+but having a descending hierarchy of nested non-terminals with the lower
+precedence operators being at the top seemed to work well and solve the
+problem. Additionally, I wasn't sure how to define the data types such that
+they would be most useful in the future, and worried about it for a while.  I
+decided that I will leave it clunky now and change the representation later
+when I actually need to use it and will have a better idea of what I want it to
+look like.
+
+There are a couple of issues that I'm aware of with my implementation.  One,
+the error messages that are output are pretty bad and non-helpful most of the
+time.  I couldn't figure out how to customize them in the scanner, and just
+didn't have time in the parser.  I'm also not totally satisfied with how robust
+the scanner is.  One issue I was having is that Alex would parse a string like
+"156someid" as two tokens, the first being a number and the second being an
+identifier, even though they aren't separated by a space.  This seemed wrong to
+me and I was suprised that Alex didn't deal with it by default.  My solution
+was to require that the character to the right of a number literal wasn't the
+start character of an identifier, which seems to have done the trick but seems
+hackish to me and I feel like there is a better way.  Additionally, in the
+parser, I was having an issue at the very top level, where programs with field
+declarations and then a method declaration with type int or bool (not void),
+wouldn't parse correctly.  It kept getting suprised by the parenthesis after
+the start of the method declaration, as if it was trying to parse additional
+field declarations instead of just giving up and doing the method declaration.
+I'm still not sure why this was happening, but it was solved by switching a
+right recursion in the definition of field_decls to a left recursion.  However
+it broke when I switched the recursion order of all "kleene star" type
+operations.. so I'm not really sure whats going on there and makes me worry
+about the parsers robustness.  

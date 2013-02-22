@@ -80,7 +80,7 @@ import Scanner (ScannedToken(..), Token(..))
 
 %% -------------------------------- Grammar -----------------------------------
 
-Program : CalloutDecls FieldDecls MethodDecls {}
+Program : CalloutDecls FieldDecls MethodDecls { Program $1 $2 $3}
 
 MethodDecls : {- empty -} { [] }
             | MethodDecl MethodDecls { $1 : $2 }
@@ -201,8 +201,7 @@ Literal : int { Int $1 }
 ----------------------------------- Haskell -----------------------------------
 {
 
--- data Program = Program CalloutDecls FieldDecls MethodDecls
-data Program1 = Program1 MethodDecls
+data Program = Program CalloutDecls FieldDecls MethodDecls
 data Block = Block FieldDecls Statements
 
 data SpaceDecl = VarDecl String | ArrayDecl String String
