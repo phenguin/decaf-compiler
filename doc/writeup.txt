@@ -13,7 +13,7 @@ which did not occur in the grammar, so I assumed these were also mistakes and
 didn't correct for them.  
 
 As above, my design is essentially just the grammar implemented split between
-Alex and Haskell.  The way I split up the work was basically to have Alex
+Alex and Happy.  The way I split up the work was basically to have Alex
 handle parsing most of the terminals as well as the literal non-terminals in
 the grammar, and identifiers.  This was because these were all simple regex
 patterns and adding non-terminals in Happy involves creating new data types
