@@ -80,10 +80,7 @@ import Scanner (ScannedToken(..), Token(..))
 
 %% -------------------------------- Grammar -----------------------------------
 
-Program : CalloutDecls MethodDecls { Program $1 [] $2 }
-        | CalloutDecls FieldDecls MethodDecls { Program $1 $2 $3 }
-
---Program : CalloutDecls FieldDecls MethodDecls { Program $1 $2 $3 }
+Program : CalloutDecls FieldDecls MethodDecls {}
 
 MethodDecls : {- empty -} { [] }
             | MethodDecl MethodDecls { $1 : $2 }
@@ -97,8 +94,8 @@ Type : data_type { Type $1 }
 
 FieldDecl : Type CommaDecls ";" { FieldDecl $1 $2 }
 
-FieldDecls : FieldDecl { [$1] }
-           | FieldDecl FieldDecls { $1 : $2 }
+FieldDecls : {- empty -} { [] }
+           | FieldDecls FieldDecl { $2 : $1 }
 
 CalloutDecl : callout id ";" { CalloutDecl $2 }
 
@@ -118,7 +115,7 @@ Statement : Location AssignOp Expr ";" { AssignStatement $1 $2 $3 }
         | MethodCall ";" { MethodCallStatement $1 }
         | if "(" Expr ")" Block { IfStatement $3 $5 }
         | if "(" Expr ")" Block else Block { IfElseStatement $3 $5 $7 }
-        | for "(" id "=" Expr "," Expr ")" Block { ForStatement $3 $5 $7 $9 }
+        | for "(" id "=" Expr ";" Expr ")" Block { ForStatement $3 $5 $7 $9 }
         | while "(" Expr ")" Block { WhileStatement $3 $5 }
         | return Expr ";" { ReturnStatement $2 }
         | return ";" { EmptyReturnStatement }
@@ -204,7 +201,8 @@ Literal : int { Int $1 }
 ----------------------------------- Haskell -----------------------------------
 {
 
-data Program = Program CalloutDecls FieldDecls MethodDecls
+-- data Program = Program CalloutDecls FieldDecls MethodDecls
+data Program1 = Program1 MethodDecls
 data Block = Block FieldDecls Statements
 
 data SpaceDecl = VarDecl String | ArrayDecl String String
