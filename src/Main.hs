@@ -14,13 +14,15 @@ module Main where
 import Prelude hiding (readFile)
 import qualified Prelude
 
-import Control.Monad (void)
+import Control.Exception (bracket)
+import Control.Monad (forM_, void)
 import Control.Monad.Error (ErrorT(..), runErrorT)
 import Control.Monad.IO.Class (liftIO)
 import Data.Either (partitionEithers)
+import GHC.IO.Handle (hDuplicate)
 import System.Environment (getProgName)
 import qualified System.Exit
-import System.IO (hPutStrLn, stderr)
+import System.IO (IOMode(..), hClose, hPutStrLn, openFile, stdout, stderr)
 import Text.Printf (printf)
 
 import qualified CLI
@@ -64,36 +66,52 @@ fatal message = do
 
 ---------------------------- Pure code: Processing ----------------------------
 
+{- Since our compiler only handles single files, the 'Configuration' struct
+doesn't currently get passed through to the scanner and parser code.  (This may
+change--one can see the scanner and parser as acting in a reader monad.)  The
+big problem with this is that error messages generated in the scanner and
+parser won't contain the file name--the file name has to get added in this
+function. -}
+mungeErrorMessage :: Configuration -> Either String a -> Either String a
+mungeErrorMessage configuration =
+  ifLeft ((Configuration.input configuration ++ " ")++)
+  where ifLeft f (Left v) = Left $ f v
+        ifLeft _ (Right a) = Right a
+
 {- The pure guts of the compiler convert input to output.  Exactly what output
 they produce, though, depends on the configuration. -}
 process :: Configuration -> String -> Either String [IO ()]
 process configuration input =
-  {- Since our compiler only handles single files, the 'Configuration' struct
-  doesn't currently get passed through to the scanner and parser code.  (This
-  may change--one can see the scanner and parser as acting in a reader monad.)
-  The big problem with this is that error messages generated in the scanner and
-  parser won't contain the file name--the file name has to get added in this
-  function. -}
-  let mungeErrorMessage =
-        ifLeft ((Configuration.input configuration ++ " ")++)
-  in
   -- Dispatch on the configuration, modifying error messages appropriately.
   case Configuration.target configuration of
-    Scan ->
-      let output =
-            Scanner.scan input |>
-            map mungeErrorMessage |>
-            Scanner.formatTokensAndErrors
-      in
-      Right [ writeFile (Configuration.output configuration) output ]
-    Parse -> do
-      let (errors, tokens) = partitionEithers $ Scanner.scan input
-      -- If errors occurred, bail out.
-      mapM_ (mungeErrorMessage . Left) errors
-      -- Otherwise, attempt a parse.
-      void $ mungeErrorMessage $ Parser.parse tokens
-      Right []
+    Scan -> scan configuration input
+    Parse -> parse configuration input
     phase -> Left $ show phase ++ " not implemented\n"
-  where ifLeft f (Left v) = Left $ f v
-        ifLeft _ (Right a) = Right a
-        v |> f = f v            -- like a Unix pipeline, but pure
+
+scan :: Configuration -> String -> Either String [IO ()]
+scan configuration input =
+  let tokensAndErrors =
+        Scanner.scan input |>
+        map (mungeErrorMessage configuration) |>
+        map Scanner.formatTokenOrError
+  in
+  {- We have to interleave output to standard error (for errors) and standard
+  output or a file (for output), so we need to actually build an appropriate
+  set of IO actions. -}
+  Right $ [ bracket openOutputHandle hClose $ \hOutput ->
+             forM_ tokensAndErrors $ \tokOrError ->
+               case tokOrError of
+                 Left err -> hPutStrLn stderr err
+                 Right tok -> hPutStrLn hOutput tok
+          ]
+  where v |> f = f v            -- like a Unix pipeline, but pure
+        openOutputHandle = maybe (hDuplicate stdout) (flip openFile WriteMode) $ Configuration.outputFileName configuration
+
+parse :: Configuration -> String -> Either String [IO ()]
+parse configuration input = do
+  let (errors, tokens) = partitionEithers $ Scanner.scan input
+  -- If errors occurred, bail out.
+  mapM_ (mungeErrorMessage configuration . Left) errors
+  -- Otherwise, attempt a parse.
+  void $ mungeErrorMessage configuration $ Parser.parse tokens
+  Right []

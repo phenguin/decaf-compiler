@@ -62,7 +62,7 @@ options = [ Option ['t'] ["target"]
                    "compile to the given stage"
           , Option ['o'] ["output"]
                    (ReqArg (\outfile -> \conf ->
-                                         Right $ conf { explicitOutput = Just outfile })
+                                         Right $ conf { outputFileName = Just outfile })
                            "<outfile>")
                    "write output to <outfile>"
           , Option ['O'] ["opt"]
@@ -92,9 +92,7 @@ longDescription = unlines [ "  -t <stage>          <stage> is one of \"scan\", \
                           , "                      unrolling."
                           , "  "
                           , "  -o <outfile>        Write output to <outfile>.  If this option is not given,"
-                          , "  --output=<outfile>  output will be written to a file with the same base name as"
-                          , "                      the input file and the extension changed according to the"
-                          , "                      final stage executed."
+                          , "  --output=<outfile>  output will be written to standard output."
                           ]
 
 

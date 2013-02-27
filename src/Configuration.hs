@@ -10,7 +10,7 @@ decafc is distributed in the hope that it will be useful, but WITHOUT ANY
 WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
 PARTICULAR PURPOSE.  See the X11 license for more details. -}
 module Configuration ( Configuration
-                     , input, target, debug, opt, output
+                     , input, target, debug, opt, outputFileName
                      , defaultConfiguration
                      , CompilerStage(..)
                      , OptimizationSpecification(..)
@@ -18,11 +18,10 @@ module Configuration ( Configuration
                      ) where
 
 import Data.Maybe (fromMaybe)
-import System.FilePath (replaceExtension)
 
 import Configuration.Types ( Configuration(..)
-                           , input, debug, opt
-                           , explicitTarget, explicitOutput
+                           , input, debug, opt, outputFileName
+                           , explicitTarget
                            , defaultConfiguration
                            , CompilerStage(..)
                            , OptimizationSpecification(..)
@@ -31,21 +30,9 @@ import Configuration.Types ( Configuration(..)
 
 
 --------------------------- The configuration type ----------------------------
-{- 'input', 'debug', and 'opt' are fine accessor functions.  'target' and
-'output', on the other hand, is a bit special. -}
+{- 'input', 'debug', 'opt', and 'outputFileName' are fine accessor functions.
+'target', on the other hand, is a bit special. -}
 
 target :: Configuration -> CompilerStage
 target conf = fromMaybe defaultTarget $ explicitTarget conf
   where defaultTarget = Parse   -- this will change as the course proceeds
-
-output :: Configuration -> FilePath
-output conf =
-  case explicitOutput conf of
-    Just path -> path
-    _ -> replaceExtension (input conf) $
-           case explicitTarget conf of
-             Nothing -> ".out"
-             Just Scan -> ".scan"
-             Just Parse -> ".parse"
-             Just Inter -> ".ir"
-             Just Assembly -> ".s"

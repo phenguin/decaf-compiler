@@ -14,7 +14,7 @@
 module Scanner ( ScannedToken(..)
                , Token(..)
                , scan
-               , formatTokensAndErrors
+               , formatTokenOrError
                ) where
 import Data.Char (toLower)
 }
@@ -228,12 +228,9 @@ unescapeString [c] = [c]
 scan :: String -> [Either String ScannedToken]
 scan = alexScanTokens
 
-formatTokensAndErrors :: [Either String ScannedToken] -> String
-formatTokensAndErrors = unlines . map formatTokenOrError
-  where formatTokenOrError tokenOrError =
-          case tokenOrError of
-            Left err -> err
-            Right tok -> unwords [ show $ line tok
-                                 , show $ extractRawToken tok
-                                 ]
+formatTokenOrError :: Either String ScannedToken -> Either String String
+formatTokenOrError (Left err) = Left err
+formatTokenOrError (Right tok) = Right $ unwords [ show $ line tok
+                                                 , show $ extractRawToken tok
+                                                 ]
 }

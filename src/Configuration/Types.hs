@@ -17,7 +17,7 @@ data Configuration = Configuration { input :: FilePath
                                    , explicitTarget :: Maybe CompilerStage
                                    , debug :: Bool
                                    , opt :: OptimizationSpecification
-                                   , explicitOutput :: Maybe FilePath
+                                   , outputFileName :: Maybe FilePath
                                    } deriving (Eq)
 
 defaultConfiguration :: Configuration
@@ -25,7 +25,7 @@ defaultConfiguration = Configuration { input = undefined
                                      , explicitTarget = Nothing
                                      , debug = False
                                      , opt = Some [] -- no optimizations
-                                     , explicitOutput = Nothing
+                                     , outputFileName = Nothing
                                      }
 
 
