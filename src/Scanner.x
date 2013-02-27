@@ -16,6 +16,7 @@ module Scanner ( ScannedToken(..)
                , scan
                , formatTokensAndErrors
                ) where
+import Data.Char (toLower)
 }
 
 %wrapper "6.035"
