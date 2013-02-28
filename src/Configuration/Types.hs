@@ -28,6 +28,15 @@ defaultConfiguration = Configuration { input = undefined
                                      , outputFileName = Nothing
                                      }
 
+testConfiguration :: FilePath -> Configuration
+testConfiguration fp  = Configuration { input = fp
+                                     , explicitTarget = Nothing
+                                     , debug = False
+                                     , opt = Some [] -- no optimizations
+                                     , outputFileName = Nothing
+                                     }
+
+
 
 ------------------------------- Compiler stages -------------------------------
 

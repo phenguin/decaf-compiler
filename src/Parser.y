@@ -10,7 +10,8 @@
 -- WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 -- FOR A PARTICULAR PURPOSE.  See the X11 license for more details.
 {
-module Parser ( parse
+module Parser ( parse,
+                Program,
               ) where
 
 import Text.Printf (printf)
@@ -201,14 +202,14 @@ Literal : int { Int $1 }
 ----------------------------------- Haskell -----------------------------------
 {
 
-data Program = Program CalloutDecls FieldDecls MethodDecls
-data Block = Block FieldDecls Statements
+data Program = Program CalloutDecls FieldDecls MethodDecls deriving (Show)
+data Block = Block FieldDecls Statements deriving (Show)
 
-data SpaceDecl = VarDecl String | ArrayDecl String String
-data FieldDecl = FieldDecl Type CommaDecls
-data ParamDecl = ParamDecl Type String
-data MethodDecl = MethodDecl Type String ParamDecls Block
-data CalloutDecl = CalloutDecl String
+data SpaceDecl = VarDecl String | ArrayDecl String String deriving (Show)
+data FieldDecl = FieldDecl Type CommaDecls deriving (Show)
+data ParamDecl = ParamDecl Type String deriving (Show)
+data MethodDecl = MethodDecl Type String ParamDecls Block deriving (Show)
+data CalloutDecl = CalloutDecl String deriving (Show)
 
 type CommaDecls = [SpaceDecl]
 type ParamDecls = [ParamDecl]
@@ -228,64 +229,81 @@ data Statement = AssignStatement Location AssignOp Expr
         | EmptyReturnStatement
         | BreakStatement
         | ContinueStatement
+     deriving (Show)
 
 data Type = Type String
+     deriving (Show)
 
 data AssignOp = AssignOp String
+     deriving (Show)
 
 data MethodCall = ParamlessMethodCall MethodName
                 | ExprParamMethodCall MethodName CommaExprs
                 | CalloutParamMethodCall MethodName CommaCalloutArgs
+     deriving (Show)
 
 data CalloutArg = ExprCalloutArg Expr
                 | StringCalloutArg String
+     deriving (Show)
 
 data MethodName = MethodName String
+     deriving (Show)
 
 
 data Location = Location String
           | IndexedLocation String Expr
+     deriving (Show)
 
 data Expr = OrExpr Expr Expr1
           | Expr1 Expr1
+     deriving (Show)
 
 data Expr1 = AndExpr Expr1 Expr2
           | Expr2 Expr2
+     deriving (Show)
 
 data Expr2 = EqualExpr Expr2 Expr3
           | NotEqualExpr Expr2 Expr3
           | Expr3 Expr3
+     deriving (Show)
 
 data Expr3 = LTExpr Expr3 Expr4
           | LTEExpr Expr3 Expr4
           | GTExpr Expr3 Expr4
           | GTEExpr Expr3 Expr4
           | Expr4 Expr4
+     deriving (Show)
 
 data Expr4 = AddExpr Expr4 Expr5
           | SubtractExpr Expr4 Expr5
           | Expr5 Expr5
+     deriving (Show)
 
 data Expr5 = MultiplyExpr Expr5 Expr6
           | DivideExpr Expr5 Expr6
           | ModuloExpr Expr5 Expr6
           | Expr6 Expr6
+     deriving (Show)
 
 data Expr6 = NegateExpr Expr7
           | NotExpr Expr7
           | Expr7 Expr7
+     deriving (Show)
 
 data Expr7 = LiteralExpr Literal
           | LocationExpr Location
           | MethodCallExpr MethodCall
           | ParenExpr Expr
+     deriving (Show)
 
 type CommaExprs = [Expr]
 type CommaCalloutArgs = [CalloutArg]
 
 data BinOp = BinOp ScannedToken
+     deriving (Show)
 
 data Literal = Bool Bool | Int String | Char Char
+     deriving (Show)
 
 parseError :: [ScannedToken] -> Either String a
 parseError [] = Left "unexpected EOF"

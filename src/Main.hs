@@ -14,6 +14,8 @@ module Main where
 import Prelude hiding (readFile)
 import qualified Prelude
 
+import System.IO.Unsafe (unsafePerformIO)
+
 import Control.Exception (bracket)
 import Control.Monad (forM_, void)
 import Control.Monad.Error (ErrorT(..), runErrorT)
@@ -26,7 +28,7 @@ import System.IO (IOMode(..), hClose, hPutStrLn, openFile, stdout, stderr)
 import Text.Printf (printf)
 
 import qualified CLI
-import Configuration (Configuration, CompilerStage(..))
+import Configuration (Configuration, CompilerStage(..), OptimizationSpecification(..))
 import qualified Configuration
 import qualified Parser
 import qualified Scanner
@@ -106,6 +108,30 @@ scan configuration input =
           ]
   where v |> f = f v            -- like a Unix pipeline, but pure
         openOutputHandle = maybe (hDuplicate stdout) (flip openFile WriteMode) $ Configuration.outputFileName configuration
+
+-- testConfig :: FilePath -> Configuration
+-- testConfig filepath = Configuration {
+--     input = filepath,
+--     explicitTarget = Nothing,
+--     debug = False,
+--     opt = Some [],
+--     outputFileName = Nothing
+--     }
+
+
+
+-- Use unsafe perform io to get a "ghci friendly" parse tree for debugging
+ghciparse :: Configuration -> String -> Either String Parser.Program
+ghciparse configuration input = do
+  let (errors, tokens) = partitionEithers $ Scanner.scan input
+  -- If errors occurred, bail out.
+  mapM_ (mungeErrorMessage configuration . Left) errors
+  -- Otherwise, attempt a parse.
+  mungeErrorMessage configuration $ Parser.parse tokens
+
+testParse :: FilePath -> Either String Parser.Program
+testParse fp = ghciparse (Configuration.testConfiguration fp) input
+    where input = unsafePerformIO $ Prelude.readFile fp
 
 parse :: Configuration -> String -> Either String [IO ()]
 parse configuration input = do

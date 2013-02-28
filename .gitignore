@@ -8,5 +8,9 @@
 *.o
 dist/
 
+# Generated haskell source
+src/Parser.hs
+src/Scanner.hs
+
 # Decaf output files
 *.scan

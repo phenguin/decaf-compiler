@@ -143,6 +143,9 @@ data ScannedToken = ScannedToken { line :: Int
                                  , extractRawToken :: Token
                                  } deriving (Eq)
 
+instance Show ScannedToken where
+    show tok = show $ extractRawToken tok
+
 -- | A token.
 data Token = Identifier String
            | DataType String
