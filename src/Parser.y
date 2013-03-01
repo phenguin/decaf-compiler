@@ -10,9 +10,7 @@
 -- WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 -- FOR A PARTICULAR PURPOSE.  See the X11 license for more details.
 {
-module Parser ( parse,
-                Program,
-              ) where
+module Parser where
 
 import Text.Printf (printf)
 
@@ -298,9 +296,6 @@ data Expr7 = LiteralExpr Literal
 
 type CommaExprs = [Expr]
 type CommaCalloutArgs = [CalloutArg]
-
-data BinOp = BinOp ScannedToken
-     deriving (Show)
 
 data Literal = Bool Bool | Int String | Char Char
      deriving (Show)
