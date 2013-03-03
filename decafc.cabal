@@ -1,0 +1,36 @@
+cabal-version:       >=1.8
+name:                decafc
+version:             0.0.0
+copyright:           (C) 2013 Benjamin Barenblat
+author:              Benjamin Barenblat
+maintainer:          bbaren@mit.edu
+license:             MIT
+license-file:        LICENSE
+extra-source-files:  alex/AlexWrapper-6.035
+build-type:          Simple
+tested-with:         GHC==7.4.2
+
+executable decafc
+  hs-source-dirs:      src
+  main-is:             Main.hs
+  other-modules:       CLI
+                     , Configuration
+                     , Configuration.Types
+                     , Parser
+                     , Scanner
+  ghc-options:         -Wall -O3
+  build-depends:       base ==4.5.*
+                     , array ==0.4.*
+                     , filepath ==1.3.*
+                     , mtl ==2.1.*
+                     , split ==0.2.*
+                     , transformers ==0.3.*
+  build-tools:         alex >=3.0.2
+                     , happy
+
+
+-- Local Variables:
+-- mode: Haskell-Cabal
+-- fill-column: 70
+-- indent-tabs-mode: nil
+-- End:

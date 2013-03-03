@@ -1,0 +1,4 @@
+# .gitignore for src/                                              -*- conf -*-
+
+# Alex
+Scanner.hs

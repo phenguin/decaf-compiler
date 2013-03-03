@@ -1,0 +1,8 @@
+
+all: Parser.hs
+
+Parser.hs: Scanner.hs Parser.y
+	happy Parser.y
+
+Scanner.hs: Scanner.x
+	alex -t ../alex/ Scanner.x

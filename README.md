@@ -1,4 +1,2 @@
-goat
-====
+Team goat.  Wooo!
 
-goat

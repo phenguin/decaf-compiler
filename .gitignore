@@ -1,0 +1,16 @@
+# .gitignore                                                       -*- conf -*-
+
+# Editor backup files
+*~
+
+# Compiled Haskell
+*.hi
+*.o
+dist/
+
+# Generated haskell source
+src/Parser.hs
+src/Scanner.hs
+
+# Decaf output files
+*.scan
