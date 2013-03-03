@@ -3,17 +3,26 @@ module Transforms where
 import Main (parse, testParse)
 import Parser 
 import MultiTree
+import Data.Hashable (hash)
 
 data LitType = IntType | BoolType | VoidType deriving (Show)
 data FDType = Single | Array Int deriving (Show)
 
-type Id = String
+data Id = IdWithHash Int String deriving (Ord)
+
+mkId :: String -> Id
+mkId s = IdWithHash (hash s) s
+
+instance Eq Id where
+    (IdWithHash h1 s1) == (IdWithHash h2 s2) = (h1 == h2) && (s1 == s2)
+
+instance Show Id where
+    show (IdWithHash _ name) = name
+
+
+
 type TypedId = (LitType, Id)
 type SemanticTree = MultiTree STNode
-
-fromRight :: Either a b -> b
-fromRight (Right x) = x
-fromRIght (Left _) = undefined
 
 data STNode = Prog
             | MethodCall Id
@@ -53,6 +62,9 @@ data STNode = Prog
             | MD TypedId
      deriving (Show)
 
+class ConvertibleToST a where
+    convert :: a -> SemanticTree
+
 convertType :: Type -> LitType
 convertType (Type "int") = IntType
 convertType (Type "boolean") = BoolType
@@ -61,11 +73,19 @@ convertType _ = undefined -- Also redesign this perhaps.. fuck strings
 
 getFieldDeclForest :: FieldDecl -> [SemanticTree]
 getFieldDeclForest (FieldDecl typ cds) = map f cds
-    where f (VarDecl name) = singleton $ FD Single (convertType typ, name)
-          f (ArrayDecl name size) = singleton $ FD (Array (read size)) (convertType typ, name)
+    where f (VarDecl name) = singleton $ FD Single (convertType typ, mkId name)
+          f (ArrayDecl name size) = singleton $ FD (Array (read size)) (convertType typ, mkId name)
 
-class ConvertibleToST a where
-    convert :: a -> SemanticTree
+prettyIRTree :: (SemanticTree -> String) -> FilePath -> String
+prettyIRTree f fp = case testParse fp of
+    Left err -> err
+    Right program -> f $ convert program
+
+putIRTree :: FilePath -> IO ()
+putIRTree = putStrLn . prettyIRTree pPrint
+
+putIRTreeTabbed :: FilePath -> IO ()
+putIRTreeTabbed = putStrLn . prettyIRTree pPrintTabbed
 
 --------------------------------
 
@@ -77,20 +97,20 @@ instance ConvertibleToST Block where
     convert (Block fds stmts) = MT DBlock $ (concat . map getFieldDeclForest) fds ++ map convert stmts
 
 instance ConvertibleToST ParamDecl where 
-    convert (ParamDecl typ name) = singleton $ PD (convertType typ, name)
+    convert (ParamDecl typ name) = singleton $ PD (convertType typ, mkId name)
 
 instance ConvertibleToST MethodDecl where 
-    convert (MethodDecl typ name pds blk) = MT (MD (convertType typ, name)) $ map convert pds ++ [convert blk]
+    convert (MethodDecl typ name pds blk) = MT (MD (convertType typ, mkId name)) $ map convert pds ++ [convert blk]
 
 instance ConvertibleToST CalloutDecl where 
-    convert (CalloutDecl name) = singleton $ CD name
+    convert (CalloutDecl name) = singleton $ CD (mkId name)
 
 instance ConvertibleToST Statement where 
     convert (AssignStatement loc op e) = addChild (convert loc) $ addChild (convert e) $ convert op 
     convert (MethodCallStatement mc) = convert mc
     convert (IfStatement cond bl) = MT If $ [convert cond, convert bl, convert (Block [] [])]
     convert (IfElseStatement cond t_block f_block) = MT If $ [convert cond, convert t_block, convert f_block]
-    convert (ForStatement idf e e' block) = MT (For idf) $ [convert e, convert e', convert block]
+    convert (ForStatement idf e e' block) = MT (For (mkId idf)) $ [convert e, convert e', convert block]
     convert (WhileStatement cond block) = MT While $ [convert cond, convert block]
     convert (ReturnStatement e) = MT Return $ [convert e]
     convert (EmptyReturnStatement) = singleton Return
@@ -104,17 +124,17 @@ instance ConvertibleToST AssignOp where
     convert _ = undefined -- Redesign this perhaps because this kind of sucks
 
 instance ConvertibleToST MethodCall where 
-    convert (ParamlessMethodCall (MethodName s)) = singleton $ MethodCall s
-    convert (ExprParamMethodCall (MethodName s) es) = MT (MethodCall s) $ map convert es
-    convert (CalloutParamMethodCall (MethodName s) cas) = MT (MethodCall s) $ map convert cas
+    convert (ParamlessMethodCall (MethodName s)) = singleton $ MethodCall (mkId s)
+    convert (ExprParamMethodCall (MethodName s) es) = MT (MethodCall (mkId s)) $ map convert es
+    convert (CalloutParamMethodCall (MethodName s) cas) = MT (MethodCall (mkId s)) $ map convert cas
 
 instance ConvertibleToST CalloutArg where 
     convert (ExprCalloutArg e) = convert e
     convert (StringCalloutArg s) = singleton (DStr s)
 
 instance ConvertibleToST Location where 
-    convert (Location s) = singleton (Loc s)
-    convert (IndexedLocation s expr) = MT (Loc s) [convert expr]
+    convert (Location s) = singleton (Loc (mkId s))
+    convert (IndexedLocation s expr) = MT (Loc (mkId s)) [convert expr]
 
 instance ConvertibleToST Expr where 
     convert (OrExpr e e') = MT Or $ [convert e, convert e']

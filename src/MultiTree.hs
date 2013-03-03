@@ -14,6 +14,10 @@ newtype FocusedMultiTree a = FMT { extractFMT :: (MultiTree a, Context a) } deri
 class PrettyPrint a where
     pPrint :: a -> String
 
+pPrintTabbed :: (Show a) => MultiTree a -> String
+pPrintTabbed = pPrintTabbed' 0
+    where pPrintTabbed' n (MT x ts) = replicate (2*n) ' ' ++ show x ++ "\n" ++ (concat $ map (pPrintTabbed' (n+1)) ts)
+
 instance (Show a) => Show (FocusedMultiTree a) where
     show (FMT t) = show t
 
