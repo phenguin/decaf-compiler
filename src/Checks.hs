@@ -1,6 +1,7 @@
 module Checks where
 
 import Data.Maybe
+import Data.Either
 import Prelude
 import MultiTree
 import Traverse
@@ -33,9 +34,45 @@ paramTypes (MT (pos, (MethodCall _) ,_) ts) = Prelude.map f ts
           f _ = VoidType -- Hackish
 --getReturnType :: SemanticTreeWithSymbols -> LitType
 --getReturnType =  
+expressionType:: SemanticTreeWithSymbols -> Either String LitType
+expressionType node@(MT (pos, exp , st) children) =  
+	if  all ((Right expectType) ==) childrenTypes 
+		then Right expectType
+		else Left $foldr (\a b -> a ++"\n" ++ b) ((show pos) ++ "Expression type error\n") (Data.Either.lefts childrenTypes)
+	where 	childrenTypes = (map expressionType children)
+		expectType    = expectedType node
 
+symbolType:: Id -> SymbolTable -> LitType
+symbolType id st = case (lookupSymbol id st) of
+			(Just (FDesc _ tp)) 	-> tp
+			(Just (MDesc tp  _))	-> tp
+			(Just (PDesc tp )) 	-> tp
+			otherwise	-> VoidType
+
+expectedType:: SemanticTreeWithSymbols -> LitType
+expectedType (MT (_,node ,st) _)  = case node of
+            MethodCall id	-> symbolType id st
+            And			-> BoolType
+            Or			-> BoolType
+            Add			-> IntType
+            Sub			-> IntType
+            Mul			-> IntType
+            Mod			-> IntType
+            Div			-> IntType
+            Not 		-> BoolType
+            Neg			-> IntType
+            Neql		-> BoolType
+            Eql			-> BoolType
+            Lt			-> BoolType
+            Lte			-> BoolType
+            Gt			-> BoolType
+            Gte			-> BoolType
+            Loc id		-> symbolType id st
+            DChar _		-> IntType
+            DInt _		-> IntType
+            DBool _		-> BoolType
 --1 --- Not implementable because of hashmap
---2
+--2 -}
 identifierDeclared 
 	(MT (pos, (Loc id ) ,st) _)= 
 		case symbolTableContains id st of
@@ -61,25 +98,27 @@ methodCallParameterMatch
 methodCallParameterMatch _ = Down Nothing 
 checkMethodCallParameters p = 
 	traverse methodCallParameterMatch p 
-{-
+
 --8/9 method return statements.
 
 methodReturnStatement
 	(MT (pos, (MD (lt, id)), st) forest) =
-		case lefts returnTypes of
-			[]	-> Right $ all [lt == rt | rt <- rights returnTypes]
-			_	-> Left $ fold (\ a b = a ++ "\n" ++ b) $ lefts returnTypes
+		case Data.Either.lefts returnTypes of
+			[]	-> Down $ if and [lt == rt | rt <- Data.Either.rights returnTypes]
+						then Nothing
+						else Just $ (show pos) ++ "invalid return"
+			_	-> Down $Just$ foldr (\ a b -> a ++ "\n" ++ b) "" $ Data.Either.lefts returnTypes
 		where 	returnTypes = map returnType (filter isReturn forest)
 			isReturn (MT(_, Return, _) _) = True
 			isReturn _ = False
 			returnType (MT(pos, Return, st) forest) = case forest of 
 				[]	-> Right VoidType
-				_	-> expressionType st $ head forest
+				_	-> expressionType (head forest)
 
 
 checkMethodReturnStatement p =
 	traverse methodReturnStatement p
-
+{-
 -- 10 This is checked coincidentally by check #2.
 
 -- 11 Check id[expr] syntax for validity
