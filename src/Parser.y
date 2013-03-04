@@ -28,7 +28,7 @@ import Scanner (ScannedToken(..), Token(..))
 %tokentype { ScannedToken }
 
 %token
-  id { ScannedToken _ _ (Identifier $$) }
+  id { ScannedToken _ _ (Identifier _) }
   "{"        { ScannedToken _ _ LCurly }
   "}"        { ScannedToken _ _ RCurly }
   "("        { ScannedToken _ _ LParen }
@@ -39,10 +39,10 @@ import Scanner (ScannedToken(..), Token(..))
   "!"        { ScannedToken _ _ Not }
   ","        { ScannedToken _ _ Comma }
 
-  bool { ScannedToken _ _ (BoolLiteral $$) }
-  string { ScannedToken _ _ (StringLiteral $$) }
-  char { ScannedToken _ _ (CharLiteral $$) }
-  int { ScannedToken _ _ (Number $$) }
+  bool { ScannedToken _ _ (BoolLiteral _) }
+  string { ScannedToken _ _ (StringLiteral _) }
+  char { ScannedToken _ _ (CharLiteral _) }
+  int { ScannedToken _ _ (Number _) }
 
   "-"        { ScannedToken _ _ (Symbol "-") }
 
@@ -66,7 +66,7 @@ import Scanner (ScannedToken(..), Token(..))
   "&&" { ScannedToken _ _ (Symbol "&&") }
   "||" { ScannedToken _ _ (Symbol "||") }
 
-  data_type { ScannedToken _ _ (DataType $$) }
+  data_type { ScannedToken _ _ (DataType _) }
   if { ScannedToken _ _ If }
   for { ScannedToken _ _ For }
   while { ScannedToken _ _ While }
@@ -84,146 +84,211 @@ Program : CalloutDecls FieldDecls MethodDecls { Program $1 $2 $3}
 MethodDecls : {- empty -} { [] }
             | MethodDecl MethodDecls { $1 : $2 }
 
-MethodDecl : Type id "(" ")" Block { MethodDecl $1 $2 [] $5 }
-           | Type id "(" ParamDecls ")" Block { MethodDecl $1 $2 $4 $6 }
-           | void id "(" ")" Block { MethodDecl (Type "void") $2 [] $5 }
-           | void id "(" ParamDecls ")" Block { MethodDecl (Type "void") $2 $4 $6 }
+MethodDecl : Type id "(" ")" Block { propogatePos $1 $ MethodDecl $1 (extractPosId $2) [] $5 }
+           | Type id "(" ParamDecls ")" Block { propogatePos $1 $ MethodDecl $1 (extractPosId $2) $4 $6 }
+           | void id "(" ")" Block { propogatePos $1 $ MethodDecl (propogatePos $1 (Type "void")) (extractPosId $2) [] $5 }
+           | void id "(" ParamDecls ")" Block { propogatePos $1 $ MethodDecl (propogatePos $1 (Type "void")) (extractPosId $2) $4 $6 }
 
-Type : data_type { Type $1 }
+Type : data_type { propogatePos $1 $ extractType $1 }
 
-FieldDecl : Type CommaDecls ";" { FieldDecl $1 $2 }
+FieldDecl : Type CommaDecls ";" { propogatePos $1 $ FieldDecl $1 $2 }
 
 FieldDecls : {- empty -} { [] }
            | FieldDecls FieldDecl { $2 : $1 }
 
-CalloutDecl : callout id ";" { CalloutDecl $2 }
+CalloutDecl : callout id ";" { propogatePos $1 $ CalloutDecl (extractPosId $2) }
 
 CalloutDecls : {- empty -} { [] }
              | CalloutDecl CalloutDecls { $1 : $2 }
 
-Block : "{" FieldDecls Statements "}" { Block $2 $3 }
-      | "{" Statements "}" { Block [] $2 }
+Block : "{" FieldDecls Statements "}" { propogatePos $1 $ Block $2 $3 }
+      | "{" Statements "}" { propogatePos $1 $ Block [] $2 }
 
-ParamDecl : Type id { ParamDecl $1 $2 }
+ParamDecl : Type id { propogatePos $1 $ ParamDecl $1 (extractPosId $2) }
 
 ParamDecls : ParamDecl { [$1] }
            | ParamDecl "," { [$1] }
            | ParamDecl "," ParamDecls { $1 : $3 }
 
-Statement : Location AssignOp Expr ";" { AssignStatement $1 $2 $3 }
-        | MethodCall ";" { MethodCallStatement $1 }
-        | if "(" Expr ")" Block { IfStatement $3 $5 }
-        | if "(" Expr ")" Block else Block { IfElseStatement $3 $5 $7 }
-        | for "(" id "=" Expr ";" Expr ")" Block { ForStatement $3 $5 $7 $9 }
-        | while "(" Expr ")" Block { WhileStatement $3 $5 }
-        | return Expr ";" { ReturnStatement $2 }
-        | return ";" { EmptyReturnStatement }
-        | break ";" { BreakStatement }
-        | continue ";" { ContinueStatement }
+Statement : Location AssignOp Expr ";" { propogatePos $1 $ AssignStatement $1 $2 $3 }
+        | MethodCall ";" { propogatePos $1 $ MethodCallStatement $1 }
+        | if "(" Expr ")" Block { propogatePos $1 $ IfStatement $3 $5 }
+        | if "(" Expr ")" Block else Block { propogatePos $1 $ IfElseStatement $3 $5 $7 }
+        | for "(" id "=" Expr ";" Expr ")" Block { propogatePos $1 $ ForStatement (extractPosId $3) $5 $7 $9 }
+        | while "(" Expr ")" Block { propogatePos $1 $ WhileStatement $3 $5 }
+        | return Expr ";" { propogatePos $1 $ ReturnStatement $2 }
+        | return ";" { propogatePos $1 $ EmptyReturnStatement }
+        | break ";" { propogatePos $1 $ BreakStatement }
+        | continue ";" { propogatePos $1 $ ContinueStatement }
 
 Statements : {- empty -} { [] }
            | Statement Statements { $1 : $2 }
 
-AssignOp : "=" { AssignOp "=" }
-        | "+=" { AssignOp "+=" }
-        | "-=" { AssignOp "-=" }
+AssignOp : "=" { propogatePos $1 $ AssignOp "=" }
+        | "+=" { propogatePos $1 $ AssignOp "+=" }
+        | "-=" { propogatePos $1 $ AssignOp "-=" }
 
-MethodCall : MethodName "(" ")" { ParamlessMethodCall $1 }
-        | MethodName "(" CommaExprs ")" { ExprParamMethodCall $1 $3 }
-        | MethodName "(" CommaCalloutArgs ")" { CalloutParamMethodCall $1 $3 }
+MethodCall : MethodName "(" ")" { propogatePos $1 $ ParamlessMethodCall $1 }
+        | MethodName "(" CommaExprs ")" { propogatePos $1 $ ExprParamMethodCall $1 $3 }
+        | MethodName "(" CommaCalloutArgs ")" { propogatePos $1 $ CalloutParamMethodCall $1 $3 }
 
-MethodName : id { MethodName $1 }
+MethodName : id { propogatePos $1 $ MethodName (extractPosId $1) }
 
-Location : id { Location $1 }
-        | id "[" Expr "]" { IndexedLocation $1 $3 }
+Location : id { propogatePos $1 $ Location (extractPosId $1) }
+        | id "[" Expr "]" { propogatePos $1 $ IndexedLocation (extractPosId $1) $3 }
 
 -- Order of operations stuff
-Expr : Expr "||" Expr1 { OrExpr $1 $3 }
-     | Expr1 { Expr1 $1 }
+Expr : Expr "||" Expr1 { propogatePos $1 $ OrExpr $1 $3 }
+     | Expr1 { propogatePos $1 $ Expr1 $1 }
 
-Expr1 : Expr1 "&&" Expr2 { AndExpr $1 $3 }
-     | Expr2 { Expr2 $1 }
+Expr1 : Expr1 "&&" Expr2 { propogatePos $1 $ AndExpr $1 $3 }
+     | Expr2 { propogatePos $1 $ Expr2 $1 }
 
-Expr2 : Expr2 "==" Expr3 { EqualExpr $1 $3 }
-     | Expr2 "!=" Expr3 { NotEqualExpr $1 $3 } 
-     | Expr3 { Expr3 $1 }
+Expr2 : Expr2 "==" Expr3 { propogatePos $1 $ EqualExpr $1 $3 }
+     | Expr2 "!=" Expr3 { propogatePos $1 $ NotEqualExpr $1 $3 } 
+     | Expr3 { propogatePos $1 $ Expr3 $1 }
 
-Expr3 : Expr3 "<" Expr4 { LTExpr $1 $3 }
-     | Expr3 "<=" Expr4 { LTEExpr $1 $3 } 
-     | Expr3 ">" Expr4 { GTExpr $1 $3 } 
-     | Expr3 ">=" Expr4 { GTEExpr $1 $3 } 
-     | Expr4 { Expr4 $1 }
+Expr3 : Expr3 "<" Expr4 { propogatePos $1 $ LTExpr $1 $3 }
+     | Expr3 "<=" Expr4 { propogatePos $1 $ LTEExpr $1 $3 } 
+     | Expr3 ">" Expr4 { propogatePos $1 $ GTExpr $1 $3 } 
+     | Expr3 ">=" Expr4 { propogatePos $1 $ GTEExpr $1 $3 } 
+     | Expr4 { propogatePos $1 $ Expr4 $1 }
 
-Expr4 : Expr4 "+" Expr5 { AddExpr $1 $3 }
-     | Expr4 "-" Expr5 { SubtractExpr $1 $3 } 
-     | Expr5 { Expr5 $1 }
+Expr4 : Expr4 "+" Expr5 { propogatePos $1 $ AddExpr $1 $3 }
+     | Expr4 "-" Expr5 { propogatePos $1 $ SubtractExpr $1 $3 } 
+     | Expr5 { propogatePos $1 $ Expr5 $1 }
 
-Expr5 : Expr5 "*" Expr6 { MultiplyExpr $1 $3 }
-     | Expr5 "/" Expr6 { DivideExpr $1 $3 } 
-     | Expr5 "%" Expr6 { ModuloExpr $1 $3 } 
-     | Expr6 { Expr6 $1 }
+Expr5 : Expr5 "*" Expr6 { propogatePos $1 $ MultiplyExpr $1 $3 }
+     | Expr5 "/" Expr6 { propogatePos $1 $ DivideExpr $1 $3 } 
+     | Expr5 "%" Expr6 { propogatePos $1 $ ModuloExpr $1 $3 } 
+     | Expr6 { propogatePos $1 $ Expr6 $1 }
 
-Expr6 : "-" Expr7 { NegateExpr $2 }
-     | "!" Expr7 { NotExpr $2 } 
-     | Expr7 { Expr7 $1 }
+Expr6 : "-" Expr7 { propogatePos $1 $ NegateExpr $2 }
+     | "!" Expr7 { propogatePos $1 $ NotExpr $2 } 
+     | Expr7 { propogatePos $1 $ Expr7 $1 }
 
-Expr7 : Literal { LiteralExpr $1 }
-     | Location { LocationExpr $1 } 
-     | MethodCall { MethodCallExpr $1 }
-     | "(" Expr ")" { ParenExpr $2 }
+Expr7 : Literal { propogatePos $1 $ LiteralExpr $1 }
+     | Location { propogatePos $1 $ LocationExpr $1 } 
+     | MethodCall { propogatePos $1 $ MethodCallExpr $1 }
+     | "(" Expr ")" { propogatePos $1 $ ParenExpr $2 }
 
 -- Maybe flip the recursion direction on this for constant stack space
 CommaExprs : Expr { [$1] }
         | Expr "," { [$1] }
         | Expr "," CommaExprs { $1 : $3 }
 
-CommaDecls : id { [VarDecl $1] }
-         | id "[" int "]" { [ArrayDecl $1 $3] }
-         | id "," { [VarDecl $1] }
-         | id "[" int "]" "," { [ArrayDecl $1 $3] }
-         | id "," CommaDecls { (VarDecl $1) : $3 }
-         | id "[" int "]" "," CommaDecls { (ArrayDecl $1 $3) : $6 }
+CommaDecls : id { [propogatePos $1 $ VarDecl (extractPosId $1)] }
+         | id "[" int "]" {  [propogatePos $1 $ ArrayDecl (extractPosId $1) (extractPosInt $3)] }
+         | id "," {  [propogatePos $1 $ VarDecl (extractPosId $1)] }
+         | id "[" int "]" "," { [propogatePos $1 $ ArrayDecl (extractPosId $1) (extractPosInt $3)] }
+         | id "," CommaDecls { (propogatePos $1 $ VarDecl (extractPosId $1)) : $3 }
+         | id "[" int "]" "," CommaDecls { (propogatePos $1 $ ArrayDecl (extractPosId $1) (extractPosInt $3)) : $6 }
 
 CommaCalloutArgs : CalloutArg { [$1] }
         | CalloutArg "," { [$1] }
         | CalloutArg "," CommaCalloutArgs { $1 : $3 }
 
-CalloutArg : Expr { ExprCalloutArg $1 }
-        | string { StringCalloutArg $1}
+CalloutArg : Expr { propogatePos $1 $ ExprCalloutArg $1 }
+        | string { propogatePos $1 $ StringCalloutArg $ extractString $1}
 
 
-Literal : int { Int $1 }
-        | bool { Bool $1 }
-        | char { Char $1 }
+Literal : int { propogatePos $1 $ Int $ extractInt $1}
+        | bool { propogatePos $1 $ Bool $ extractBool $1}
+        | char { propogatePos $1 $ Char $ extractChar $1}
 
 
 ----------------------------------- Haskell -----------------------------------
 {
 
+type Pos = (Int, Int)
+applyFst :: (a -> b) -> (a, c) -> (b, c)
+applyFst f (x,y) = (f x, y)
+
+extractPos :: ScannedToken -> Pos
+extractPos st = (line st, column st)
+
+extractBool :: ScannedToken -> Bool
+extractBool s@(ScannedToken _ _ (BoolLiteral x)) = x
+
+extractWithPos :: (ScannedToken -> a) -> ScannedToken -> WithPos a
+extractWithPos f s = propogatePos s $ f s
+
+extractInt :: ScannedToken -> String
+extractInt s@(ScannedToken _ _ (Number x)) = x
+
+extractPosInt = extractWithPos extractInt
+
+extractChar :: ScannedToken -> Char
+extractChar s@(ScannedToken _ _ (CharLiteral x)) = x
+
+extractString :: ScannedToken -> String
+extractString s@(ScannedToken _ _ (StringLiteral x)) = x
+
+extractPosString = extractWithPos extractString
+
+extractType :: ScannedToken -> Type
+extractType s@(ScannedToken _ _ (DataType x)) = Type x
+
+extractPosType = extractWithPos extractType
+
+extractId :: ScannedToken -> String
+extractId s@(ScannedToken _ _ (Identifier x)) = x
+
+extractPosId = extractWithPos extractId
+
+data WithPos a = P Pos a deriving (Show)
+
+instance Functor WithPos where
+    fmap f (P p v) = P p (f v)
+
+getPos :: WithPos a -> Pos
+getPos (P p _) = p
+
+changeLine :: Int -> WithPos a -> WithPos a
+changeLine n (P (x,y) v) = P (x+n,y) v
+
+changeCol :: Int -> WithPos a -> WithPos a
+changeCol n (P (x,y) v) = P (x,y+n) v
+
+getVal :: WithPos a -> a
+getVal (P _ v) = v
+
+addPos :: Pos -> a -> WithPos a
+addPos p v = P p v
+
+class PropogatePos a where
+    propogatePos :: a -> b -> WithPos b
+
+instance PropogatePos (WithPos a) where
+    propogatePos wp = addPos (getPos wp)
+
+instance PropogatePos ScannedToken where
+    propogatePos st = addPos (line st, column st)
+
+
 data Program = Program CalloutDecls FieldDecls MethodDecls deriving (Show)
 data Block = Block FieldDecls Statements deriving (Show)
 
-data SpaceDecl = VarDecl String | ArrayDecl String String deriving (Show)
-data FieldDecl = FieldDecl Type CommaDecls deriving (Show)
-data ParamDecl = ParamDecl Type String deriving (Show)
-data MethodDecl = MethodDecl Type String ParamDecls Block deriving (Show)
-data CalloutDecl = CalloutDecl String deriving (Show)
+data SpaceDecl = VarDecl (WithPos String) | ArrayDecl (WithPos String) (WithPos String) deriving (Show)
+data FieldDecl = FieldDecl (WithPos Type) CommaDecls deriving (Show)
+data ParamDecl = ParamDecl (WithPos Type) (WithPos String) deriving (Show)
+data MethodDecl = MethodDecl (WithPos Type) (WithPos String) ParamDecls (WithPos Block) deriving (Show)
+data CalloutDecl = CalloutDecl (WithPos String) deriving (Show)
 
-type CommaDecls = [SpaceDecl]
-type ParamDecls = [ParamDecl]
-type FieldDecls = [FieldDecl]
-type Statements = [Statement]
-type MethodDecls = [MethodDecl]
-type CalloutDecls = [CalloutDecl]
+type CommaDecls = [WithPos SpaceDecl]
+type ParamDecls = [WithPos ParamDecl]
+type FieldDecls = [WithPos FieldDecl]
+type Statements = [WithPos Statement]
+type MethodDecls = [WithPos MethodDecl]
+type CalloutDecls = [WithPos CalloutDecl]
 
-
-data Statement = AssignStatement Location AssignOp Expr
-        | MethodCallStatement MethodCall
-        | IfStatement Expr Block
-        | IfElseStatement Expr Block Block
-        | ForStatement String Expr Expr Block
-        | WhileStatement Expr Block
-        | ReturnStatement Expr
+data Statement = AssignStatement (WithPos Location) (WithPos AssignOp) (WithPos Expr)
+        | MethodCallStatement (WithPos MethodCall)
+        | IfStatement (WithPos Expr) (WithPos Block)
+        | IfElseStatement (WithPos Expr) (WithPos Block) (WithPos Block)
+        | ForStatement (WithPos String) (WithPos Expr) (WithPos Expr) (WithPos Block)
+        | WhileStatement (WithPos Expr) (WithPos Block)
+        | ReturnStatement (WithPos Expr)
         | EmptyReturnStatement
         | BreakStatement
         | ContinueStatement
@@ -235,67 +300,67 @@ data Type = Type String
 data AssignOp = AssignOp String
      deriving (Show)
 
-data MethodCall = ParamlessMethodCall MethodName
-                | ExprParamMethodCall MethodName CommaExprs
-                | CalloutParamMethodCall MethodName CommaCalloutArgs
+data MethodCall = ParamlessMethodCall (WithPos MethodName)
+                | ExprParamMethodCall (WithPos MethodName) CommaExprs
+                | CalloutParamMethodCall (WithPos MethodName) CommaCalloutArgs
      deriving (Show)
 
-data CalloutArg = ExprCalloutArg Expr
+data CalloutArg = ExprCalloutArg (WithPos Expr)
                 | StringCalloutArg String
      deriving (Show)
 
-data MethodName = MethodName String
+data MethodName = MethodName (WithPos String)
      deriving (Show)
 
 
-data Location = Location String
-          | IndexedLocation String Expr
+data Location = Location (WithPos String)
+          | IndexedLocation (WithPos String) (WithPos Expr)
      deriving (Show)
 
-data Expr = OrExpr Expr Expr1
-          | Expr1 Expr1
+data Expr = OrExpr (WithPos Expr) (WithPos Expr1)
+          | Expr1 (WithPos Expr1)
      deriving (Show)
 
-data Expr1 = AndExpr Expr1 Expr2
-          | Expr2 Expr2
+data Expr1 = AndExpr (WithPos Expr1) (WithPos Expr2)
+          | Expr2 (WithPos Expr2)
      deriving (Show)
 
-data Expr2 = EqualExpr Expr2 Expr3
-          | NotEqualExpr Expr2 Expr3
-          | Expr3 Expr3
+data Expr2 = EqualExpr (WithPos Expr2) (WithPos Expr3)
+          | NotEqualExpr (WithPos Expr2) (WithPos Expr3)
+          | Expr3 (WithPos Expr3)
      deriving (Show)
 
-data Expr3 = LTExpr Expr3 Expr4
-          | LTEExpr Expr3 Expr4
-          | GTExpr Expr3 Expr4
-          | GTEExpr Expr3 Expr4
-          | Expr4 Expr4
+data Expr3 = LTExpr (WithPos Expr3) (WithPos Expr4)
+          | LTEExpr (WithPos Expr3) (WithPos Expr4)
+          | GTExpr (WithPos Expr3) (WithPos Expr4)
+          | GTEExpr (WithPos Expr3) (WithPos Expr4)
+          | Expr4 (WithPos Expr4)
      deriving (Show)
 
-data Expr4 = AddExpr Expr4 Expr5
-          | SubtractExpr Expr4 Expr5
-          | Expr5 Expr5
+data Expr4 = AddExpr (WithPos Expr4) (WithPos Expr5)
+          | SubtractExpr (WithPos Expr4) (WithPos Expr5)
+          | Expr5 (WithPos Expr5)
      deriving (Show)
 
-data Expr5 = MultiplyExpr Expr5 Expr6
-          | DivideExpr Expr5 Expr6
-          | ModuloExpr Expr5 Expr6
-          | Expr6 Expr6
+data Expr5 = MultiplyExpr (WithPos Expr5) (WithPos Expr6)
+          | DivideExpr (WithPos Expr5) (WithPos Expr6)
+          | ModuloExpr (WithPos Expr5) (WithPos Expr6)
+          | Expr6 (WithPos Expr6)
      deriving (Show)
 
-data Expr6 = NegateExpr Expr7
-          | NotExpr Expr7
-          | Expr7 Expr7
+data Expr6 = NegateExpr (WithPos Expr7)
+          | NotExpr (WithPos Expr7)
+          | Expr7 (WithPos Expr7)
      deriving (Show)
 
-data Expr7 = LiteralExpr Literal
-          | LocationExpr Location
-          | MethodCallExpr MethodCall
-          | ParenExpr Expr
+data Expr7 = LiteralExpr (WithPos Literal)
+          | LocationExpr (WithPos Location)
+          | MethodCallExpr (WithPos MethodCall)
+          | ParenExpr (WithPos Expr)
      deriving (Show)
 
-type CommaExprs = [Expr]
-type CommaCalloutArgs = [CalloutArg]
+type CommaExprs = [WithPos Expr]
+type CommaCalloutArgs = [WithPos CalloutArg]
 
 data Literal = Bool Bool | Int String | Char Char
      deriving (Show)

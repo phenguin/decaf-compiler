@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleInstances #-}
 module Transforms where
 
 import Main (parse, testParse)
@@ -19,12 +20,10 @@ instance Eq Id where
 instance Show Id where
     show (IdWithHash _ name) = name
 
-
-
 type TypedId = (LitType, Id)
-type SemanticTree = MultiTree (pos, STNode)
+type SemanticTree = MultiTree (Pos, STNode)
 
-data STNode = Prog 
+data STNode = Prog
             | MethodCall Id
             | And
             | Or
@@ -56,10 +55,10 @@ data STNode = Prog
             | If
             | For Id
             | While
-            | FD FDType TypedId	-- Field declaration
-            | CD Id		-- Callout declaration
-            | PD TypedId	-- Parameter declaration
-            | MD TypedId	-- Method declaration
+            | FD FDType TypedId
+            | CD Id
+            | PD TypedId
+            | MD TypedId
      deriving (Show)
 
 class ConvertibleToST a where
@@ -71,10 +70,10 @@ convertType (Type "boolean") = BoolType
 convertType (Type "void") = VoidType
 convertType _ = undefined -- Also redesign this perhaps.. fuck strings
 
-getFieldDeclForest :: FieldDecl -> [SemanticTree]
-getFieldDeclForest (FieldDecl typ cds) = map f cds
-    where f (VarDecl name) = singleton $ FD Single (convertType typ, mkId name)
-          f (ArrayDecl name size) = singleton $ FD (Array (read size)) (convertType typ, mkId name)
+getFieldDeclForest :: WithPos FieldDecl -> [SemanticTree]
+getFieldDeclForest (P pos (FieldDecl typ cds)) = map f cds
+    where f (P pos (VarDecl name)) = singleton $ (pos, FD Single ((convertType . getVal) typ, (mkId . getVal) name))
+          f (P pos (ArrayDecl name size)) = singleton $ (pos, FD (Array (read $ getVal size)) ((convertType . getVal) typ, (mkId . getVal) name))
 
 prettyIRTree :: (SemanticTree -> String) -> FilePath -> String
 prettyIRTree f fp = case testParse fp of
@@ -93,95 +92,95 @@ putIRTreeTabbed = putStrLn . prettyIRTree pPrintTabbed
 --------------------------------
 
 instance ConvertibleToST Program where 
-    convert (P pos (Program cds fds mds)) =(pos, MT Prog children)
+    convert (Program cds fds mds) = MT ((1,1), Prog) children
         where children = (map convert cds) ++ (concat . map getFieldDeclForest) fds ++ (map convert mds)
 
-instance ConvertibleToST Block where 
-    convert (P pos (Block fds stmts)) =(pos, MT DBlock $ (concat . map getFieldDeclForest) fds ++ map convert stmts)
+instance ConvertibleToST (WithPos Block) where 
+    convert (P pos (Block fds stmts)) = MT (pos, DBlock) $ (concat . map getFieldDeclForest ) fds ++ map convert stmts
 
-instance ConvertibleToST ParamDecl where 
-    convert (P pos (ParamDecl typ name)) =(pos, singleton $ PD (convertType typ, mkId name))
+instance ConvertibleToST (WithPos ParamDecl) where 
+    convert (P pos (ParamDecl typ name)) = singleton $ (pos, PD ((convertType . getVal) typ, (mkId . getVal) name))
 
-instance ConvertibleToST MethodDecl where 
-    convert (P pos (MethodDecl typ name pds blk)) =(pos, MT (MD (convertType typ, mkId name)) $ map convert pds ++ [convert blk])
+instance ConvertibleToST (WithPos MethodDecl) where 
+    convert (P pos (MethodDecl typ name pds blk)) = MT (pos, (MD ((convertType . getVal) typ, (mkId . getVal) name))) $ map convert pds ++ [convert blk]
 
-instance ConvertibleToST CalloutDecl where 
-    convert (P pos (CalloutDecl name)) =(pos, singleton $ CD (mkId name))
+instance ConvertibleToST (WithPos CalloutDecl) where 
+    convert (P pos (CalloutDecl name)) = singleton $ (pos, CD ((mkId . getVal) name))
 
-instance ConvertibleToST Statement where 
-    convert (P pos (AssignStatement loc op e)) =(pos, addChild (convert loc) $ addChild (convert e) $ convert op )
-    convert (P pos (MethodCallStatement mc)) =(pos, convert mc)
-    convert (P pos (IfStatement cond bl)) =(pos, MT If $ [convert cond, convert bl, convert (Block [] [])])
-    convert (P pos (IfElseStatement cond t_block f_block)) =(pos, MT If $ [convert cond, convert t_block, convert f_block])
-    convert (P pos (ForStatement idf e e' block)) =(pos, MT (For (mkId idf)) $ [convert e, convert e', convert block])
-    convert (P pos (WhileStatement cond block)) =(pos, MT While $ [convert cond, convert block])
-    convert (P pos (ReturnStatement e)) =(pos, MT Return $ [convert e])
-    convert (P pos (EmptyReturnStatement)) =(pos, singleton Return)
-    convert (P pos (BreakStatement)) =(pos, singleton Break)
-    convert (P pos (ContinueStatement)) =(pos, singleton Continue)
+instance ConvertibleToST (WithPos Statement) where 
+    convert (P pos (AssignStatement loc op e)) = addChild (convert loc) $ addChild (convert e) $ convert op 
+    convert (P pos (MethodCallStatement mc)) = convert mc
+    convert (P pos (IfStatement cond bl)) = MT (pos, If) $ [convert cond, convert bl]
+    convert (P pos (IfElseStatement cond t_block f_block)) = MT (pos, If) $ [convert cond, convert t_block, convert f_block]
+    convert (P pos (ForStatement idf e e' block)) = MT (pos, (For ((mkId . getVal) idf))) $ [convert e, convert e', convert block]
+    convert (P pos (WhileStatement cond block)) = MT (pos, While) $ [convert cond, convert block]
+    convert (P pos (ReturnStatement e)) = MT (pos, Return) $ [convert e]
+    convert (P pos (EmptyReturnStatement)) = singleton (pos, Return)
+    convert (P pos (BreakStatement)) = singleton (pos, Break)
+    convert (P pos (ContinueStatement)) = singleton (pos, Continue)
 
-instance ConvertibleToST AssignOp where 
-    convert (P pos (AssignOp "=")) =(pos, singleton Assign)
-    convert (P pos (AssignOp "+=")) =(pos, singleton AssignPlus)
-    convert (P pos (AssignOp "-=")) =(pos, singleton AssignMinus)
+instance ConvertibleToST (WithPos AssignOp) where 
+    convert (P pos (AssignOp "=")) = singleton (pos, Assign)
+    convert (P pos (AssignOp "+=")) = singleton (pos, AssignPlus)
+    convert (P pos (AssignOp "-=")) = singleton (pos, AssignMinus)
     convert _ = undefined -- Redesign this perhaps because this kind of sucks
 
-instance ConvertibleToST MethodCall where 
-    convert (P pos (ParamlessMethodCall (MethodName s))) =(pos, singleton $ MethodCall (mkId s))
-    convert (P pos (ExprParamMethodCall (MethodName s)) es) =(pos, MT (MethodCall (mkId s)) $ map convert es)
-    convert (P pos (CalloutParamMethodCall (MethodName s)) cas) =(pos, MT (MethodCall (mkId s)) $ map convert cas)
+instance ConvertibleToST (WithPos MethodCall) where 
+    convert (P pos (ParamlessMethodCall (P pos2 (MethodName s)))) = singleton $ (pos, MethodCall $ (mkId . getVal) s)
+    convert (P pos (ExprParamMethodCall (P pos2 (MethodName s)) es)) = MT (pos, (MethodCall $ (mkId . getVal) s)) $ map convert es
+    convert (P pos (CalloutParamMethodCall (P pos2 (MethodName s)) cas)) = MT (pos, (MethodCall $ (mkId . getVal) s)) $ map convert cas
 
-instance ConvertibleToST CalloutArg where 
-    convert (P pos (ExprCalloutArg e)) =(pos, convert e)
-    convert (P pos (StringCalloutArg s)) =(pos, singleton (DStr s))
+instance ConvertibleToST (WithPos CalloutArg) where 
+    convert (P pos (ExprCalloutArg e)) = convert e
+    convert (P pos (StringCalloutArg s)) = singleton (pos, (DStr s))
 
-instance ConvertibleToST Location where 
-    convert (P pos (Location s)) =(pos, singleton (Loc (mkId s)))
-    convert (P pos (IndexedLocation s expr)) =(pos, MT (Loc (mkId s)) [convert expr])
+instance ConvertibleToST (WithPos Location) where 
+    convert (P pos (Location s)) = singleton (pos, (Loc ((mkId . getVal) s)))
+    convert (P pos (IndexedLocation s expr)) = MT (pos, (Loc ((mkId . getVal) s))) [convert expr]
 
-instance ConvertibleToST Expr where 
-    convert (P pos (OrExpr e e')) =(pos, MT Or $ [convert e, convert e'])
-    convert (P pos (Expr1 e)) =(pos, convert e)
+instance ConvertibleToST (WithPos Expr) where 
+    convert (P pos (OrExpr e e')) = MT (pos, Or) $ [convert e, convert e']
+    convert (P pos (Expr1 e)) = convert e
 
-instance ConvertibleToST Expr1 where 
-    convert (P pos (AndExpr e e')) =(pos, MT And $ [convert e, convert e'])
-    convert (P pos (Expr2 e)) =(pos, convert e)
+instance ConvertibleToST (WithPos Expr1) where 
+    convert (P pos (AndExpr e e')) = MT (pos, And) $ [convert e, convert e']
+    convert (P pos (Expr2 e)) = convert e
 
-instance ConvertibleToST Expr2 where 
-    convert (P pos (EqualExpr e e')) =(pos, MT Eql $ [convert e, convert e'])
-    convert (P pos (NotEqualExpr e e')) =(pos, MT Neql $ [convert e, convert e'])
-    convert (P pos (Expr3 e)) =(pos, convert e)
+instance ConvertibleToST (WithPos Expr2) where 
+    convert (P pos (EqualExpr e e')) = MT (pos, Eql) $ [convert e, convert e']
+    convert (P pos (NotEqualExpr e e')) = MT (pos, Neql) $ [convert e, convert e']
+    convert (P pos (Expr3 e)) = convert e
 
-instance ConvertibleToST Expr3 where 
-    convert (P pos (LTExpr e e')) =(pos, MT Lt $ [convert e, convert e'])
-    convert (P pos (LTEExpr e e')) =(pos, MT Lte $ [convert e, convert e'])
-    convert (P pos (GTExpr e e')) =(pos, MT Gt $ [convert e, convert e'])
-    convert (P pos (GTEExpr e e')) =(pos, MT Gte $ [convert e, convert e'])
-    convert (P pos (Expr4 e)) =(pos, convert e)
+instance ConvertibleToST (WithPos Expr3) where 
+    convert (P pos (LTExpr e e')) = MT (pos, Lt) $ [convert e, convert e']
+    convert (P pos (LTEExpr e e')) = MT (pos, Lte) $ [convert e, convert e']
+    convert (P pos (GTExpr e e')) = MT (pos, Gt) $ [convert e, convert e']
+    convert (P pos (GTEExpr e e')) = MT (pos, Gte) $ [convert e, convert e']
+    convert (P pos (Expr4 e)) = convert e
 
-instance ConvertibleToST Expr4 where 
-    convert (P pos (AddExpr e e')) =(pos, MT Add $ [convert e, convert e'])
-    convert (P pos (SubtractExpr e e')) =(pos, MT Sub $ [convert e, convert e'])
-    convert (P pos (Expr5 e)) =(pos, convert e)
+instance ConvertibleToST (WithPos Expr4) where 
+    convert (P pos (AddExpr e e')) = MT (pos, Add) $ [convert e, convert e']
+    convert (P pos (SubtractExpr e e')) = MT (pos, Sub) $ [convert e, convert e']
+    convert (P pos (Expr5 e)) = convert e
 
-instance ConvertibleToST Expr5 where 
-    convert (P pos (MultiplyExpr e e')) =(pos, MT Mul $ [convert e, convert e'])
-    convert (P pos (DivideExpr e e')) =(pos, MT Div $ [convert e, convert e'])
-    convert (P pos (ModuloExpr e e')) =(pos, MT Mod $ [convert e, convert e'])
-    convert (P pos (Expr6 e)) =(pos, convert e)
+instance ConvertibleToST (WithPos Expr5) where 
+    convert (P pos (MultiplyExpr e e')) = MT (pos, Mul) $ [convert e, convert e']
+    convert (P pos (DivideExpr e e')) = MT (pos, Div) $ [convert e, convert e']
+    convert (P pos (ModuloExpr e e')) = MT (pos, Mod) $ [convert e, convert e']
+    convert (P pos (Expr6 e)) = convert e
 
-instance ConvertibleToST Expr6 where 
-    convert (P pos (NegateExpr e)) =(pos, MT Neg $ map convert [e])
-    convert (P pos (NotExpr e)) =(pos, MT Not $ map convert [e])
-    convert (P pos (Expr7 e)) =(pos, convert e)
+instance ConvertibleToST (WithPos Expr6) where 
+    convert (P pos (NegateExpr e)) = MT (pos, Neg) $ map convert [e]
+    convert (P pos (NotExpr e)) = MT (pos, Not) $ map convert [e]
+    convert (P pos (Expr7 e)) = convert e
 
-instance ConvertibleToST Expr7 where 
-    convert (P pos (LiteralExpr lit)) =(pos, convert lit)
-    convert (P pos (LocationExpr loc)) =(pos, convert loc)
-    convert (P pos (MethodCallExpr mc)) =(pos, convert mc)
-    convert (P pos (ParenExpr e)) =(pos, convert e)
+instance ConvertibleToST (WithPos Expr7) where 
+    convert (P pos (LiteralExpr lit)) = convert lit
+    convert (P pos (LocationExpr loc)) = convert loc
+    convert (P pos (MethodCallExpr mc)) = convert mc
+    convert (P pos (ParenExpr e)) = convert e
 
-instance ConvertibleToST Literal where 
-    convert (P pos (Bool b)) =(pos, singleton (DBool b))
-    convert (P pos (Int str)) =(pos, singleton (DInt (read str)) )
-    convert (P pos (Char c)) =(pos, singleton (DChar c) )
+instance ConvertibleToST (WithPos Literal) where 
+    convert (P pos (Bool b)) = singleton (pos, (DBool b))
+    convert (P pos (Int str)) = singleton (pos, (DInt (read str)))
+    convert (P pos (Char c)) = singleton (pos, (DChar c))
