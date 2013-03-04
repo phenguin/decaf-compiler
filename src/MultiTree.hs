@@ -4,7 +4,7 @@ import Control.Monad
 import Data.Maybe 
 import Control.Applicative
 
-data MultiTree a = MT a (Forest a) deriving (Eq)
+data MultiTree a = MT { nodeName :: a, children :: (Forest a) } deriving (Eq)
 
 data Cxt a = Cxt { parentLabel :: a, lefts :: [MultiTree a], rights :: [MultiTree a] } deriving (Eq, Show)
 

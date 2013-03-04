@@ -58,7 +58,7 @@ data STNode = Prog
             | CD Id
             | PD TypedId
             | MD TypedId
-     deriving (Show)
+     deriving (Show, Eq)
 
 class ConvertibleToST a where
     convert :: a -> SemanticTree

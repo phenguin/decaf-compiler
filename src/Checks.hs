@@ -30,7 +30,10 @@ doChecks fs t = let errs = concat $ map (\f -> f t) fs in do
 
 -- List the checks you want to be applied here. Main.hs pulls this var
 checksList :: [SemanticCheck]
-checksList = [checkArrayBoundsValid, checkCondsHaveBoolType]
+checksList = [checkArrayBoundsValid
+            , checkCondsHaveBoolType
+            , checkArithRelOpOperandTypes
+            ]
 
 testCheck c = doChecks [c] . checkParse
 
@@ -49,8 +52,7 @@ paramTypes (MT (pos, (MethodCall _) ,_) ts) = Prelude.map f ts
 	  f (MT (pos , (DBool _),_)_) = BoolType
 	  f (MT (pos , (DChar _),_)_) = IntType
           f _ = VoidType -- Hackish
---getReturnType :: SemanticTreeWithSymbols -> LitType
---getReturnType =  
+          --
 expressionType:: SemanticTreeWithSymbols -> Either String LitType
 expressionType node@(MT (pos, exp , st) children) =  if null ls && (childsTypePred node) rs then Right expectType else Left $ "Expression type error"
       where childrenTypes = (map expressionType children)
@@ -126,8 +128,8 @@ identifierDeclared
 	_ = Down Nothing
 
 checkIdenifierDeclared p = traverse identifierDeclared p 
---4
 
+-- Semantic Check #4
 arrayBoundsValid :: SemanticTreeWithSymbols -> TraverseControl
 arrayBoundsValid (MT (pos, (FD (Array n) (t, id)), st) _) = case n <= 0 of
     True -> Down $ Just $ show (pos) ++ ": Invalid array declaration for " ++ (idString id) ++ ".  Array must have positive integer size"
@@ -148,7 +150,20 @@ condHasBoolType (MT (pos, While, st) (x:xs)) = case expressionType x of
     _ -> Down $ Just $ show pos ++ ": While conditional expr must have type bool"
 
 condHasBoolType _ = Down Nothing
+
 checkCondsHaveBoolType = traverse condHasBoolType
+
+-- Semantic Check #13
+typecheckArithRelOps :: SemanticTreeWithSymbols -> TraverseControl
+
+typecheckArithRelOps node@(MT (pos, x, st) _) 
+    | x `elem` opList = case expressionType node of
+        Right _  -> Down Nothing
+        Left _ -> Down $ Just $ show pos ++ ": Arithmetic and Relational ops operands must have int types"
+    | otherwise = Down Nothing
+    where opList = [Add, Sub, Mul, Mod, Div, Gt, Gte, Lt, Lte]
+
+checkArithRelOpOperandTypes = traverse typecheckArithRelOps
 
 -- 5 parameter type check
 checkParameterTypes:: SymbolTable -> Id ->[LitType] -> Bool
