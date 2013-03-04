@@ -3,35 +3,36 @@ module Checks where
 import Data.Maybe
 import Prelude
 import MultiTree
-
+import Traverse
+import Semantics
+import Transforms
+import Main(testParse)
 -- Utility functions for semantic checking
+checkParse :: String -> SemanticTreeWithSymbols
+checkParse s = addSymbolTables $convert $fromRight $testParse s
 
-expand (MT _ a ) = a
+symbolTableContains:: Id -> SymbolTable -> Bool 
+symbolTableContains id st = isJust $ lookupSymbol id st
 
-traverse f tree = case (f tree ) of
-	Just b -> b
-	Nothing -> and checkedChildren
-	where 	children = expand tree
-		checkedChildren = map (traverse f) children
+idString:: Id -> String
+idString id@(IdWithHash _ s) = s
 
 
-symbolTableContains:: ST -> Identifier-> Bool 
-symbolTableContains st symb = 
-
-symbolTableType:: ST -> Identifier -> LitType
 
 --1 --- Not implementable because of hashmap
 --2
 identifierDeclared 
 	(MT (pos, (Loc id ) ,st) _)= 
-		case symbolTableContains st id of
-			True 	-> nothing
-			False 	-> False
+		case symbolTableContains id st of
+			True 	-> Down Nothing
+			False 	-> Down $ Just$ "Identifier " ++ (idString id) ++ " is undeclared"
 identifierDeclared 
-	_ = Nothing
+	_ = Down Nothing
 
 checkIdenifierDeclared p = traverse identifierDeclared p 
---5 parameter type check
+
+
+{- 5 parameter type check
 checkParameterTypes st param2 = ?????? 
 
 methodCallParameterMatch 
@@ -248,4 +249,4 @@ breakContinue
 
 breakContinueCheck p =
 	traverse breakContinue p
-
+-}
