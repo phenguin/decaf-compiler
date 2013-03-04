@@ -353,20 +353,20 @@ incrementDecrementAssignCheck p =
 
 -- 18 TODO For statement integer checks
 
-
+-}
 -- 19 Break/Continue checks
 
 breakContinue
-	(MT (pos, Break t, st) forest) = Left "Cannot have break statement outside of a loop."
+	(MT (pos, Break, st) forest) = Up $ Just "Cannot have break statement outside of a loop."
 breakContinue
-	(MT (pos, Continue t, st) forest) = Left "Cannot have continue statement outside of a loop."
+	(MT (pos, Continue, st) forest) = Up $ Just "Cannot have continue statement outside of a loop."
 breakContinue
-	(MT (pos, For t, st) forest) = Right True
+	(MT (pos, For t, st) forest) = Up Nothing
 breakContinue
-	(MT (pos, While t, st) forest) = Right True
+	(MT (pos, While, st) forest) = Up Nothing
 
 breakContinueCheck p =
 	traverse breakContinue p
--}
+
 
 
