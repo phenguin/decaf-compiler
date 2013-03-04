@@ -10,7 +10,7 @@ import qualified Data.HashMap.Strict as H
 import System.IO.Unsafe
 import Control.Monad.State
 --data Node = Tree Node Node | Leaf  Int deriving (Show)
-
+{-
 --expand:: STNode -> [Node]
 -- GLOBALS
 r = Data.IORef.readIORef
@@ -23,17 +23,19 @@ my = unsafePerformIO . n
 -- #########GLOBALS##############
 st = my H.empty
 -- ##############################
+-}
+expand:: SemanticTree -> [SemanticTree]
 expand (MT _ a) = a
 expand _ = [] 
-
+{-
 checkprepare f = convert.fromRight$testParse f 
 
 arrDecCheck (MT (FD (Array n) _) [])  = Just $ n> 0   
 arrDecCheck  _ = Nothing
 checkArrayDeclarationNotZero p = traverse arrDecCheck p
 
-mainMethod (MT (MD (_,"main")) _) = Just False 
-mainMethod _ = Nothing
+--mainMethod (MT (MD (_,"main")) _) = Just False 
+--mainMethod _ = Nothing
 checkMainMethodDeclared p =  not (traverse mainMethod p)
 
 
@@ -61,9 +63,15 @@ x = (Tree (Tree (Tree (Leaf 4) (Leaf 2) )( Lea f 5))( Leaf 5))
 
 --treeMapReduce:: (Node -> Maybe [a]) -> ([a] -> [a] -> [a]) -> Node -> [a] 
 --}
-scrapeFDs  (MT fd@(FD _ _) _ ) = Just fd
-scrapeFDs _ = Nothing
+-}
 
+
+type SymbolTree = MultiTree (STNode,ST)
+data ST = ST [SymbolEntry] | Empty deriving (Show)
+data SymbolEntry = Variable FDType TypedId  deriving (Show)
+scrapeFDs  st (MT fd@(FD a b) _ ) = Just $ Variable a b
+scrapeFDs st _ = Nothing
+{-
 data SymbolContext = SymbolContext String 
 
 collectFDs a (MT n b) = (MT n (a ++ b))
@@ -78,10 +86,17 @@ scrapeBlocks _ = Nothing
 
 data SymbolTable = SymbolTable String SymbolTable [STNode]| Empty
 	deriving (Show)
+-}
 
-nextBlocks p = if not $ null blocks 
-			then nextBl
-	where 	children = expand p
-		blocks   = map fromJust $ filter isJust $ map scrapeBlocks $children	
-fdsCollect p = map fromJust $filter isJust $map scrapeFDs $expand p
-	
+convertS st a = (st, a)
+fdsCollect st p = map fromJust $filter isJust $map (scrapeFDs st)$expand p
+symbolTable:: SemanticTree-> SymbolTree
+symbolTable p@(MT (Prog) children) = (MT (Prog, st) newChildren)
+	where 	newChildren = map (symbolTable' st) (expand p)  
+		st = ST $ fdsCollect st p
+symbolTable' :: ST -> SemanticTree -> SymbolTree
+symbolTable' (ST prevFds) p@(MT (DBlock) children) = (MT (DBlock, st) newChildren)
+	where 	newChildren = map (symbolTable' st) (expand p)  
+		st = ST $ (prevFds ++ (fdsCollect st p))
+symbolTable' st p@(MT a children)= (MT (a, st ) newChildren)
+	where newChildren = map (symbolTable' st) (expand p) 

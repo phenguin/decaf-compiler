@@ -84,6 +84,9 @@ prettyIRTree f fp = case testParse fp of
 putIRTree :: FilePath -> IO ()
 putIRTree = putStrLn . prettyIRTree pPrint
 
+fromRight :: Either a b -> b
+fromRight (Right b) = b
+
 putIRTreeTabbed :: FilePath -> IO ()
 putIRTreeTabbed = putStrLn . prettyIRTree pPrintTabbed
 
