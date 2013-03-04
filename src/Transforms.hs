@@ -1,13 +1,12 @@
 {-# LANGUAGE FlexibleInstances #-}
 module Transforms where
 
-import Main (parse, testParse)
 import Parser 
 import MultiTree
 import Data.Hashable (hash)
 
-data LitType = IntType | BoolType | VoidType deriving (Show)
-data FDType = Single | Array Int deriving (Show)
+data LitType = IntType | BoolType | VoidType deriving (Show, Eq)
+data FDType = Single | Array Int deriving (Show, Eq, Ord)
 
 data Id = IdWithHash Int String deriving (Ord)
 
@@ -75,19 +74,8 @@ getFieldDeclForest (P pos (FieldDecl typ cds)) = map f cds
     where f (P pos (VarDecl name)) = singleton $ (pos, FD Single ((convertType . getVal) typ, (mkId . getVal) name))
           f (P pos (ArrayDecl name size)) = singleton $ (pos, FD (Array (read $ getVal size)) ((convertType . getVal) typ, (mkId . getVal) name))
 
-prettyIRTree :: (SemanticTree -> String) -> FilePath -> String
-prettyIRTree f fp = case testParse fp of
-    Left err -> err
-    Right program -> f $ convert program
-
-putIRTree :: FilePath -> IO ()
-putIRTree = putStrLn . prettyIRTree pPrint
-
 fromRight :: Either a b -> b
 fromRight (Right b) = b
-
-putIRTreeTabbed :: FilePath -> IO ()
-putIRTreeTabbed = putStrLn . prettyIRTree pPrintTabbed
 
 --------------------------------
 

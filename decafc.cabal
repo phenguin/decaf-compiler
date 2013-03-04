@@ -25,6 +25,9 @@ executable decafc
                      , mtl ==2.1.*
                      , split ==0.2.*
                      , transformers ==0.3.*
+                     , hashable
+                     , containers
+                     , unordered-containers
   build-tools:         alex >=3.0.2
                      , happy
 

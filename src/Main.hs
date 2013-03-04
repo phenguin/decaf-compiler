@@ -14,8 +14,6 @@ module Main where
 import Prelude hiding (readFile)
 import qualified Prelude
 
-import System.IO.Unsafe (unsafePerformIO)
-
 import Control.Exception (bracket)
 import Control.Monad (forM_, void)
 import Control.Monad.Error (ErrorT(..), runErrorT)
@@ -26,12 +24,16 @@ import System.Environment (getProgName)
 import qualified System.Exit
 import System.IO (IOMode(..), hClose, hPutStrLn, openFile, stdout, stderr)
 import Text.Printf (printf)
+import Util (mungeErrorMessage)
 
 import qualified CLI
 import Configuration (Configuration, CompilerStage(..), OptimizationSpecification(..))
 import qualified Configuration
 import qualified Parser
+import qualified Checks
 import qualified Scanner
+import Transforms (convert)
+import Semantics (addSymbolTables)
 
 
 ------------------------ Impure code: Fun with ErrorT -------------------------
@@ -68,18 +70,6 @@ fatal message = do
 
 ---------------------------- Pure code: Processing ----------------------------
 
-{- Since our compiler only handles single files, the 'Configuration' struct
-doesn't currently get passed through to the scanner and parser code.  (This may
-change--one can see the scanner and parser as acting in a reader monad.)  The
-big problem with this is that error messages generated in the scanner and
-parser won't contain the file name--the file name has to get added in this
-function. -}
-mungeErrorMessage :: Configuration -> Either String a -> Either String a
-mungeErrorMessage configuration =
-  ifLeft ((Configuration.input configuration ++ " ")++)
-  where ifLeft f (Left v) = Left $ f v
-        ifLeft _ (Right a) = Right a
-
 {- The pure guts of the compiler convert input to output.  Exactly what output
 they produce, though, depends on the configuration. -}
 process :: Configuration -> String -> Either String [IO ()]
@@ -88,6 +78,7 @@ process configuration input =
   case Configuration.target configuration of
     Scan -> scan configuration input
     Parse -> parse configuration input
+    Inter -> checkSemantics configuration input
     phase -> Left $ show phase ++ " not implemented\n"
 
 scan :: Configuration -> String -> Either String [IO ()]
@@ -120,19 +111,6 @@ scan configuration input =
 
 
 
--- Use unsafe perform io to get a "ghci friendly" parse tree for debugging
-ghciparse :: Configuration -> String -> Either String Parser.Program
-ghciparse configuration input = do
-  let (errors, tokens) = partitionEithers $ Scanner.scan input
-  -- If errors occurred, bail out.
-  mapM_ (mungeErrorMessage configuration . Left) errors
-  -- Otherwise, attempt a parse.
-  mungeErrorMessage configuration $ Parser.parse tokens
-
-testParse :: FilePath -> Either String Parser.Program
-testParse fp = ghciparse (Configuration.testConfiguration fp) input
-    where input = unsafePerformIO $ Prelude.readFile fp
-
 parse :: Configuration -> String -> Either String [IO ()]
 parse configuration input = do
   let (errors, tokens) = partitionEithers $ Scanner.scan input
@@ -141,3 +119,11 @@ parse configuration input = do
   -- Otherwise, attempt a parse.
   void $ mungeErrorMessage configuration $ Parser.parse tokens
   Right []
+
+checkSemantics :: Configuration -> String -> Either String [IO ()]
+checkSemantics configuration input = do
+  let (errors, tokens) = partitionEithers $ Scanner.scan input
+  -- If errors occurred, bail out.
+  mapM_ (mungeErrorMessage configuration . Left) errors
+  parseTree <- mungeErrorMessage configuration $ Parser.parse tokens
+  Checks.doChecks Checks.checksList $ addSymbolTables $ convert parseTree

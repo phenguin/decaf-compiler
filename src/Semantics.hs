@@ -5,7 +5,6 @@ import MultiTree
 import Parser (parse,Pos)
 import Data.Map as M
 import Data.Hashable (hash)
-import Main (testParse)
 
 data Descriptor = FDesc FDType LitType
                 | MDesc LitType [LitType] 

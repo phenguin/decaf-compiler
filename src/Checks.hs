@@ -7,7 +7,7 @@ import MultiTree
 import Traverse
 import Semantics
 import Transforms
-import Main(testParse)
+import Util (testParse)
 
 -- Utility functions for semantic checking
 checkParse :: String -> SemanticTreeWithSymbols
@@ -18,6 +18,22 @@ symbolTableContains id st = isJust $ lookupSymbol id st
 
 idString:: Id -> String
 idString id@(IdWithHash _ s) = s
+
+type SemanticCheck = SemanticTreeWithSymbols -> [String]
+
+doChecks :: [SemanticCheck] -> SemanticTreeWithSymbols -> Either String [IO ()]
+doChecks fs t = let errs = concat $ map (\f -> f t) fs in do
+    case errs of
+        [] -> Right []
+        _ ->  Left $ "\n" ++ unlines errs
+
+-- List the checks you want to be applied here. Main.hs pulls this var
+checksList :: [SemanticCheck]
+checksList = [checkArrayBoundsValid]
+
+testCheck c = doChecks [c] . checkParse
+
+-- Implementations of specific semantic checks below here
 
 paramTypes :: SemanticTreeWithSymbols -> [LitType]
 paramTypes (MT (pos, (MD _) ,_) ts) = Prelude.map f $ Prelude.filter g ts
@@ -71,6 +87,7 @@ expectedType (MT (_,node ,st) _)  = case node of
             DChar _		-> IntType
             DInt _		-> IntType
             DBool _		-> BoolType
+
 --1 --- Not implementable because of hashmap
 --2 -}
 identifierDeclared 
@@ -82,6 +99,14 @@ identifierDeclared
 	_ = Down Nothing
 
 checkIdenifierDeclared p = traverse identifierDeclared p 
+--4
+
+arrayBoundsValid (MT (pos, (FD (Array n) (t, id)), st) _) = case n <= 0 of
+    True -> Down $ Just $ show (pos) ++ ": Invalid array declaration for " ++ (idString id) ++ ".  Array must have positive integer size"
+    False -> Down Nothing
+arrayBoundsValid _ = Down Nothing
+
+checkArrayBoundsValid = traverse arrayBoundsValid
 
 
 -- 5 parameter type check
@@ -301,3 +326,5 @@ breakContinue
 breakContinueCheck p =
 	traverse breakContinue p
 -}
+
+
