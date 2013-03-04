@@ -29,12 +29,11 @@ boolean test ( int a ) {
 }
 void test ( int a, boolean b, int c, boolean d, boolean e, int f ) {
   int i, j;
-  for ( i = 5; 0b0010101100110001001 ) {
+  for ( i = 5, 0x15989 ) {
     printf ( );
     printf ( 1 );
     printf ( 1+5 );
     printf ( 0xAABBCCDDEEFF123456789 );
-    prtinf ( 0b00010010010100101010 );
     printf ( "hello world" );
   }
 }
