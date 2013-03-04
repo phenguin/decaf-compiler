@@ -6,9 +6,9 @@ import Parser (parse,Pos)
 import Data.Map as M
 import Data.Hashable (hash)
 
-data Descriptor = FDesc FDType LitType
-                | MDesc LitType [LitType] 
-                | PDesc LitType
+data Descriptor = FDesc { arrayOrSingle :: FDType, fieldType :: LitType }
+                | MDesc { returnType :: LitType, paramTypeList :: [LitType] }
+                | PDesc { paramType :: LitType }
                 | CODesc deriving (Show)
 
 type SemanticTreeWithSymbols = MultiTree (Pos ,STNode, SymbolTable)

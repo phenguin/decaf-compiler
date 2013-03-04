@@ -1,10 +1,11 @@
 module Checks where
 
 import Data.Maybe
-import Data.Either
+import Data.Either (partitionEithers, lefts, rights)
 import Prelude
 import MultiTree
 import Traverse
+import Data.List (nub)
 import Semantics
 import Transforms
 import Util (testParse)
@@ -29,7 +30,7 @@ doChecks fs t = let errs = concat $ map (\f -> f t) fs in do
 
 -- List the checks you want to be applied here. Main.hs pulls this var
 checksList :: [SemanticCheck]
-checksList = [checkArrayBoundsValid]
+checksList = [checkArrayBoundsValid, checkCondsHaveBoolType]
 
 testCheck c = doChecks [c] . checkParse
 
@@ -51,12 +52,10 @@ paramTypes (MT (pos, (MethodCall _) ,_) ts) = Prelude.map f ts
 --getReturnType :: SemanticTreeWithSymbols -> LitType
 --getReturnType =  
 expressionType:: SemanticTreeWithSymbols -> Either String LitType
-expressionType node@(MT (pos, exp , st) children) =  
-	if  all ((Right expectType) ==) childrenTypes 
-		then Right expectType
-		else Left $foldr (\a b -> a ++"\n" ++ b) ((show pos) ++ "Expression type error\n") (Data.Either.lefts childrenTypes)
-	where 	childrenTypes = (map expressionType children)
-		expectType    = expectedType node
+expressionType node@(MT (pos, exp , st) children) =  if null ls && (childsTypePred node) rs then Right expectType else Left $ "Expression type error"
+      where childrenTypes = (map expressionType children)
+            expectType = expectedType node
+            (ls, rs) = partitionEithers childrenTypes 
 
 symbolType:: Id -> SymbolTable -> LitType
 symbolType id st = case (lookupSymbol id st) of
@@ -88,6 +87,34 @@ expectedType (MT (_,node ,st) _)  = case node of
             DInt _		-> IntType
             DBool _		-> BoolType
 
+childsTypePred:: SemanticTreeWithSymbols -> [LitType] -> Bool
+childsTypePred (MT (_,node ,st) _)  = case node of
+            MethodCall id	-> mcCheck id
+            And			-> allBool
+            Or			-> allBool
+            Add			-> allInt
+            Sub			-> allInt
+            Mul			-> allInt
+            Mod			-> allInt
+            Div			-> allInt
+            Not 		-> allBool
+            Neg			-> allInt
+            Neql		-> allSame
+            Eql			-> allSame
+            Lt			-> allInt
+            Lte			-> allInt
+            Gt			-> allInt
+            Gte			-> allInt
+            Loc id		-> allInt
+            otherwise   -> const True
+        where allBool = all (== BoolType)
+              allInt = all (== IntType)
+              allSame xs = length (nub xs) <= 1
+              mcCheck id xs = let res = lookupSymbol id st in
+                               case res of
+                                    Nothing -> False
+                                    Just md -> xs == paramTypeList md
+
 --1 --- Not implementable because of hashmap
 --2 -}
 identifierDeclared 
@@ -101,6 +128,7 @@ identifierDeclared
 checkIdenifierDeclared p = traverse identifierDeclared p 
 --4
 
+arrayBoundsValid :: SemanticTreeWithSymbols -> TraverseControl
 arrayBoundsValid (MT (pos, (FD (Array n) (t, id)), st) _) = case n <= 0 of
     True -> Down $ Just $ show (pos) ++ ": Invalid array declaration for " ++ (idString id) ++ ".  Array must have positive integer size"
     False -> Down Nothing
@@ -108,6 +136,19 @@ arrayBoundsValid _ = Down Nothing
 
 checkArrayBoundsValid = traverse arrayBoundsValid
 
+-- Semantic Check #12
+condHasBoolType :: SemanticTreeWithSymbols -> TraverseControl
+
+condHasBoolType (MT (pos, If, st) (x:xs)) = case expressionType x of
+    Right BoolType -> Down Nothing
+    _ -> Down $ Just $ show pos ++ ": If conditional expr must have type bool"
+
+condHasBoolType (MT (pos, While, st) (x:xs)) = case expressionType x of
+    Right BoolType -> Down Nothing
+    _ -> Down $ Just $ show pos ++ ": While conditional expr must have type bool"
+
+condHasBoolType _ = Down Nothing
+checkCondsHaveBoolType = traverse condHasBoolType
 
 -- 5 parameter type check
 checkParameterTypes:: SymbolTable -> Id ->[LitType] -> Bool
