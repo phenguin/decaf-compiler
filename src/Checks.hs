@@ -354,6 +354,16 @@ incrementDecrementAssignCheck p =
 -- 18 TODO For statement integer checks
 
 -}
+
+forCheck (MT (pos, (For t), st ) forest) =
+	case subExpressionTypes of
+		([],x) -> if all (==IntType)$ (symbolType t st):x
+				then Down Nothing
+				else Up $Just $ (show pos) ++ "Malformed For loop"
+		otherwise-> Up $Just $ (show pos) ++ "Malformed For loop"
+	where	subExpressionTypes = partitionEithers (map expressionType (take 2 forest))
+					
+checkForLoops p = traverse forCheck p 
 -- 19 Break/Continue checks
 
 breakContinue
