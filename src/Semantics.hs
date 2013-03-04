@@ -2,7 +2,7 @@ module Semantics where
 
 import Transforms 
 import MultiTree
-import Parser (parse)
+import Parser (parse,Pos)
 import Data.Map as M
 import Data.Hashable (hash)
 import Main (testParse)
@@ -12,7 +12,7 @@ data Descriptor = FDesc FDType LitType
                 | PDesc LitType
                 | CODesc deriving (Show)
 
-type SemanticTreeWithSymbols = MultiTree (STNode, SymbolTable)
+type SemanticTreeWithSymbols = MultiTree (Pos ,STNode, SymbolTable)
 type Scope = M.Map Id Descriptor
 type SymbolTable = [Scope]
 
@@ -20,10 +20,10 @@ addSymbolTables :: SemanticTree -> SemanticTreeWithSymbols
 addSymbolTables = addSymbolTables' . initSymbols
 
 initSymbols :: SemanticTree -> SemanticTreeWithSymbols
-initSymbols = fmap (\x -> (x, []))
+initSymbols = fmap (\(x,y) -> (x,y, []))
 
 removeSymbols :: SemanticTreeWithSymbols -> SemanticTree
-removeSymbols = fmap fst
+removeSymbols = fmap (\(x,y,_)-> (x,y)) 
 
 addSymbol :: Id -> Descriptor -> SymbolTable -> SymbolTable
 addSymbol i d [] = [M.insert i d $ empty]
@@ -47,30 +47,30 @@ nameDefined s st = case lookupByName s st of
     Just _ -> True
 
 getParamTypes :: SemanticTree -> [LitType]
-getParamTypes (MT (MD _) ts) = Prelude.map f $ Prelude.filter g ts
-    where g (MT (PD _) _) = True
+getParamTypes (MT (pos, MD _) ts) = Prelude.map f $ Prelude.filter g ts
+    where g (MT (pos, PD _) _) = True
           g _ = False
-          f (MT (PD (t, i)) _) = t
+          f (MT (pos, (PD (t, i))) _) = t
           f _ = VoidType -- Hackish
 
 alterScope :: Scope -> SemanticTree -> Scope
-alterScope s (MT (FD fdt (t, i)) _) = addSymbolToScope i (FDesc fdt t) s
-alterScope s (MT (PD (t, i)) _) = addSymbolToScope i (PDesc t) s
-alterScope s (MT (CD i) _) = addSymbolToScope i CODesc s
-alterScope s md@(MT (MD (t, i)) _) = addSymbolToScope i (MDesc t (getParamTypes md)) s 
+alterScope s (MT (pos, (FD fdt (t, i))) _) = addSymbolToScope i (FDesc fdt t) s
+alterScope s (MT (pos, (PD (t, i))) _) = addSymbolToScope i (PDesc t) s
+alterScope s (MT (pos, (CD i)) _) = addSymbolToScope i CODesc s
+alterScope s md@(MT (pos, MD (t, i)) _) = addSymbolToScope i (MDesc t (getParamTypes md)) s 
 alterScope s _ = s
 
 addNodeDecs :: SemanticTree -> Maybe Scope
-addNodeDecs (MT Prog ts) = Just $ Prelude.foldl alterScope empty ts
-addNodeDecs (MT DBlock ts) = Just $ Prelude.foldl alterScope empty ts
-addNodeDecs (MT (MD _) ts) = Just $ Prelude.foldl alterScope empty ts
+addNodeDecs (MT (pos,Prog) ts) = Just $ Prelude.foldl alterScope empty ts
+addNodeDecs (MT (pos,DBlock) ts) = Just $ Prelude.foldl alterScope empty ts
+addNodeDecs (MT (pos,(MD _)) ts) = Just $ Prelude.foldl alterScope empty ts
 addNodeDecs _ = Nothing
 
 addScope :: Scope -> SemanticTreeWithSymbols -> SemanticTreeWithSymbols
-addScope s (MT (x, st) ts) = MT (x, s:st) (Prelude.map (addScope s) ts)
+addScope s (MT (pos, x , st) ts) = MT (pos, x, s:st) (Prelude.map (addScope s) ts)
 
 addSymbolTables' :: SemanticTreeWithSymbols -> SemanticTreeWithSymbols
-addSymbolTables' t@(MT (x, st) ts) = case addNodeDecs (removeSymbols t) of
-    Just syms -> MT (x, st) (Prelude.map (addSymbolTables' . addScope syms) ts)
-    Nothing -> MT (x, st) (Prelude.map addSymbolTables' ts)
+addSymbolTables' t@(MT (pos, x, st) ts) = case addNodeDecs (removeSymbols t) of
+    Just syms -> MT (pos, x, st) (Prelude.map (addSymbolTables' . addScope syms) ts)
+    Nothing -> MT (pos, x, st) (Prelude.map addSymbolTables' ts)
 
