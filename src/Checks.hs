@@ -18,13 +18,19 @@ symbolTableContains id st = isJust $ lookupSymbol id st
 idString:: Id -> String
 idString id@(IdWithHash _ s) = s
 
-getParamTypes :: SemanticTreeWithSymbols -> [LitType]
-getParamTypes (MT (pos, (MD _) ,_) ts) = Prelude.map f $ Prelude.filter g ts
-    where g (MT (pos, PD _) _) = True
+paramTypes :: SemanticTreeWithSymbols -> [LitType]
+paramTypes (MT (pos, (MD _) ,_) ts) = Prelude.map f $ Prelude.filter g ts
+    where g (MT (pos, (PD _), _) _) = True
           g _ = False
-          f (MT (pos, (PD (t, i))) _) = t
+          f (MT (pos, (PD (t, i)),_) _) = t
           f _ = VoidType -- Hackish
 
+paramTypes (MT (pos, (MethodCall _) ,_) ts) = Prelude.map f ts
+    where f (MT (pos, (PD (t, i)),_) _) = t
+	  f (MT (pos , (DInt _),_)_) = IntType
+	  f (MT (pos , (DBool _),_)_) = BoolType
+	  f (MT (pos , (DChar _),_)_) = IntType
+          f _ = VoidType -- Hackish
 --getReturnType :: SemanticTreeWithSymbols -> LitType
 --getReturnType =  
 
@@ -44,15 +50,15 @@ checkIdenifierDeclared p = traverse identifierDeclared p
 -- 5 parameter type check
 checkParameterTypes:: SymbolTable -> Id ->[LitType] -> Bool
 checkParameterTypes st id param2 = (param1 == param2)
-			where 	param1 = params
-				(MDesc _ params) = lookupSymbol st id param2
+			where 	(MDesc _ param1) = fromJust $ lookupSymbol id st
 
 methodCallParameterMatch 
-	(MT (pos, (MethodCall id), st) forest )= 
-			if checkParameterTypes st id param1 
+	node@(MT (pos, (MethodCall id), st) forest )= 
+			if  (symbolTableContains id st)&& (checkParameterTypes st id params)
 				then Down Nothing
-				else Up "Method " ++ (idString id) ++ " parameter type error"					
-		where (MDesc _ params) = forest 
+				else Up $ Just $ (show pos) ++ "Method " ++ (idString id) ++ " parameter type error"					
+		where  params = (paramTypes node) 
+methodCallParameterMatch _ = Down Nothing 
 checkMethodCallParameters p = 
 	traverse methodCallParameterMatch p 
 {-
