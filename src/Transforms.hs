@@ -56,10 +56,10 @@ data STNode = Prog
             | If
             | For Id
             | While
-            | FD FDType TypedId
-            | CD Id
-            | PD TypedId
-            | MD TypedId
+            | FD FDType TypedId	-- Field declaration
+            | CD Id		-- Callout declaration
+            | PD TypedId	-- Parameter declaration
+            | MD TypedId	-- Method declaration
      deriving (Show)
 
 class ConvertibleToST a where
