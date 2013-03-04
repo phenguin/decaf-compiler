@@ -121,6 +121,7 @@ methodCallParameterMatch
 				else Up $ Just $ (show pos) ++ "Method " ++ (idString id) ++ " parameter type error"					
 		where  params = (paramTypes node) 
 methodCallParameterMatch _ = Down Nothing 
+
 checkMethodCallParameters p = 
 	traverse methodCallParameterMatch p 
 

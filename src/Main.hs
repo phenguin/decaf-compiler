@@ -15,7 +15,7 @@ import Prelude hiding (readFile)
 import qualified Prelude
 
 import Control.Exception (bracket)
-import Control.Monad (forM_, void)
+import Control.Monad (forM_, void, liftM)
 import Control.Monad.Error (ErrorT(..), runErrorT)
 import Control.Monad.IO.Class (liftIO)
 import Data.Either (partitionEithers)
@@ -25,9 +25,11 @@ import qualified System.Exit
 import System.IO (IOMode(..), hClose, hPutStrLn, openFile, stdout, stderr)
 import Text.Printf (printf)
 import Util (mungeErrorMessage)
+import MultiTree (pPrint)
 
 import qualified CLI
 import Configuration (Configuration, CompilerStage(..), OptimizationSpecification(..))
+import Configuration.Types (debug)
 import qualified Configuration
 import qualified Parser
 import qualified Checks
@@ -100,17 +102,6 @@ scan configuration input =
   where v |> f = f v            -- like a Unix pipeline, but pure
         openOutputHandle = maybe (hDuplicate stdout) (flip openFile WriteMode) $ Configuration.outputFileName configuration
 
--- testConfig :: FilePath -> Configuration
--- testConfig filepath = Configuration {
---     input = filepath,
---     explicitTarget = Nothing,
---     debug = False,
---     opt = Some [],
---     outputFileName = Nothing
---     }
-
-
-
 parse :: Configuration -> String -> Either String [IO ()]
 parse configuration input = do
   let (errors, tokens) = partitionEithers $ Scanner.scan input
@@ -120,10 +111,19 @@ parse configuration input = do
   void $ mungeErrorMessage configuration $ Parser.parse tokens
   Right []
 
+prependOutput :: String -> Either String [IO ()] -> Either String [IO ()]
+prependOutput msg (Left s) = Left $ msg ++ "\n" ++ s
+prependOutput msg actions = liftM (putStrLn msg :) actions
+
 checkSemantics :: Configuration -> String -> Either String [IO ()]
 checkSemantics configuration input = do
   let (errors, tokens) = partitionEithers $ Scanner.scan input
   -- If errors occurred, bail out.
   mapM_ (mungeErrorMessage configuration . Left) errors
   parseTree <- mungeErrorMessage configuration $ Parser.parse tokens
-  Checks.doChecks Checks.checksList $ addSymbolTables $ convert parseTree
+  let irTree = convert parseTree
+      irTreeWithST = addSymbolTables irTree
+      output = Checks.doChecks Checks.checksList $ irTreeWithST in
+      case debug configuration of
+          False -> output
+          True -> prependOutput (pPrint irTree) output
