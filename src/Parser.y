@@ -84,10 +84,10 @@ Program : CalloutDecls FieldDecls MethodDecls { Program $1 $2 $3}
 MethodDecls : {- empty -} { [] }
             | MethodDecl MethodDecls { $1 : $2 }
 
-MethodDecl : Type id "(" ")" Block { propogatePos $1 $ MethodDecl $1 (extractPosString $2) [] $5 }
-           | Type id "(" ParamDecls ")" Block { propogatePos $1 $ MethodDecl $1 (extractPosString $2) $4 $6 }
-           | void id "(" ")" Block { propogatePos $1 $ MethodDecl (propogatePos $1 (Type "void")) (extractPosString $2) [] $5 }
-           | void id "(" ParamDecls ")" Block { propogatePos $1 $ MethodDecl (propogatePos $1 (Type "void")) (extractPosString $2) $4 $6 }
+MethodDecl : Type id "(" ")" Block { propogatePos $1 $ MethodDecl $1 (extractPosId $2) [] $5 }
+           | Type id "(" ParamDecls ")" Block { propogatePos $1 $ MethodDecl $1 (extractPosId $2) $4 $6 }
+           | void id "(" ")" Block { propogatePos $1 $ MethodDecl (propogatePos $1 (Type "void")) (extractPosId $2) [] $5 }
+           | void id "(" ParamDecls ")" Block { propogatePos $1 $ MethodDecl (propogatePos $1 (Type "void")) (extractPosId $2) $4 $6 }
 
 Type : data_type { propogatePos $1 $ extractType $1 }
 
@@ -96,7 +96,7 @@ FieldDecl : Type CommaDecls ";" { propogatePos $1 $ FieldDecl $1 $2 }
 FieldDecls : {- empty -} { [] }
            | FieldDecls FieldDecl { $2 : $1 }
 
-CalloutDecl : callout id ";" { propogatePos $1 $ CalloutDecl (extractPosString $2) }
+CalloutDecl : callout id ";" { propogatePos $1 $ CalloutDecl (extractPosId $2) }
 
 CalloutDecls : {- empty -} { [] }
              | CalloutDecl CalloutDecls { $1 : $2 }
@@ -104,7 +104,7 @@ CalloutDecls : {- empty -} { [] }
 Block : "{" FieldDecls Statements "}" { propogatePos $1 $ Block $2 $3 }
       | "{" Statements "}" { propogatePos $1 $ Block [] $2 }
 
-ParamDecl : Type id { propogatePos $1 $ ParamDecl $1 (extractPosString $2) }
+ParamDecl : Type id { propogatePos $1 $ ParamDecl $1 (extractPosId $2) }
 
 ParamDecls : ParamDecl { [$1] }
            | ParamDecl "," { [$1] }
@@ -114,7 +114,7 @@ Statement : Location AssignOp Expr ";" { propogatePos $1 $ AssignStatement $1 $2
         | MethodCall ";" { propogatePos $1 $ MethodCallStatement $1 }
         | if "(" Expr ")" Block { propogatePos $1 $ IfStatement $3 $5 }
         | if "(" Expr ")" Block else Block { propogatePos $1 $ IfElseStatement $3 $5 $7 }
-        | for "(" id "=" Expr ";" Expr ")" Block { propogatePos $1 $ ForStatement (extractPosString $3) $5 $7 $9 }
+        | for "(" id "=" Expr ";" Expr ")" Block { propogatePos $1 $ ForStatement (extractPosId $3) $5 $7 $9 }
         | while "(" Expr ")" Block { propogatePos $1 $ WhileStatement $3 $5 }
         | return Expr ";" { propogatePos $1 $ ReturnStatement $2 }
         | return ";" { propogatePos $1 $ EmptyReturnStatement }
@@ -132,10 +132,10 @@ MethodCall : MethodName "(" ")" { propogatePos $1 $ ParamlessMethodCall $1 }
         | MethodName "(" CommaExprs ")" { propogatePos $1 $ ExprParamMethodCall $1 $3 }
         | MethodName "(" CommaCalloutArgs ")" { propogatePos $1 $ CalloutParamMethodCall $1 $3 }
 
-MethodName : id { propogatePos $1 $ MethodName (extractPosString $1) }
+MethodName : id { propogatePos $1 $ MethodName (extractPosId $1) }
 
-Location : id { propogatePos $1 $ Location (extractPosString $1) }
-        | id "[" Expr "]" { propogatePos $1 $ IndexedLocation (extractPosString $1) $3 }
+Location : id { propogatePos $1 $ Location (extractPosId $1) }
+        | id "[" Expr "]" { propogatePos $1 $ IndexedLocation (extractPosId $1) $3 }
 
 -- Order of operations stuff
 Expr : Expr "||" Expr1 { propogatePos $1 $ OrExpr $1 $3 }
@@ -177,12 +177,12 @@ CommaExprs : Expr { [$1] }
         | Expr "," { [$1] }
         | Expr "," CommaExprs { $1 : $3 }
 
-CommaDecls : id { [propogatePos $1 $ VarDecl (extractPosString $1)] }
-         | id "[" int "]" {  [propogatePos $1 $ ArrayDecl (extractPosString $1) (extractPosInt $3)] }
-         | id "," {  [propogatePos $1 $ VarDecl (extractPosString $1)] }
-         | id "[" int "]" "," { [propogatePos $1 $ ArrayDecl (extractPosString $1) (extractPosInt $3)] }
-         | id "," CommaDecls { (propogatePos $1 $ VarDecl (extractPosString $1)) : $3 }
-         | id "[" int "]" "," CommaDecls { (propogatePos $1 $ ArrayDecl (extractPosString $1) (extractPosInt $3)) : $6 }
+CommaDecls : id { [propogatePos $1 $ VarDecl (extractPosId $1)] }
+         | id "[" int "]" {  [propogatePos $1 $ ArrayDecl (extractPosId $1) (extractPosInt $3)] }
+         | id "," {  [propogatePos $1 $ VarDecl (extractPosId $1)] }
+         | id "[" int "]" "," { [propogatePos $1 $ ArrayDecl (extractPosId $1) (extractPosInt $3)] }
+         | id "," CommaDecls { (propogatePos $1 $ VarDecl (extractPosId $1)) : $3 }
+         | id "[" int "]" "," CommaDecls { (propogatePos $1 $ ArrayDecl (extractPosId $1) (extractPosInt $3)) : $6 }
 
 CommaCalloutArgs : CalloutArg { [$1] }
         | CalloutArg "," { [$1] }
@@ -233,6 +233,8 @@ extractPosType = extractWithPos extractType
 
 extractId :: ScannedToken -> String
 extractId s@(ScannedToken _ _ (Identifier x)) = x
+
+extractPosId = extractWithPos extractId
 
 data WithPos a = P Pos a deriving (Show)
 
