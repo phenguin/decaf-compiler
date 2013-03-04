@@ -190,3 +190,62 @@ booleanOperation
 			b	= forest !! 1
 			errorMsg= "Cannot use non-boolean in strictly boolean operation."
 
+booleanOperationCheck p =
+	traverse booleanOperation p
+
+-- 16 Assignment ops
+-- TODO: I am confused how to properly get the operands ("location" and "expression") for the assignment operation. -Charlie
+
+assignmentType
+	(MT (pos, (Assign id), st) forest) =
+		case exprType of
+			Left -> exprType
+			Right -> if (fromRight exprType) == locationType
+				then Right Nothing
+				else Left "Cannot assign expression to location of a different type."
+		where	locationType	= symbolTableType st location
+			exprType	= expressionType st expr
+			location	= ?????
+			expr		= ????????
+
+assignmentTypeCheck p =
+	traverse assignmentType p
+
+-- 17 Increment/decrement assign operation must be integers
+-- TODO: I am confused how to properly get the operands ("location" and "expression") for the assignment operation. -Charlie
+
+incrementDecrementAssign
+	(MT (pos, t, st) forest) =
+		case t of
+			AssignPlus -> assignOp
+			AssignMinus -> assignOp
+		where	assignOp 	= case exprType of
+				Left -> exprType
+				Right -> if (fromRight exprType) == IntType && locationType == IntType
+						then Right Nothing
+						else Left "Cannot increment or decrement with non-integers."
+			locationType	= symbolTableType st location
+			exprType	= expressionType st expr
+			location	= ????
+			expression	= ??????
+
+incrementDecrementAssignCheck p =
+	traverse incrementDecrementAssign p
+
+-- 18 TODO For statement integer checks
+
+
+-- 19 Break/Continue checks
+
+breakContinue
+	(MT (pos, Break t, st) forest) = Left "Cannot have break statement outside of a loop."
+breakContinue
+	(MT (pos, Continue t, st) forest) = Left "Cannot have continue statement outside of a loop."
+breakContinue
+	(MT (pos, For t, st) forest) = Right True
+breakContinue
+	(MT (pos, While t, st) forest) = Right True
+
+breakContinueCheck p =
+	traverse breakContinue p
+
