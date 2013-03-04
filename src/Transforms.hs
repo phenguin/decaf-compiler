@@ -20,8 +20,6 @@ instance Eq Id where
 instance Show Id where
     show (IdWithHash _ name) = name
 
-
-
 type TypedId = (LitType, Id)
 type SemanticTree = MultiTree (Pos, STNode)
 
