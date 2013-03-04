@@ -7,6 +7,7 @@ import Traverse
 import Semantics
 import Transforms
 import Main(testParse)
+
 -- Utility functions for semantic checking
 checkParse :: String -> SemanticTreeWithSymbols
 checkParse s = addSymbolTables $convert $fromRight $testParse s
@@ -17,7 +18,15 @@ symbolTableContains id st = isJust $ lookupSymbol id st
 idString:: Id -> String
 idString id@(IdWithHash _ s) = s
 
+getParamTypes :: SemanticTreeWithSymbols -> [LitType]
+getParamTypes (MT (pos, (MD _) ,_) ts) = Prelude.map f $ Prelude.filter g ts
+    where g (MT (pos, PD _) _) = True
+          g _ = False
+          f (MT (pos, (PD (t, i))) _) = t
+          f _ = VoidType -- Hackish
 
+--getReturnType :: SemanticTreeWithSymbols -> LitType
+--getReturnType =  
 
 --1 --- Not implementable because of hashmap
 --2
@@ -25,31 +34,28 @@ identifierDeclared
 	(MT (pos, (Loc id ) ,st) _)= 
 		case symbolTableContains id st of
 			True 	-> Down Nothing
-			False 	-> Down $ Just$ "Identifier " ++ (idString id) ++ " is undeclared"
+			False 	-> Down $ Just$ (show pos) ++ "Identifier " ++ (idString id) ++ " is undeclared"
 identifierDeclared 
 	_ = Down Nothing
 
 checkIdenifierDeclared p = traverse identifierDeclared p 
 
 
-{- 5 parameter type check
-checkParameterTypes st param2 = ?????? 
+-- 5 parameter type check
+checkParameterTypes:: SymbolTable -> Id ->[LitType] -> Bool
+checkParameterTypes st id param2 = (param1 == param2)
+			where 	param1 = params
+				(MDesc _ params) = lookupSymbol st id param2
 
 methodCallParameterMatch 
 	(MT (pos, (MethodCall id), st) forest )= 
-			if checkParameterTypes st pds 
-				then Nothing
-				else Just False					
-		where 
-			parameters = map extractPD pdNodes 
-			extractPD (MT (pos,pd,st) _) = pd
-			pdNodes = filter isPD forest
-			isPD (MT (pos, (PD _), st) _) = True
-			isPD _ = False
-
+			if checkParameterTypes st id param1 
+				then Down Nothing
+				else Up "Method " ++ (idString id) ++ " parameter type error"					
+		where (MDesc _ params) = forest 
 checkMethodCallParameters p = 
 	traverse methodCallParameterMatch p 
-
+{-
 --8/9 method return statements.
 
 methodReturnStatement
