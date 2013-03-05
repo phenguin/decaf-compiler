@@ -380,14 +380,19 @@ incrementDecrementAssignCheck p =
 -- 18 TODO For statement integer checks
 
 -}
-assignCheck (MT (pos, (Assign), _) forest) = 
+assignCheck (MT (pos, (Assign), st) forest) = 
 	if allequal 
 		then Up Nothing
 		else Up $ Just $ (show pos)++"Assign operator type mismatch"
 	where 	allequal = case partitionEithers childrenType of
-				([],rightTypes) -> and $ map (\ x -> (head rightTypes) == x) rightTypes
+				([],rightTypes) -> (and $ map (\ x -> (head rightTypes) == x) rightTypes) && arraycheck
 				otherwise  ->  False
 		childrenType = map expressionType forest
+		arraycheck = null ( filter arrs (tail forest))
+		arrs (MT (pos,(Loc id),s) _ ) = case (lookupSymbol id st) of
+				Just (FDesc (Array _) _) -> True
+				otherwise -> False
+		arrs _ = False
 assignCheck (MT (pos, (AssignPlus), _) forest) =
 	if allint
 		then Up Nothing
