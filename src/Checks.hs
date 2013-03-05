@@ -40,7 +40,8 @@ checksList = [checkArrayBoundsValid
 	    , checkBreakContinue
 	    , checkMain
 	    , checkAssignOperators
-        , checkArrayLocAccessesValid
+            , checkArrayLocAccessesValid
+	    , checkDoubles
 	    ]
 
 testCheck c = doChecks [c] . checkParse
@@ -310,3 +311,17 @@ findMain _ = Down Nothing
 checkMain p = case (traverse findMain p) of
 		["MAIN"] -> []
 		otherwise -> ["Main is not defined"]
+
+
+
+doublesCheck (MT (pos,DBlock,st) forest) = 
+		if (and [((length (filter (==x) names)) == 1) | x <- names]) 
+			then Down Nothing
+			else Up $Just$ (show pos) ++ "Declared twice" 
+		where 	names  = map (\(MT (_,(FD _ (_,(IdWithHash _ id))), _) _ )->id) fields
+			fields = filter isFD forest
+			isFD (MT (_,(FD _ _),_) _) = True
+			isFD _ = False
+doublesCheck _ = Down Nothing
+
+checkDoubles = traverse doublesCheck
