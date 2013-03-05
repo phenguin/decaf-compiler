@@ -1,9 +1,45 @@
- We decided to use Justin's parser because it was already creating a
-AST. Justin also wrote the transformations from the initial AST to the
-final rose tree.  Our IR is a rose tree of the tuple  (position, node type, symbol table)
-Charles spend most of his time catching up with haskell and writing checks.
-Then Santiago wrote a utility function called traverse to do semantic 
-checks at each node without navigating the tree. This allowed us to write
-simple purely functional stateless checks. Furthermore we use the
-Either monoid to collect errors from all the semantic checks.
-We found a few mistakes in the parser, but they have been fixed.
+ Semantic Checker Project Writeup -------------------------------- Group
+ Members: Justin Cullen, Santiago Perez, Charles Gordon We decided to use
+ Justin's parser because it was already creating a AST.  Justin also a small
+ tree library and the series transformations from the initial AST to the final
+ rose tree.  Charles spend most of his time catching up with haskell and
+ writing checks.  Then Santiago wrote a utility function called traverse to do
+ semantic checks at each node without navigating the tree. This allowed us to
+ write simple purely functional stateless checks.  Furthermore we use the
+ Either monoid to collect errors from all the semantic checks.
+ 
+ Our final IR is a rose tree of the tuple  (file position, node type, symbol
+ table), where symbol table is a stack of hashmaps representing the nested
+ scopes relevant at each point in the tree.  We considered using a state monad
+ to explore the tree while keeping track of when we assigned variables and
+ changed scopes, but decided it was better to just augment the tree with symbol
+ table data so we could implement semantic checks without worrying about state.
+ One thing that would have been nice to do differently would be to generate an
+ actual tree structure off the bat from Happy, rather than a big nesting of
+ otherwise unrelated data types.  Because we didn't, we had to write code to
+ make each type implement a convert to a Tree of the union of each possible
+ node type.  This was a bit clunky and probably could have been avoided, at the
+ expense of making the parser code more complex.
+
+ Our project has a flat structure under the src/ directory and is loosely
+ broken out into the modules below: Traverse.hs - Contains the traverse
+ function used to expand semantic check predicates on single nodes to the whole
+ tree
+
+Util.hs - Contains functions used for testing in a repl as well as pretty
+printing functionality for trees.. etc.
+
+Transform.hs - Contains the code to convert the clunk psuedo-AST into an actual
+Rose Tree enabling abstract Tree operations on it.
+
+Semantics.hs - Defines the symbol table data type and operations, and the code
+to augment the preliminary IR tree with symbol table data at each node.
+
+MultiTree.hs - Basic library defining data types and operations for Trees, and
+zippered/focused trees.
+
+Checks.hs - Functions for each of the test which get used with traverse to do
+semantic checking.
+
+Main.hs - Outward interface
+
