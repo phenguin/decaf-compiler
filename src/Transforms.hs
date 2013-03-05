@@ -5,7 +5,7 @@ import Parser
 import MultiTree
 import Data.Hashable (hash)
 
-data LitType = IntType | BoolType | VoidType deriving (Show, Eq)
+data LitType = IntType | BoolType | VoidType | StrType deriving (Show, Eq)
 data FDType = Single | Array Int deriving (Show, Eq, Ord)
 
 data Id = IdWithHash Int String deriving (Ord)
