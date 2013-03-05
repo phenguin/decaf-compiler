@@ -1,0 +1,8 @@
+callout thesame;
+int blahdfa;
+void main () {
+    return;
+}
+int foo (int a, int a) {
+    return 5;
+}

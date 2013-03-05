@@ -1,0 +1,6 @@
+int foo (int a) {
+    return a + b;
+}
+void main ( ) {
+    return
+}

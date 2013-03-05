@@ -1,0 +1,6 @@
+callout blah;
+int thesame;
+int thesame;
+void main () {
+    return;
+}
