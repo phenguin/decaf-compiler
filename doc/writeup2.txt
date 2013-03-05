@@ -1,0 +1,10 @@
+ We decided to use Justin's parser because it was already creating a
+AST. Justin also wrote the transformations from the initial AST to the
+final rose tree.  Our IR is a rose tree of the tuple  (position, node type, symbol table)
+Charles spend most of his time catching up with haskell.
+Then Santiago wrote a utility function called traverse to do semantic 
+checks at each node without navigating the tree. This allowed us to write
+simple purely functional stateless checks. Furthermore we use the
+Either monoid to collect errors from all the semantic checks.
+
+We found a few mistakes in the parser, but they have been fixed.
