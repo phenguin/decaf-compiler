@@ -107,14 +107,13 @@ Block : "{" FieldDecls Statements "}" { propogatePos $1 $ Block $2 $3 }
 ParamDecl : Type id { propogatePos $1 $ ParamDecl $1 (extractPosId $2) }
 
 ParamDecls : ParamDecl { [$1] }
-           | ParamDecl "," { [$1] }
            | ParamDecl "," ParamDecls { $1 : $3 }
 
 Statement : Location AssignOp Expr ";" { propogatePos $1 $ AssignStatement $1 $2 $3 }
         | MethodCall ";" { propogatePos $1 $ MethodCallStatement $1 }
         | if "(" Expr ")" Block { propogatePos $1 $ IfStatement $3 $5 }
         | if "(" Expr ")" Block else Block { propogatePos $1 $ IfElseStatement $3 $5 $7 }
-        | for "(" id "=" Expr ";" Expr ")" Block { propogatePos $1 $ ForStatement (extractPosId $3) $5 $7 $9 }
+        | for "(" id "=" Expr "," Expr ")" Block { propogatePos $1 $ ForStatement (extractPosId $3) $5 $7 $9 }
         | while "(" Expr ")" Block { propogatePos $1 $ WhileStatement $3 $5 }
         | return Expr ";" { propogatePos $1 $ ReturnStatement $2 }
         | return ";" { propogatePos $1 $ EmptyReturnStatement }
@@ -179,7 +178,6 @@ CommaExprs : Expr { [$1] }
 
 CommaDecls : id { [propogatePos $1 $ VarDecl (extractPosId $1)] }
          | id "[" int "]" {  [propogatePos $1 $ ArrayDecl (extractPosId $1) (extractPosInt $3)] }
-         | id "," {  [propogatePos $1 $ VarDecl (extractPosId $1)] }
          | id "[" int "]" "," { [propogatePos $1 $ ArrayDecl (extractPosId $1) (extractPosInt $3)] }
          | id "," CommaDecls { (propogatePos $1 $ VarDecl (extractPosId $1)) : $3 }
          | id "[" int "]" "," CommaDecls { (propogatePos $1 $ ArrayDecl (extractPosId $1) (extractPosInt $3)) : $6 }
