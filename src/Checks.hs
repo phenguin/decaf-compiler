@@ -63,8 +63,14 @@ paramTypes (MT (pos, (MethodCall _) ,_) ts) = Prelude.map f ts
           --
 expressionType:: SemanticTreeWithSymbols -> Either String LitType
 expressionType node@(MT (pos, exp , st) children) =  if null ls && (childsTypePred node) rs then Right expectType else Left $ "Expression type error"
-      where childrenTypes = (map expressionType children)
-            expectType = expectedType node
+      where childrenTypes = (map expressionType childrenMinusCallouts)
+            childrenMinusCallouts = filter isNotCO children
+	    isNotCO (MT(_,(MethodCall id),s) _) =
+		case lookupSymbol id s of
+			(Just CODesc) -> False
+			otherwise -> True 
+	    isNotCO _ = True
+	    expectType = expectedType node
             (ls, rs) = partitionEithers childrenTypes 
 
 symbolType:: Id -> SymbolTable -> LitType
@@ -123,6 +129,7 @@ childsTypePred (MT (_,node ,st) _)  = case node of
               mcCheck id xs = let res = lookupSymbol id st in
                                case res of
                                     Just md@(MDesc _ _) -> xs == paramTypeList md
+				    Just md@(CODesc)    -> True
                                     _ -> False
 
 --1 --- Not implementable because of hashmap
@@ -234,8 +241,8 @@ arrayLocAccessValid _ = Down Nothing
 
 checkArrayLocAccessesValid = traverse arrayLocAccessValid
 
-assignCheck (MT (pos, (Assign), st) forest) = 
-	if allequal 
+assignCheck node@(MT (pos, (Assign), st) forest) = 
+	if allequal || containsCO 
 		then Up Nothing
 		else Up $ Just $ (show pos)++"Assign operator type mismatch"
 	where 	allequal = case partitionEithers childrenType of
@@ -247,6 +254,11 @@ assignCheck (MT (pos, (Assign), st) forest) =
 				Just (FDesc (Array _) _) -> null index
 				otherwise -> False
 		arrs _ = False
+		containsCO = not $ null $traverse cos node
+		cos (MT (pos, (MethodCall id) , st) _ )= case (lookupSymbol id st) of
+			Just CODesc -> Up $Just "CALLOUT!"
+			otherwise -> Down Nothing 
+		cos _ = Down Nothing
 assignCheck (MT (pos, (AssignPlus), _) forest) =
 	if allint
 		then Up Nothing
