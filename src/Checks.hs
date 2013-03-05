@@ -243,8 +243,8 @@ assignCheck (MT (pos, (Assign), st) forest) =
 				otherwise  ->  False
 		childrenType = map expressionType forest
 		arraycheck = null ( filter arrs (tail forest))
-		arrs (MT (pos,(Loc id),s) _ ) = case (lookupSymbol id st) of
-				Just (FDesc (Array _) _) -> True
+		arrs (MT (pos,(Loc id),s) index ) = case (lookupSymbol id st) of
+				Just (FDesc (Array _) _) -> null index
 				otherwise -> False
 		arrs _ = False
 assignCheck (MT (pos, (AssignPlus), _) forest) =
@@ -267,7 +267,6 @@ assignCheck (MT (pos, (AssignMinus), _) forest) =
 assignCheck _ = Down Nothing
 
 checkAssignOperators = traverse assignCheck
-
 
 forCheck (MT (pos, (For t), st ) forest) =
 	case subExpressionTypes of
