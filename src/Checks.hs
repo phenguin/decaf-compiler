@@ -312,7 +312,14 @@ checkMain p = case (traverse findMain p) of
 		["MAIN"] -> []
 		otherwise -> ["Main is not defined"]
 
-
+doublesCheck (MT (pos,MD _,st) forest) =
+                if (and [((length (filter (==x) names)) == 1) | x <- names])
+                        then Down Nothing
+                        else Up $Just$ (show pos) ++ "Declared twice"
+                where   names  = map (\(MT (_,(PD (_,(IdWithHash _ id))), _) _ )->id) fields
+                        fields = filter isFD forest
+                        isFD (MT (_,(PD _),_) _) = True
+                        isFD _ = False
 
 doublesCheck (MT (pos,DBlock,st) forest) = 
 		if (and [((length (filter (==x) names)) == 1) | x <- names]) 
