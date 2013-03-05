@@ -33,7 +33,14 @@ checksList :: [SemanticCheck]
 checksList = [checkArrayBoundsValid
             , checkCondsHaveBoolType
             , checkArithRelOpOperandTypes
-            ]
+            , checkIdenifierDeclared
+	    , checkForLoops
+	    , checkMethodCallParameters
+	    , checkMethodReturnStatement
+	    , checkBreakContinue
+	    , checkMain
+	    , checkAssignOperators
+	    ]
 
 testCheck c = doChecks [c] . checkParse
 
@@ -120,7 +127,7 @@ childsTypePred (MT (_,node ,st) _)  = case node of
 --1 --- Not implementable because of hashmap
 --2 -}
 identifierDeclared 
-	(MT (pos, (Loc id ) ,st) _)= 
+	(MT (pos, (Loc id) ,st) _)= 
 		case symbolTableContains id st of
 			True 	-> Down Nothing
 			False 	-> Down $ Just$ (show pos) ++ "Identifier " ++ (idString id) ++ " is undeclared"
@@ -131,8 +138,8 @@ checkIdenifierDeclared p = traverse identifierDeclared p
 
 -- Semantic Check #4
 arrayBoundsValid :: SemanticTreeWithSymbols -> TraverseControl
-arrayBoundsValid (MT (pos, (FD (Array n) (t, id)), st) _) = case n <= 0 of
-    True -> Down $ Just $ show (pos) ++ ": Invalid array declaration for " ++ (idString id) ++ ".  Array must have positive integer size"
+arrayBoundsValid (MT (pos, (FD (Array n) _), _) _) = case n <= 0 of
+    True -> Down $ Just $ show (pos) ++ ": Array must have positive integer size"
     False -> Down Nothing
 arrayBoundsValid _ = Down Nothing
 
@@ -167,15 +174,19 @@ checkArithRelOpOperandTypes = traverse typecheckArithRelOps
 
 -- 5 parameter type check
 checkParameterTypes:: SymbolTable -> Id ->[LitType] -> Bool
-checkParameterTypes st id param2 = (param1 == param2)
-			where 	(MDesc _ param1) = fromJust $ lookupSymbol id st
-
+checkParameterTypes st id param2 = case (fromJust $ lookupSymbol id st ) of
+					(MDesc _ param1) -> (all (\(a,b)->a==b) (zip param1 param2))
+					(CODesc) -> True
+					otherwise -> False
 methodCallParameterMatch 
 	node@(MT (pos, (MethodCall id), st) forest )= 
 			if  (symbolTableContains id st)&& (checkParameterTypes st id params)
 				then Down Nothing
 				else Up $ Just $ (show pos) ++ "Method " ++ (idString id) ++ " parameter type error"					
-		where  params = (paramTypes node) 
+		where  	params = map extractType $ filter (isParam) forest--(paramTypes node) 
+			extractType (MT (pos , (PD (t,_)) ,_)_) = t
+			isParam (MT (pos, (PD _) ,_)_) = True
+			isParam _ = False
 methodCallParameterMatch _ = Down Nothing 
 
 checkMethodCallParameters p = 
@@ -186,7 +197,7 @@ checkMethodCallParameters p =
 methodReturnStatement
 	(MT (pos, (MD (lt, id)), st) forest) =
 		case Data.Either.lefts returnTypes of
-			[]	-> Down $ if and [lt == rt | rt <- Data.Either.rights returnTypes]
+			[]	-> Up $ if and [lt == rt | rt <- Data.Either.rights returnTypes]
 						then Nothing
 						else Just $ (show pos) ++ "invalid return"
 			_	-> Down $Just$ foldr (\ a b -> a ++ "\n" ++ b) "" $ Data.Either.lefts returnTypes
@@ -197,14 +208,14 @@ methodReturnStatement
 				[]	-> Right VoidType
 				_	-> expressionType (head forest)
 
-
+methodReturnStatement _ = Down Nothing
 checkMethodReturnStatement p =
 	traverse methodReturnStatement p
-{-
+
 -- 10 This is checked coincidentally by check #2.
 
 -- 11 Check id[expr] syntax for validity
-
+{-
 arrayLocationValidity
 	(MT (pos, (Loc id), st) forest) =
 		case forest of
@@ -224,7 +235,7 @@ arrayLocationValidity
 
 checkArrayLocationValidity p =
 	traverse arrayLocationValidity p
-
+-}{-
 -- 12 Expressions within if or while statements must be booleans.
 
 ifWhileConditionBoolean
@@ -369,6 +380,35 @@ incrementDecrementAssignCheck p =
 -- 18 TODO For statement integer checks
 
 -}
+assignCheck (MT (pos, (Assign), _) forest) = 
+	if allequal 
+		then Up Nothing
+		else Up $ Just $ (show pos)++"Assign operator type mismatch"
+	where 	allequal = case partitionEithers childrenType of
+				([],rightTypes) -> and $ map (\ x -> (head rightTypes) == x) rightTypes
+				otherwise  ->  False
+		childrenType = map expressionType forest
+assignCheck (MT (pos, (AssignPlus), _) forest) =
+	if allint
+		then Up Nothing
+		else Up $ Just $ (show pos)++"Assign operator type mismatch"
+	where 	allint = case partitionEithers childrenType of
+				([],rightTypes) -> and $ map (\ x -> x == IntType) rightTypes
+				otherwise  ->  False
+		childrenType = map expressionType forest
+assignCheck (MT (pos, (AssignMinus), _) forest) =
+	if allint 
+		then Up Nothing
+		else Up $ Just $ (show pos)++"Assign operator type mismatch"
+	where 	allint = case partitionEithers childrenType of
+				([],rightTypes) -> and $ map (\ x -> x == IntType) rightTypes
+				otherwise  ->  False
+		childrenType = map expressionType forest
+
+assignCheck _ = Down Nothing
+
+checkAssignOperators = traverse assignCheck
+
 
 forCheck (MT (pos, (For t), st ) forest) =
 	case subExpressionTypes of
@@ -377,7 +417,7 @@ forCheck (MT (pos, (For t), st ) forest) =
 				else Up $Just $ (show pos) ++ "Malformed For loop"
 		otherwise-> Up $Just $ (show pos) ++ "Malformed For loop"
 	where	subExpressionTypes = partitionEithers (map expressionType (take 2 forest))
-					
+forCheck _ = Down Nothing				
 checkForLoops p = traverse forCheck p 
 -- 19 Break/Continue checks
 
@@ -389,9 +429,14 @@ breakContinue
 	(MT (pos, For t, st) forest) = Up Nothing
 breakContinue
 	(MT (pos, While, st) forest) = Up Nothing
-
-breakContinueCheck p =
+breakContinue _ = Down Nothing
+checkBreakContinue p =
 	traverse breakContinue p
 
+findMain
+	(MT (pos,(MD (_,(IdWithHash _ "main"))),_) _) = Up $Just "MAIN"
+findMain _ = Down Nothing
 
-
+checkMain p = case (traverse findMain p) of
+		["MAIN"] -> []
+		otherwise -> ["Main is not defined"]
