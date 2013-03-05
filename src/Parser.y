@@ -163,7 +163,9 @@ Expr5 : Expr5 "*" Expr6 { propogatePos $1 $ MultiplyExpr $1 $3 }
      | Expr6 { propogatePos $1 $ Expr6 $1 }
 
 Expr6 : "-" Expr7 { propogatePos $1 $ NegateExpr $2 }
+     | "-" Expr6 { propogatePos $1 $ NegateExpr' $2 } 
      | "!" Expr7 { propogatePos $1 $ NotExpr $2 } 
+     | "!" Expr6 { propogatePos $1 $ NotExpr' $2 } 
      | Expr7 { propogatePos $1 $ Expr7 $1 }
 
 Expr7 : Literal { propogatePos $1 $ LiteralExpr $1 }
@@ -347,7 +349,9 @@ data Expr5 = MultiplyExpr (WithPos Expr5) (WithPos Expr6)
      deriving (Show)
 
 data Expr6 = NegateExpr (WithPos Expr7)
+          | NegateExpr' (WithPos Expr6)
           | NotExpr (WithPos Expr7)
+          | NotExpr' (WithPos Expr6)
           | Expr7 (WithPos Expr7)
      deriving (Show)
 

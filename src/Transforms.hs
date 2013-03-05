@@ -160,7 +160,9 @@ instance ConvertibleToST (WithPos Expr5) where
 instance ConvertibleToST (WithPos Expr6) where 
     convert (P pos (NegateExpr (P _ (LiteralExpr (P _ (Int str)))))) = singleton (pos, DInt $ -1 * (read str))
     convert (P pos (NegateExpr e)) = MT (pos, Neg) $ map convert [e]
+    convert (P pos (NegateExpr' e)) = MT (pos, Neg) $ map convert [e]
     convert (P pos (NotExpr e)) = MT (pos, Not) $ map convert [e]
+    convert (P pos (NotExpr' e)) = MT (pos, Not) $ map convert [e]
     convert (P pos (Expr7 e)) = convert e
 
 instance ConvertibleToST (WithPos Expr7) where 
