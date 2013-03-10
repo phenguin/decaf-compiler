@@ -9,7 +9,7 @@ int A[100];
 int length;
 int partition ( int p, int r ) {
   int x, i, j, t;
-  int z;
+  int z, a;
   x = A[p];
   i = p - 1;
   j = r + 1;
@@ -48,6 +48,7 @@ void quicksort ( int p, int r ) {
 }
 void main ( ) {
   int temp;
+  int i;
   length = 10;
   // adjust for sort length
   printf ( "creating random array of %d elements\n", length );
