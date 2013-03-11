@@ -1,0 +1,25 @@
+1. Your traversal code is sweet. Short, clean, and awesome. For the next project you'll probably want one that can also 
+perform replace.
+
+2. Your compiler is relatively clean and easy to read. Execellent job separating the checks from the tree. This pattern
+will pay dividends in the future. 
+
+Nice job guys!
+
+[Fix these up, though]
+15 Hidden Tests Failed:
+Illegal file ./illegal/hidden-illegal-05.dcf semantic checked successfully.
+Illegal file ./illegal/hidden-illegal-13.dcf semantic checked successfully.
+Illegal file ./illegal/hidden-illegal-17.dcf semantic checked successfully.
+Illegal file ./illegal/hidden-illegal-20.dcf semantic checked successfully.
+Illegal file ./illegal/hidden-illegal-22.dcf semantic checked successfully.
+Illegal file ./illegal/hidden-illegal-24.dcf semantic checked successfully.
+Illegal file ./illegal/hidden-illegal-26.dcf semantic checked successfully.
+Illegal file ./illegal/hidden-illegal-27.dcf semantic checked successfully.
+Illegal file ./illegal/hidden-illegal-28.dcf semantic checked successfully.
+Illegal file ./illegal/hidden-illegal-30.dcf semantic checked successfully.
+Illegal file ./illegal/hidden-illegal-43.dcf semantic checked successfully.
+Illegal file ./illegal/hidden-illegal-44.dcf semantic checked successfully.
+Illegal file ./illegal/hidden-illegal-50.dcf semantic checked successfully.
+Illegal file ./illegal/hidden-illegal-52.dcf semantic checked successfully.
+Illegal file ./illegal/method_shadowing2.dcf semantic checked successfully.
