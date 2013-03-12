@@ -1,0 +1,62 @@
+Code Generation Design Document
+===============================
+
+Overview:
+===============================
+Currently our IR-tree has nodes for major statement types as well as control flow statements.  We plan to transform this IR-tree into a lower level representation by creating a handler function for each node type to generate a list of low level nodes which are a bijective mapping to assembly instructions.
+
+Current IR:
+===============================
+Our current IR is a classic rose tree with nodes for the various language constructs of decaf.
+We have also augmented all of the nodes with positioning and symbol-scope information. This allows us to implement tree manipulations in a simple and purely functional fashion without needing to traverse the tree. We will use this same pattern to facilitate the transition to a lower IR.  
+
+type IRNode = ((line #, col #), STNode, SymbolMap)
+
+data IRTree = MT IRNode  [MT IRNode]
+
+data STNode = Prog
+           | MethodCall Id
+           | And
+           | Or
+           | Add
+           | Sub
+           | Mul
+           | Mod
+           | Div
+           | Not
+           | Neg
+           | AssignPlus
+           | AssignMinus
+           | Assign
+           | Neql
+           | Eql
+           | Lt
+           | Lte
+           | Gt
+           | Gte
+           | Loc Id
+           | DStr String
+           | DChar Char
+           | DInt Int
+           | DBool Bool
+           | DBlock
+           | Return
+           | Break
+           | Continue
+           | If
+           | For Id
+           | While
+           | FD FDType TypedId
+           | CD Id
+           | PD TypedId
+           | MD TypedId
+
+Low Level IR Plan:
+===============================
+We plan to make a data type called AssmOp that has a constructor for each possible assembly instruction that will be used when compiling decaf programs.  We do this rather than using strings because we want to have flexibility in explicitly specifying opcode arguments.  The main case where this will be important is when we have to assign function locals and parameters to specific offsets in memory.  We plan to fill the arguments of each opcode in with a placeholder value, and specify their concrete values as late as possible.  
+
+Our low level IR will be transformed from our current IR by mapping each node type to its handler function, which will know how to combine the output from its children nodes into a list of assembly instructions for itself and its children.  For instance the handler for the “+” node in our tree will take the load expressions resulting from handling its children and combine these into an appropriate “add” assembly instruction.  The handlers for location references will usually output code with a placeholder rather than a concrete value for the memory location to load from.  These will then be lazily propagated up the tree until these placeholders can be filled in. For instance, the handler for a method declaration node will know both how many parameters there are, how many locals there are, and stack offsets for these fields; but its subordinate recursive calls will not need to know this information. Instead, they leave placeholders which will be set in one pass at the handler for a control-flow relevant parent node.  A similar approach will be taken to handle “continue”, and “break” statements in loops. Instead of  explicitly specifying labels to jump to, we will leave a placeholder and defer defining explicit labels to its parent loop node. This also allows for nested looping to use the same handler, as the parent loop will modify the labels of the child loop.  Once we have this final low level IR, we should be able to generate a linear representation using a depth first descent at the end of the handler for the root node, “Prog”, that will return a merged linear low level IR that is very close to the final assembly .  At this point we will do necessary post-processing and then convert this representation to a string for output to the appropriate assembly file.
+
+Conclusion:
+===============================
+    When we were discussing this transformation we had two basic decisions to make, whether we would use a graph or a tree, whether handling placeholders should be done lazily or strictly.. We believe using another tree will allow us to write more idiomatic code in haskell. We also think a tree encapsulates all the necessary power for generating a the final code. We decided that using labels will group our code in a way that is more conducive to optimization. Propagating state would make optimization code distributed and therefore difficult to develop and maintain (or rather fix when another optimization breaks things). 
