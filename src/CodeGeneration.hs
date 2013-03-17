@@ -74,10 +74,11 @@ handler node = case node of
             If                          ->asmIf
             For _                       ->asmFor
             While                       ->asmWhile
-            -- FD _ _                      ->asmFD
-            -- CD _                        ->asmCD
-            -- PD _                        ->asmPD
-            -- MD _                        ->asmMD
+        --    FD _ _                      ->asmFD
+         --   CD _                        ->asmCD
+         --   PD _                        ->asmPD
+         --   MD _                        ->asmMD
+         --   Prog                        ->asmProg
 
 
 
@@ -85,7 +86,7 @@ asmTransform:: SemanticTreeWithSymbols -> [AsmOp]
 asmTransform node@(MT (pos, stnode, st) _) = (handler stnode) node
 
 asmMethodCall :: SemanticTreeWithSymbols -> [AsmOp]
-asmMethodCall node@(MT (pos, (MethodCall id), st) forest) = undefined
+asmMethodCall node@(MT (pos, (MethodCall id), st) forest) = [Call (Label (idString id))]
 
 asmAnd:: SemanticTreeWithSymbols -> [AsmOp]
 asmAnd node@(MT (pos, stnode, st) forest) = undefined

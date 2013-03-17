@@ -8,7 +8,7 @@ import Data.Hashable (hash)
 data LitType = IntType | BoolType | VoidType | StrType deriving (Show, Eq)
 data FDType = Single | Array Int deriving (Show, Eq, Ord)
 
-data Id = IdWithHash Int String deriving (Ord)
+data Id = IdWithHash {hashInt::Int , idString::String} deriving (Ord)
 
 mkId :: String -> Id
 mkId s = IdWithHash (hash s) s
@@ -160,9 +160,10 @@ instance ConvertibleToST (WithPos Expr5) where
 instance ConvertibleToST (WithPos Expr6) where 
     convert (P pos (NegateExpr (P _ (LiteralExpr (P _ (Int str)))))) = singleton (pos, DInt $ -1 * (read str))
     convert (P pos (NegateExpr e)) = MT (pos, Neg) $ map convert [e]
-    convert (P pos (NegateExpr' e)) = MT (pos, Neg) $ map convert [e]
+-- no instance of these negateexpr' and notexpr', safe to delete?
+ --   convert (P pos (NegateExpr' e)) = MT (pos, Neg) $ map convert [e]
     convert (P pos (NotExpr e)) = MT (pos, Not) $ map convert [e]
-    convert (P pos (NotExpr' e)) = MT (pos, Not) $ map convert [e]
+ --   convert (P pos (NotExpr' e)) = MT (pos, Not) $ map convert [e]
     convert (P pos (Expr7 e)) = convert e
 
 instance ConvertibleToST (WithPos Expr7) where 
