@@ -37,22 +37,9 @@ instance Show Register where
     show R15 = "%r15"
 
 data MemLoc = Reg Register | BPOffset Int | Label String deriving (Eq)
-data DataSource = M MemLoc | C Int deriving (Eq) -- Placeholder, memory location, or constant (immediate value)
-data MaybePlaceholder a = PH String | Val a deriving (Eq)
+data DataSource = M MemLoc | C Int deriving (Eq) --memory location, or constant (immediate value)
 
-instance (Show a) => Show (MaybePlaceholder a) where
-    show (PH s) = s ++ ":_"
-    show (Val x) = show x
-
-instance Monad MaybePlaceholder where
-    return = Val
-    (PH s) >>= _ = PH s
-    (Val x) >>= f = f x
-
-instance Functor MaybePlaceholder where
-    fmap = liftM
-
-data AsmOp = Mov (MaybePlaceholder DataSource) (MaybePlaceholder MemLoc)
+data AsmOp = Mov DataSource MemLoc
          | CMove Register Register 
          | CMovne Register Register 
          | CMovg Register Register 
@@ -172,7 +159,7 @@ getAssemblyStr node = concat $ intersperse "\n" $ map show $ asmTransform node
 
 ----- Assembly generation helper functions
 ld :: (ValidDataSource a, ValidMemLoc b) => a -> b -> AsmOp
-ld x y = Mov (return $ toDataSource x) (return $ toMemLoc y)
+ld x y = Mov (toDataSource x) (toMemLoc y)
 
 class ValidMemLoc a where
     toMemLoc :: a -> MemLoc
@@ -205,9 +192,6 @@ class Registerizable a where
     reg :: Register -> a
     isReg :: a -> Bool
     getReg :: a -> Maybe Register
-
-instance (Registerizable a) => Registerizable (MaybePlaceholder a) where
-    reg = return . reg
 
 instance Registerizable Register where
     reg x = x
@@ -318,7 +302,7 @@ asmGte:: SemanticTreeWithSymbols -> [AsmOp]
 asmGte node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
 
 asmLoc:: SemanticTreeWithSymbols -> [AsmOp]
-asmLoc node@(MT (pos, (Loc i), st) forest) = [Mov (PH $ idString i) (reg RAX)]
+asmLoc node@(MT (pos, (Loc i), st) forest) = concat $ map asmTransform forest
 
 asmDStr:: SemanticTreeWithSymbols -> [AsmOp]
 asmDStr node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
