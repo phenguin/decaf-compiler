@@ -4,6 +4,7 @@ module CodeGeneration where
 import Transforms
 import MultiTree
 import Semantics
+import Data.List
 
 data Register = RAX | RBX | RCX | RDX | RSP | RBP | RSI | RDI | R8 | R9 | R10 | R11 | R12 | R13 | R14 | R15 deriving (Show, Eq)
 
@@ -39,7 +40,8 @@ data AsmOp = Mov DataSource MemLoc
          | Shl Register
          | Ror DataSource MemLoc
          | Cmp DataSource MemLoc
-         deriving (Eq, Show)
+         | Lbl String
+	 deriving (Eq, Show)
 
 
 
@@ -79,9 +81,9 @@ handler node = case node of
             While                       ->asmWhile
         --    FD _ _                      ->asmFD
          --   CD _                        ->asmCD
-         --   PD _                        ->asmPD
-         --   MD _                        ->asmMD
-         --   Prog                        ->asmProg
+            PD _                        ->asmPD
+            MD _                        ->asmMD
+            Prog                        ->asmProg
 
 class Registerizable a where
     reg :: Register -> a
@@ -102,7 +104,7 @@ asmTransform:: SemanticTreeWithSymbols -> [AsmOp]
 asmTransform node@(MT (pos, stnode, st) _) = (handler stnode) node
 
 asmMethodCall :: SemanticTreeWithSymbols -> [AsmOp]
-asmMethodCall node@(MT (pos, (MethodCall id), st) forest) = [Call (Label (idString id))]
+asmMethodCall node@(MT (pos, (MethodCall id), st) forest) =  intercalate [Push (reg RAX)] (map asmTransform forest) ++ [Call (Label (idString id))]
 
 asmAnd:: SemanticTreeWithSymbols -> [AsmOp]
 asmAnd = asmBinOp AndQ
@@ -165,7 +167,7 @@ asmDStr:: SemanticTreeWithSymbols -> [AsmOp]
 asmDStr node@(MT (pos, stnode, st) forest) = undefined
 
 asmDChar:: SemanticTreeWithSymbols -> [AsmOp]
-asmDChar node@(MT (pos, stnode, st) forest) = undefined
+asmDChar node@(MT (pos, (DChar char) , st) forest) = undefined
 
 asmDInt:: SemanticTreeWithSymbols -> [AsmOp]
 asmDInt node@(MT (pos, stnode, st) forest) = undefined
@@ -194,3 +196,11 @@ asmFor node@(MT (pos, stnode, st) forest) = undefined
 asmWhile:: SemanticTreeWithSymbols -> [AsmOp]
 asmWhile node@(MT (pos, stnode, st) forest) = undefined
 
+asmMD:: SemanticTreeWithSymbols -> [AsmOp]
+asmMD node@(MT (pos, (MD (_,id)), st) forest) = [Lbl (idString id)] ++ (concat (map asmTransform forest ))
+
+asmPD:: SemanticTreeWithSymbols -> [AsmOp]
+asmPD node@(MT (pos, (MD (_,id)), st) forest) = []
+
+asmProg:: SemanticTreeWithSymbols -> [AsmOp]
+asmProg node@(MT (pos, _ , st) forest) = concat $ map asmTransform forest
