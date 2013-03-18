@@ -3,6 +3,7 @@
 module CodeGeneration where
 
 import Transforms
+import MemoryIRTree
 import Control.Monad
 import MultiTree
 import Semantics
@@ -16,27 +17,6 @@ getHashStr x = case h < 0 of
     False -> 'P' : show h
     where h = hash x
 
-data Register = RAX | RBX | RCX | RDX | RSP | RBP | RSI | RDI | R8 | R9 | R10 | R11 | R12 | R13 | R14 | R15 deriving (Eq)
-
-instance Show Register where
-    show RAX = "%rax"
-    show RBX = "%rbx"
-    show RCX = "%rcx"
-    show RDX = "%rdx"
-    show RSP = "%rsp"
-    show RBP = "%rbp"
-    show RSI = "%rsi"
-    show RDI = "%rdi"
-    show R8 = "%r8"
-    show R9 = "%r9"
-    show R10 = "%r10"
-    show R11 = "%r11"
-    show R12 = "%r12"
-    show R13 = "%r13"
-    show R14 = "%r14"
-    show R15 = "%r15"
-
-data MemLoc = Reg Register | BPOffset Int | Label String deriving (Eq)
 data DataSource = M MemLoc | C Int deriving (Eq) --memory location, or constant (immediate value)
 
 data AsmOp = Mov DataSource MemLoc
@@ -73,11 +53,6 @@ data AsmOp = Mov DataSource MemLoc
 instance Show DataSource where
 	show (M ml) = show ml
 	show (C i) = '$' : show i
-
-instance Show MemLoc where
-	show (Reg r) = map toLower $ (show r)
-	show (BPOffset i) = (show i)++"(%rbp)"
-	show (Label str) = str
 
 instance Show AsmOp where
          show (Mov x y) = "mov "++(show x)++", "++ (show y) 
@@ -161,15 +136,6 @@ getAssemblyStr node = concat $ intersperse "\n" $ map show $ asmTransform node
 ld :: (ValidDataSource a, ValidMemLoc b) => a -> b -> AsmOp
 ld x y = Mov (toDataSource x) (toMemLoc y)
 
-class ValidMemLoc a where
-    toMemLoc :: a -> MemLoc
-
-instance ValidMemLoc MemLoc where
-    toMemLoc = id
-
-instance ValidMemLoc Register where
-    toMemLoc = Reg
-
 class ValidDataSource a where
     toDataSource :: a -> DataSource
 
@@ -188,16 +154,6 @@ instance ValidDataSource Register where
 instance ValidDataSource MemLoc where
     toDataSource = M
 
-class Registerizable a where
-    reg :: Register -> a
-    isReg :: a -> Bool
-    getReg :: a -> Maybe Register
-
-instance Registerizable Register where
-    reg x = x
-    isReg = const True
-    getReg x = Just x 
-
 instance Registerizable DataSource where
     reg x = M (reg x)
 
@@ -207,14 +163,6 @@ instance Registerizable DataSource where
     getReg (M (Reg x)) = Just x
     getReg _ = Nothing
 
-instance Registerizable MemLoc where
-    reg x = Reg x
-
-    isReg (Reg _) = True
-    isReg _ = False
-
-    getReg (Reg x) = Just x
-    getReg _ = Nothing
 
 asmBinOp :: (Registerizable a, Registerizable b) => (a -> b -> AsmOp) -> SemanticTreeWithSymbols -> [AsmOp]
 asmBinOp binop node@(MT (pos, stnode, st) (t1:t2:ts)) = asmTransform t1 ++ [ld RAX R10] ++ asmTransform t2 ++ [binop (reg R10) (reg RAX)]
