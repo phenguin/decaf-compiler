@@ -55,7 +55,7 @@ void main ( ) {
   printf ( "creating random array of %d elements\n", length );
   srandom ( 17 );
   for ( i = 0, length ) {
-    temp = random (;
+    temp = random ( );
     A[i] = temp;
   }
   printf ( "\nbefore sort:\n" );

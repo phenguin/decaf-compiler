@@ -8,7 +8,7 @@ void main ( ) {
   i1 = 100 - 50 - 40;
   printf ( "- assoc: result should be 10, is: %d\n", i1 );
   i1 = 100 - 50 + 40;
-  printf ( "-, + assoc: result should be 90, is: %d\n", i1 );
+  printf ( "-,+ assoc: result should be 90, is: %d\n", i1 );
   i1 = 100 - 5 * 4;
   printf ( "- * assoc: result should be 80, is: %d\n", i1 );
   i1 = 10 * 5 - 4;
@@ -17,5 +17,5 @@ void main ( ) {
   i1 = i1 * i1 - ( 0 - 2 );
   printf ( "*, -, uses var: result should be 11, is: %d\n", i1 );
   i1 = 3 * 4 - 2 * 5;
-  printf ( "*, - assoc: result should be 2, is: %d\n", i1 );
+  printf ( "*,- assoc: result should be 2, is: %d\n", i1 );
 }

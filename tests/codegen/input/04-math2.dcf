@@ -3,11 +3,11 @@ callout printf;
 void main ( ) {
   int a, b, c;
   a = 10 + 20;
-  printf ( "10 + 20 is %d ( 30 ) \n", a );
+  printf ( "10 + 20 is %d (30)\n", a );
   a = 10 - 20;
-  printf ( "10 - 20 is %d ( -10 ) \n", a );
+  printf ( "10 - 20 is %d (-10)\n", a );
   a = 10 * 20;
-  printf ( "10 * 20 is %d ( 200 ) \n", a );
+  printf ( "10 * 20 is %d (200)\n", a );
   a = 1;
   b = 2;
   c = 2;

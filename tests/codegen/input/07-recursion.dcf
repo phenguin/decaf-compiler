@@ -10,5 +10,5 @@ int factorial ( int n ) {
 void main ( ) {
   int res;
   res = factorial ( 10 );
-  printf ( "10! = %d ( 3628800 ) \n", res );
+  printf ( "10! = %d (3628800)\n", res );
 }

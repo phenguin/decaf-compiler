@@ -3,7 +3,7 @@ boolean not2 ( boolean a ) {
   boolean b;
   b = true;
   if ( a ) {
-    b=false;
+    b = false;
   }
   return b;
 }

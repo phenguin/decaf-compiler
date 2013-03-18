@@ -11,16 +11,16 @@ void swap ( int x, int y ) {
 void main ( ) {
   int i;
   srandom ( 17 );
-  for ( i=0, 10 ) {
+  for ( i = 0, 10 ) {
     int temp;
-    temp = random (;
+    temp = random ( );
     a[i] = temp;
   }
-  for ( i=0, 10 ) {
+  for ( i = 0, 10 ) {
     printf ( "%d\n", a[i] );
   }
   printf ( "\n" );
-  for ( i=0, 10 ) {
+  for ( i = 0, 10 ) {
     int j;
     j = i - 1;
     while ( ( j >= 0 ) && ( a[j] > a[j+1] ) ) {
@@ -28,7 +28,7 @@ void main ( ) {
       j -= 1;
     }
   }
-  for ( i=0, 10 ) {
+  for ( i = 0, 10 ) {
     printf ( "%d\n", a[i] );
   }
 }
