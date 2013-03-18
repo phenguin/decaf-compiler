@@ -5,11 +5,12 @@ import Transforms
 import MultiTree
 import Semantics
 import Data.List
+import Data.Char
 
 data Register = RAX | RBX | RCX | RDX | RSP | RBP | RSI | RDI | R8 | R9 | R10 | R11 | R12 | R13 | R14 | R15 deriving (Show, Eq)
 
-data MemLoc = Reg Register | BPOffset Int | Label String deriving (Show, Eq)
-data DataSource = M MemLoc | C Int deriving (Show, Eq) -- Placeholder, memory location, or constant (immediate value)
+data MemLoc = Reg Register | BPOffset Int | Label String deriving (Eq)
+data DataSource = M MemLoc | C Int deriving (Eq) -- Placeholder, memory location, or constant (immediate value)
 data Placeholder a = ParamPH | LocalPH deriving (Eq, Show)
 
 data AsmOp = Mov DataSource MemLoc
@@ -42,34 +43,42 @@ data AsmOp = Mov DataSource MemLoc
          | Lbl String
          deriving (Eq)
 
+instance Show DataSource where
+	show (M ml) = show ml
+	show (C i) = show i
+
+instance Show MemLoc where
+	show (Reg r) = map toLower (show r)
+	show (BPOffset i) = (show i)++"(%rbp)"
+	show (Label str) = str
+
 instance Show AsmOp where
-         show (CMove x y) = "" 
-         show (CMovne x y) = ""
-         show (CMovg x y) = ""
-         show (CMovl x y) = ""
-         show (CMovge x y) = ""
-         show (CMovle x y) = ""
-         show (Enter x) = ""
+         show (CMove x y) = "mov "++(show x)++" , "++ (show y) 
+         show (CMovne x y) = "cmove"++(show x)++" , "++ (show y)
+         show (CMovg x y) = "cmovne"++(show x)++" , "++ (show y)
+         show (CMovl x y) = "cmovl"++(show x)++" , "++ (show y)
+         show (CMovge x y) = "cmovge"++(show x)++" , "++ (show y)
+         show (CMovle x y) = "cmovle"++(show x)++" , "++ (show y)
+         show (Enter x) = "enter"++(show x)
          show Leave = "leave"
-         show (Push x) = ""
-         show (Pop x) = ""
-         show (Call x) = ""
+         show (Push x) = "push"++(show x)
+         show (Pop x) = "pop"++(show x)
+         show (Call x) = "call"++(show x)
          show Ret = "ret"
-         show (Jmp x) = ""
-         show (Je x) = ""
-         show (Jne x) = ""
-         show (AddQ x y) = ""
-         show (AndQ x y) = ""
-         show (OrQ x y) = ""
-         show (XorQ x y) = ""
-         show (SubQ x y) = ""
-         show (IMul x y) = ""
-         show (IDiv x) = ""
-         show (Shr x) = ""
-         show (Shl x) = ""
-         show (Ror x y) = ""
-         show (Cmp x y) = ""
->>>>>>> Start working on show code for assmops
+         show (Jmp x) = "jmp"++(show x)
+         show (Je x) = "je"++(show x)
+         show (Jne x) = "jne"++(show x)
+         show (AddQ x y) = "addq"++(show x)++" , "++ (show y)
+         show (AndQ x y) = "and"++(show x)++" , "++ (show y)
+         show (OrQ x y) = "or"++(show x)++" , "++ (show y)
+         show (XorQ x y) = "xor"++(show x)++" , "++ (show y)
+         show (SubQ x y) = "subq"++(show x)++" , "++ (show y)
+         show (IMul x y) = "imul"++(show x)++" , "++ (show y)
+         show (IDiv x) = "idiv"++(show x)
+         show (Shr x) = "shr"++(show x)
+         show (Shl x) = "shl"++(show x)
+         show (Ror x y) = "ror"++(show x)++" , "++ (show y)
+         show (Cmp x y) = "cmp"++(show x)++" , "++ (show y)
 
 handler:: STNode -> (SemanticTreeWithSymbols -> [AsmOp])
 handler node = case node of
