@@ -18,6 +18,10 @@ pPrintTabbed :: (Show a) => MultiTree a -> String
 pPrintTabbed = pPrintTabbed' 0
     where pPrintTabbed' n (MT x ts) = replicate (2*n) ' ' ++ show x ++ "\n" ++ (concat $ map (pPrintTabbed' (n+1)) ts)
 
+-- Turn tree into a list, order not preserved in a meaningful way
+listify :: MultiTree a -> [a]
+listify t = (nodeName t) : (concat $ map listify (children t))
+
 instance (Show a) => Show (FocusedMultiTree a) where
     show (FMT t) = show t
 

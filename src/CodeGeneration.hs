@@ -6,6 +6,13 @@ import MultiTree
 import Semantics
 import Data.List
 import Data.Char
+import Data.Hashable (hash, Hashable)
+
+getHashStr :: (Hashable a) => a -> String
+getHashStr x = case h < 0 of
+    True -> 'N' : show (abs h)
+    False -> 'P' : show h
+    where h = hash x
 
 data Register = RAX | RBX | RCX | RDX | RSP | RBP | RSI | RDI | R8 | R9 | R10 | R11 | R12 | R13 | R14 | R15 deriving (Eq)
 
@@ -59,6 +66,7 @@ data AsmOp = Mov DataSource MemLoc
          | Ror DataSource MemLoc
          | Cmp DataSource MemLoc
          | Lbl String
+         | AsmString String
          deriving (Eq)
 
 instance Show DataSource where
@@ -99,6 +107,7 @@ instance Show AsmOp where
          show (Ror x y) = "ror "++(show x)++" , "++ (show y)
          show (Cmp x y) = "cmp "++(show x)++" , "++ (show y)
          show (Lbl x) = x ++ ":"
+         show (AsmString s) = ".string " ++ show s
 
 handler:: STNode -> (SemanticTreeWithSymbols -> [AsmOp])
 handler node = case node of
@@ -300,4 +309,10 @@ asmPD:: SemanticTreeWithSymbols -> [AsmOp]
 asmPD node@(MT (pos, _, st) forest) = concat $ map asmTransform forest
 
 asmProg:: SemanticTreeWithSymbols -> [AsmOp]
-asmProg node@(MT (pos, _ , st) forest) = concat $ map asmTransform forest
+asmProg node@(MT (pos, _ , st) forest) = concat $ (map asmTransform forest) ++ makeLabels dstrs
+     where f (_, DStr s, _) = [s]
+           f _ = []
+           getDStrs = concat . (map f)
+           dstrs = getDStrs (listify node)
+           g s = [Lbl $ '.' : getHashStr s, AsmString s]
+           makeLabels = map g
