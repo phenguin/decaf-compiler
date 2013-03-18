@@ -39,13 +39,7 @@ data AsmOp = Mov DataSource MemLoc
          | Shl Register
          | Ror DataSource MemLoc
          | Cmp DataSource MemLoc
-<<<<<<< HEAD
          | Lbl String
-	 deriving (Eq, Show)
-
-
-
-=======
          deriving (Eq)
 
 instance Show AsmOp where
@@ -170,79 +164,79 @@ asmMul:: SemanticTreeWithSymbols -> [AsmOp]
 asmMul = asmBinOp IMul
 
 asmMod:: SemanticTreeWithSymbols -> [AsmOp]
-asmMod node@(MT (pos, stnode, st) forest) = undefined
+asmMod node@(MT (pos, stnode, st) forest) = []
 
 asmDiv:: SemanticTreeWithSymbols -> [AsmOp]
-asmDiv node@(MT (pos, stnode, st) forest) = undefined
+asmDiv node@(MT (pos, stnode, st) forest) = []
 
 asmNot:: SemanticTreeWithSymbols -> [AsmOp]
-asmNot node@(MT (pos, stnode, st) forest) = undefined
+asmNot node@(MT (pos, stnode, st) forest) = []
 
 asmNeg:: SemanticTreeWithSymbols -> [AsmOp]
-asmNeg node@(MT (pos, stnode, st) forest) = undefined
+asmNeg node@(MT (pos, stnode, st) forest) = []
 
 asmAssignPlus:: SemanticTreeWithSymbols -> [AsmOp]
-asmAssignPlus node@(MT (pos, stnode, st) forest) = undefined
+asmAssignPlus node@(MT (pos, stnode, st) forest) = []
 
 asmAssignMinus:: SemanticTreeWithSymbols -> [AsmOp]
-asmAssignMinus node@(MT (pos, stnode, st) forest) = undefined
+asmAssignMinus node@(MT (pos, stnode, st) forest) = []
 
 asmAssign:: SemanticTreeWithSymbols -> [AsmOp]
-asmAssign node@(MT (pos, stnode, st) forest) = undefined
+asmAssign node@(MT (pos, stnode, st) forest) = []
 
 asmNeql:: SemanticTreeWithSymbols -> [AsmOp]
-asmNeql node@(MT (pos, stnode, st) forest) = undefined
+asmNeql node@(MT (pos, stnode, st) forest) = []
 
 asmEql:: SemanticTreeWithSymbols -> [AsmOp]
-asmEql node@(MT (pos, stnode, st) forest) = undefined
+asmEql node@(MT (pos, stnode, st) forest) = []
 
 asmLt:: SemanticTreeWithSymbols -> [AsmOp]
-asmLt node@(MT (pos, stnode, st) forest) = undefined
+asmLt node@(MT (pos, stnode, st) forest) = []
 
 asmLte:: SemanticTreeWithSymbols -> [AsmOp]
-asmLte node@(MT (pos, stnode, st) forest) = undefined
+asmLte node@(MT (pos, stnode, st) forest) = []
 
 asmGt:: SemanticTreeWithSymbols -> [AsmOp]
-asmGt node@(MT (pos, stnode, st) forest) = undefined
+asmGt node@(MT (pos, stnode, st) forest) = []
 
 asmGte:: SemanticTreeWithSymbols -> [AsmOp]
-asmGte node@(MT (pos, stnode, st) forest) = undefined
+asmGte node@(MT (pos, stnode, st) forest) = []
 
 asmLoc:: SemanticTreeWithSymbols -> [AsmOp]
-asmLoc node@(MT (pos, stnode, st) forest) = undefined
+asmLoc node@(MT (pos, stnode, st) forest) = []
 
 asmDStr:: SemanticTreeWithSymbols -> [AsmOp]
-asmDStr node@(MT (pos, stnode, st) forest) = undefined
+asmDStr node@(MT (pos, stnode, st) forest) = []
 
 asmDChar:: SemanticTreeWithSymbols -> [AsmOp]
-asmDChar node@(MT (pos, (DChar char) , st) forest) = undefined
+asmDChar node@(MT (pos, (DChar char) , st) forest) = []
 
 asmDInt:: SemanticTreeWithSymbols -> [AsmOp]
-asmDInt node@(MT (pos, stnode, st) forest) = undefined
+asmDInt node@(MT (pos, stnode, st) forest) = []
 
 asmDBool:: SemanticTreeWithSymbols -> [AsmOp]
-asmDBool node@(MT (pos, stnode, st) forest) = undefined
+asmDBool node@(MT (pos, stnode, st) forest) = []
 
 asmDBlock:: SemanticTreeWithSymbols -> [AsmOp]
-asmDBlock node@(MT (pos, stnode, st) forest) = undefined
+asmDBlock node@(MT (pos, stnode, st) forest) = []
 
 asmReturn:: SemanticTreeWithSymbols -> [AsmOp]
-asmReturn node@(MT (pos, stnode, st) forest) = undefined
+asmReturn node@(MT (pos, stnode, st) forest) = []
 
 asmBreak:: SemanticTreeWithSymbols -> [AsmOp]
-asmBreak node@(MT (pos, stnode, st) forest) = undefined
+asmBreak node@(MT (pos, stnode, st) forest) = []
 
 asmContinue:: SemanticTreeWithSymbols -> [AsmOp]
-asmContinue node@(MT (pos, stnode, st) forest) = undefined
+asmContinue node@(MT (pos, stnode, st) forest) = []
 
 asmIf:: SemanticTreeWithSymbols -> [AsmOp]
-asmIf node@(MT (pos, stnode, st) forest) = undefined
+asmIf node@(MT (pos, stnode, st) forest) = []
 
 asmFor:: SemanticTreeWithSymbols -> [AsmOp]
-asmFor node@(MT (pos, stnode, st) forest) = undefined
+asmFor node@(MT (pos, stnode, st) forest) = []
 
 asmWhile:: SemanticTreeWithSymbols -> [AsmOp]
-asmWhile node@(MT (pos, stnode, st) forest) = undefined
+asmWhile node@(MT (pos, stnode, st) forest) = []
 
 asmMD:: SemanticTreeWithSymbols -> [AsmOp]
 asmMD node@(MT (pos, (MD (_,id)), st) forest) = [Lbl (idString id)] ++ (concat (map asmTransform forest ))
