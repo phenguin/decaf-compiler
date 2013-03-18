@@ -29,6 +29,9 @@ data AsmOp = Mov DataSource MemLoc
          | Je MemLoc
          | Jne MemLoc
          | AddQ DataSource MemLoc
+         | AndQ DataSource MemLoc
+         | OrQ DataSource MemLoc
+         | XorQ DataSource MemLoc
          | SubQ DataSource MemLoc
          | IMul DataSource MemLoc
          | IDiv DataSource
@@ -80,7 +83,20 @@ handler node = case node of
          --   MD _                        ->asmMD
          --   Prog                        ->asmProg
 
+class Registerizable a where
+    reg :: Register -> a
 
+instance Registerizable Register where
+    reg x = x
+
+instance Registerizable DataSource where
+    reg x = M (reg x)
+
+instance Registerizable MemLoc where
+    reg x = Reg x
+
+asmBinOp :: (Registerizable a, Registerizable b) => (a -> b -> AsmOp) -> SemanticTreeWithSymbols -> [AsmOp]
+asmBinOp binop node@(MT (pos, stnode, st) (t1:t2:ts)) = asmTransform t1 ++ [Mov (reg RAX) (reg R10)] ++ asmTransform t2 ++ [binop (reg R10) (reg RAX)]
 
 asmTransform:: SemanticTreeWithSymbols -> [AsmOp]
 asmTransform node@(MT (pos, stnode, st) _) = (handler stnode) node
@@ -89,19 +105,19 @@ asmMethodCall :: SemanticTreeWithSymbols -> [AsmOp]
 asmMethodCall node@(MT (pos, (MethodCall id), st) forest) = [Call (Label (idString id))]
 
 asmAnd:: SemanticTreeWithSymbols -> [AsmOp]
-asmAnd node@(MT (pos, stnode, st) forest) = undefined
+asmAnd = asmBinOp AndQ
 
 asmOr:: SemanticTreeWithSymbols -> [AsmOp]
-asmOr node@(MT (pos, stnode, st) forest) = undefined
+asmOr = asmBinOp OrQ
 
 asmAdd:: SemanticTreeWithSymbols -> [AsmOp]
-asmAdd node@(MT (pos, stnode, st) forest) = undefined
+asmAdd = asmBinOp AddQ
 
 asmSub:: SemanticTreeWithSymbols -> [AsmOp]
-asmSub node@(MT (pos, stnode, st) forest) = undefined
+asmSub = asmBinOp SubQ
 
 asmMul:: SemanticTreeWithSymbols -> [AsmOp]
-asmMul node@(MT (pos, stnode, st) forest) = undefined
+asmMul = asmBinOp IMul
 
 asmMod:: SemanticTreeWithSymbols -> [AsmOp]
 asmMod node@(MT (pos, stnode, st) forest) = undefined
