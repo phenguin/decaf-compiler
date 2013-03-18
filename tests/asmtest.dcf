@@ -1,0 +1,4 @@
+callout printf;
+void main( ) {
+    printf("Hello world %d %c %s!\n", 5+6, 'b', "cats and stuff");
+}

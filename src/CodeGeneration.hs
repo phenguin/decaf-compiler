@@ -71,7 +71,7 @@ data AsmOp = Mov DataSource MemLoc
 
 instance Show DataSource where
 	show (M ml) = show ml
-	show (C i) = show i
+	show (C i) = '$' : show i
 
 instance Show MemLoc where
 	show (Reg r) = map toLower $ (show r)
@@ -79,13 +79,13 @@ instance Show MemLoc where
 	show (Label str) = str
 
 instance Show AsmOp where
-         show (Mov x y) = "mov "++(show x)++" , "++ (show y) 
-         show (CMove x y) = "cmove "++(show x)++" , "++ (show y) 
-         show (CMovne x y) = "cmove "++(show x)++" , "++ (show y)
-         show (CMovg x y) = "cmovne "++(show x)++" , "++ (show y)
-         show (CMovl x y) = "cmovl "++(show x)++" , "++ (show y)
-         show (CMovge x y) = "cmovge "++(show x)++" , "++ (show y)
-         show (CMovle x y) = "cmovle "++(show x)++" , "++ (show y)
+         show (Mov x y) = "mov "++(show x)++", "++ (show y) 
+         show (CMove x y) = "cmove "++(show x)++", "++ (show y) 
+         show (CMovne x y) = "cmove "++(show x)++", "++ (show y)
+         show (CMovg x y) = "cmovne "++(show x)++", "++ (show y)
+         show (CMovl x y) = "cmovl "++(show x)++", "++ (show y)
+         show (CMovge x y) = "cmovge "++(show x)++", "++ (show y)
+         show (CMovle x y) = "cmovle "++(show x)++", "++ (show y)
          show (Enter x) = "enter "++(show x)
          show Leave = "leave"
          show (Push x) = "push "++(show x)
@@ -95,17 +95,18 @@ instance Show AsmOp where
          show (Jmp x) = "jmp "++(show x)
          show (Je x) = "je "++(show x)
          show (Jne x) = "jne "++(show x)
-         show (AddQ x y) = "addq "++(show x)++" , "++ (show y)
-         show (AndQ x y) = "and "++(show x)++" , "++ (show y)
-         show (OrQ x y) = "or "++(show x)++" , "++ (show y)
-         show (XorQ x y) = "xor "++(show x)++" , "++ (show y)
-         show (SubQ x y) = "subq "++(show x)++" , "++ (show y)
-         show (IMul x y) = "imul "++(show x)++" , "++ (show y)
+         show (AddQ x y) = "addq "++(show x)++", "++ (show y)
+         show (AndQ x y) = "and "++(show x)++", "++ (show y)
+         show (OrQ x y) = "or "++(show x)++", "++ (show y)
+         show (XorQ x y) = "xor "++(show x)++", "++ (show y)
+         show (SubQ x y) = "subq "++(show x)++", "++ (show y)
+         show (IMul x y) = "imul "++(show x)++", "++ (show y)
          show (IDiv x) = "idiv "++(show x)
          show (Shr x) = "shr "++(show x)
          show (Shl x) = "shl "++(show x)
-         show (Ror x y) = "ror "++(show x)++" , "++ (show y)
-         show (Cmp x y) = "cmp "++(show x)++" , "++ (show y)
+         show (Ror x y) = "ror "++(show x)++", "++ (show y)
+         show (Cmp x y) = "cmp "++(show x)++", "++ (show y)
+         show (Lbl "main") = ".globl main\nmain:"
          show (Lbl x) = x ++ ":"
          show (AsmString s) = ".string " ++ show s
 
@@ -174,6 +175,17 @@ instance Registerizable DataSource where
     getReg (M (Reg x)) = Just x
     getReg _ = Nothing
 
+class ValidDataSource a where
+    datum :: a -> DataSource
+
+instance ValidDataSource Register where
+    datum r = M (Reg r)
+
+instance ValidDataSource MemLoc where
+    datum x = M x
+
+instance ValidDataSource DataSource where
+    datum = id
 
 instance Registerizable MemLoc where
     reg x = Reg x
@@ -189,27 +201,30 @@ asmBinOp binop node@(MT (pos, stnode, st) (t1:t2:ts)) = asmTransform t1 ++ [Mov 
 
 asmMethodCall :: SemanticTreeWithSymbols -> [AsmOp]
 asmMethodCall node@(MT (pos, (MethodCall id), st) forest) =  
-	params ++ intercalate [Push (reg RAX)] (map asmTransform forest) ++ [Call (Label (idString id))]
+	 params ++ (if idString id == "printf" then [Mov (C 0) (reg RAX)] else []) ++ [Call (Label (idString id))]
 		where 	params =  makeparam forest 0
-			makeparam:: [SemanticTreeWithSymbols] -> [AsmOp]
 			makeparam ((MT (pos,(DStr str),st) _):xs) i =  
-				[param i (Label '.':(getHashStr str)) ] ++ (makeparam xs (i+1))
+				[param i $ datum (Label ("$." ++ (getHashStr str))) ] ++ (makeparam xs (i+1))
 			makeparam ((MT (_,(DChar chrtr),_) _):xs) i = 
-				[param i (C (ord chrtr)) ] ++ (makeparam xs (i+1))
+				[param i $ datum (C (ord chrtr)) ] ++ (makeparam xs (i+1))
 			makeparam ((MT (_,(DInt intgr),_) _):xs) i = 
-				[param i (C intgr) ] ++ (makeparam xs (i+1))
+				[param i $ datum (C intgr) ] ++ (makeparam xs (i+1))
 			makeparam ((MT (_,(DBool b),_) _):xs) i = 
-				[param i (C (if b then 1 else 0))] ++ (makeparam xs (i+1))
-			makeparam ((MT (_,(PD (_,id)),_) _):xs) i = 
-				[param i ()] ++ (makeparam xs (i+1))
-			makeparam _ i = []
+				[param i $ datum (C (if b then 1 else 0))] ++ (makeparam xs (i+1))
+			-- Handle local variables
+			-- makeparam ((MT (_,(PD (_,id)),_) _):xs) i = 
+			-- 	[param i ()] ++ (makeparam xs (i+1))
+			makeparam ys i = case ys of 
+                                  (x:xs) -> (asmTransform x) ++ [param i (reg RAX)] ++ makeparam xs (i+1)
+                                  [] -> []
+
 			param i dtsrc = case i of
-				0 -> (Mov dtsrc RDI)
-				1 -> (Mov dtsrc RSI)
-				2 -> (Mov dtsrc RDX)
-				3 -> (Mov dtsrc RCX)
-				4 -> (Mov dtsrc R8)
-				5 -> (Mov dtsrc R9)
+				0 -> (Mov dtsrc (reg RDI))
+				1 -> (Mov dtsrc (reg RSI))
+				2 -> (Mov dtsrc (reg RDX))
+				3 -> (Mov dtsrc (reg RCX))
+				4 -> (Mov dtsrc (reg R8))
+				5 -> (Mov dtsrc (reg R9))
 				otherwise -> (Push dtsrc)
 
 asmAnd:: SemanticTreeWithSymbols -> [AsmOp]
@@ -273,10 +288,13 @@ asmDStr:: SemanticTreeWithSymbols -> [AsmOp]
 asmDStr node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
 
 asmDChar:: SemanticTreeWithSymbols -> [AsmOp]
-asmDChar node@(MT (pos, (DChar char) , st) forest) = concat $ map asmTransform forest
+asmDChar node@(MT (pos, (DChar c), st) forest) = [Mov (C $ ord c) (reg RAX)]
+asmDChar node@(MT (pos, _, st) forest) = []
 
 asmDInt:: SemanticTreeWithSymbols -> [AsmOp]
-asmDInt node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
+asmDInt node@(MT (pos, (DInt i), st) forest) = [Mov (C i) (reg RAX)]
+asmDInt node@(MT (pos, _, st) forest) = []
+
 
 asmDBool:: SemanticTreeWithSymbols -> [AsmOp]
 asmDBool node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
@@ -303,7 +321,7 @@ asmWhile:: SemanticTreeWithSymbols -> [AsmOp]
 asmWhile node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
 
 asmMD:: SemanticTreeWithSymbols -> [AsmOp]
-asmMD node@(MT (pos, (MD (_,id)), st) forest) = [Lbl (idString id)] ++ (concat (map asmTransform forest ))
+asmMD node@(MT (pos, (MD (_,id)), st) forest) = [Lbl (idString id)] ++ (concat (map asmTransform forest )) ++ [Ret]
 
 asmPD:: SemanticTreeWithSymbols -> [AsmOp]
 asmPD node@(MT (pos, _, st) forest) = concat $ map asmTransform forest

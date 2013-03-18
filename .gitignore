@@ -6,6 +6,9 @@
 # Compiled Haskell
 *.hi
 *.o
+*.s
+*.out
+*.o
 dist/
 
 # Generated haskell source
