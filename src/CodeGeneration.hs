@@ -1,7 +1,9 @@
+{-# LANGUAGE FlexibleInstances #-}
 
 module CodeGeneration where
 
 import Transforms
+import Control.Monad
 import MultiTree
 import Semantics
 import Data.List
@@ -36,9 +38,21 @@ instance Show Register where
 
 data MemLoc = Reg Register | BPOffset Int | Label String deriving (Eq)
 data DataSource = M MemLoc | C Int deriving (Eq) -- Placeholder, memory location, or constant (immediate value)
-data Placeholder a = ParamPH | LocalPH deriving (Eq, Show)
+data MaybePlaceholder a = PH String | Val a deriving (Eq)
 
-data AsmOp = Mov DataSource MemLoc
+instance (Show a) => Show (MaybePlaceholder a) where
+    show (PH s) = s ++ ":_"
+    show (Val x) = show x
+
+instance Monad MaybePlaceholder where
+    return = Val
+    (PH s) >>= _ = PH s
+    (Val x) >>= f = f x
+
+instance Functor MaybePlaceholder where
+    fmap = liftM
+
+data AsmOp = Mov (MaybePlaceholder DataSource) (MaybePlaceholder MemLoc)
          | CMove Register Register 
          | CMovne Register Register 
          | CMovg Register Register 
@@ -156,10 +170,44 @@ asmTransform node@(MT (pos, stnode, st) _) = (handler stnode) node
 getAssemblyStr :: SemanticTreeWithSymbols -> String
 getAssemblyStr node = concat $ intersperse "\n" $ map show $ asmTransform node
 
+----- Assembly generation helper functions
+ld :: (ValidDataSource a, ValidMemLoc b) => a -> b -> AsmOp
+ld x y = Mov (return $ toDataSource x) (return $ toMemLoc y)
+
+class ValidMemLoc a where
+    toMemLoc :: a -> MemLoc
+
+instance ValidMemLoc MemLoc where
+    toMemLoc = id
+
+instance ValidMemLoc Register where
+    toMemLoc = Reg
+
+class ValidDataSource a where
+    toDataSource :: a -> DataSource
+
+instance ValidDataSource DataSource where
+    toDataSource = id
+
+instance ValidDataSource Int where
+    toDataSource = C
+
+instance ValidDataSource Integer where
+    toDataSource = C . fromIntegral
+
+instance ValidDataSource Register where
+    toDataSource = M . Reg
+
+instance ValidDataSource MemLoc where
+    toDataSource = M
+
 class Registerizable a where
     reg :: Register -> a
     isReg :: a -> Bool
     getReg :: a -> Maybe Register
+
+instance (Registerizable a) => Registerizable (MaybePlaceholder a) where
+    reg = return . reg
 
 instance Registerizable Register where
     reg x = x
@@ -175,18 +223,6 @@ instance Registerizable DataSource where
     getReg (M (Reg x)) = Just x
     getReg _ = Nothing
 
-class ValidDataSource a where
-    datum :: a -> DataSource
-
-instance ValidDataSource Register where
-    datum r = M (Reg r)
-
-instance ValidDataSource MemLoc where
-    datum x = M x
-
-instance ValidDataSource DataSource where
-    datum = id
-
 instance Registerizable MemLoc where
     reg x = Reg x
 
@@ -197,20 +233,20 @@ instance Registerizable MemLoc where
     getReg _ = Nothing
 
 asmBinOp :: (Registerizable a, Registerizable b) => (a -> b -> AsmOp) -> SemanticTreeWithSymbols -> [AsmOp]
-asmBinOp binop node@(MT (pos, stnode, st) (t1:t2:ts)) = asmTransform t1 ++ [Mov (reg RAX) (reg R10)] ++ asmTransform t2 ++ [binop (reg R10) (reg RAX)]
+asmBinOp binop node@(MT (pos, stnode, st) (t1:t2:ts)) = asmTransform t1 ++ [ld RAX R10] ++ asmTransform t2 ++ [binop (reg R10) (reg RAX)]
 
 asmMethodCall :: SemanticTreeWithSymbols -> [AsmOp]
 asmMethodCall node@(MT (pos, (MethodCall id), st) forest) =  
-	 params ++ (if idString id == "printf" then [Mov (C 0) (reg RAX)] else []) ++ [Call (Label (idString id))]
+	 params ++ (if idString id == "printf" then [ld (0 :: Int) RAX] else []) ++ [Call (Label (idString id))]
 		where 	params =  makeparam forest 0
 			makeparam ((MT (pos,(DStr str),st) _):xs) i =  
-				[param i $ datum (Label ("$." ++ (getHashStr str))) ] ++ (makeparam xs (i+1))
+				[param i $ toDataSource (Label ("$." ++ (getHashStr str))) ] ++ (makeparam xs (i+1))
 			makeparam ((MT (_,(DChar chrtr),_) _):xs) i = 
-				[param i $ datum (C (ord chrtr)) ] ++ (makeparam xs (i+1))
+				[param i $ toDataSource (C (ord chrtr)) ] ++ (makeparam xs (i+1))
 			makeparam ((MT (_,(DInt intgr),_) _):xs) i = 
-				[param i $ datum (C intgr) ] ++ (makeparam xs (i+1))
+				[param i $ toDataSource (C intgr) ] ++ (makeparam xs (i+1))
 			makeparam ((MT (_,(DBool b),_) _):xs) i = 
-				[param i $ datum (C (if b then 1 else 0))] ++ (makeparam xs (i+1))
+				[param i $ toDataSource (C (if b then 1 else 0))] ++ (makeparam xs (i+1))
 			-- Handle local variables
 			-- makeparam ((MT (_,(PD (_,id)),_) _):xs) i = 
 			-- 	[param i ()] ++ (makeparam xs (i+1))
@@ -219,12 +255,12 @@ asmMethodCall node@(MT (pos, (MethodCall id), st) forest) =
                                   [] -> []
 
 			param i dtsrc = case i of
-				0 -> (Mov dtsrc (reg RDI))
-				1 -> (Mov dtsrc (reg RSI))
-				2 -> (Mov dtsrc (reg RDX))
-				3 -> (Mov dtsrc (reg RCX))
-				4 -> (Mov dtsrc (reg R8))
-				5 -> (Mov dtsrc (reg R9))
+				0 -> (ld dtsrc RDI)
+				1 -> (ld dtsrc RSI)
+				2 -> (ld dtsrc RDX)
+				3 -> (ld dtsrc RCX)
+				4 -> (ld dtsrc R8)
+				5 -> (ld dtsrc R9)
 				otherwise -> (Push dtsrc)
 
 asmAnd:: SemanticTreeWithSymbols -> [AsmOp]
@@ -282,17 +318,17 @@ asmGte:: SemanticTreeWithSymbols -> [AsmOp]
 asmGte node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
 
 asmLoc:: SemanticTreeWithSymbols -> [AsmOp]
-asmLoc node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
+asmLoc node@(MT (pos, (Loc i), st) forest) = [Mov (PH $ idString i) (reg RAX)]
 
 asmDStr:: SemanticTreeWithSymbols -> [AsmOp]
 asmDStr node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
 
 asmDChar:: SemanticTreeWithSymbols -> [AsmOp]
-asmDChar node@(MT (pos, (DChar c), st) forest) = [Mov (C $ ord c) (reg RAX)]
+asmDChar node@(MT (pos, (DChar c), st) forest) = [ld (ord c) RAX]
 asmDChar node@(MT (pos, _, st) forest) = []
 
 asmDInt:: SemanticTreeWithSymbols -> [AsmOp]
-asmDInt node@(MT (pos, (DInt i), st) forest) = [Mov (C i) (reg RAX)]
+asmDInt node@(MT (pos, (DInt i), st) forest) = [ld i RAX]
 asmDInt node@(MT (pos, _, st) forest) = []
 
 
