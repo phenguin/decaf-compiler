@@ -12,7 +12,6 @@ data MemLoc = Reg Register | BPOffset Int | Label String deriving (Show, Eq)
 data DataSource = M MemLoc | C Int deriving (Show, Eq) -- Placeholder, memory location, or constant (immediate value)
 data Placeholder a = ParamPH | LocalPH deriving (Eq, Show)
 
-
 data AsmOp = Mov DataSource MemLoc
          | CMove Register Register 
          | CMovne Register Register 
@@ -40,11 +39,43 @@ data AsmOp = Mov DataSource MemLoc
          | Shl Register
          | Ror DataSource MemLoc
          | Cmp DataSource MemLoc
+<<<<<<< HEAD
          | Lbl String
 	 deriving (Eq, Show)
 
 
 
+=======
+         deriving (Eq)
+
+instance Show AsmOp where
+         show (CMove x y) = "" 
+         show (CMovne x y) = ""
+         show (CMovg x y) = ""
+         show (CMovl x y) = ""
+         show (CMovge x y) = ""
+         show (CMovle x y) = ""
+         show (Enter x) = ""
+         show Leave = "leave"
+         show (Push x) = ""
+         show (Pop x) = ""
+         show (Call x) = ""
+         show Ret = "ret"
+         show (Jmp x) = ""
+         show (Je x) = ""
+         show (Jne x) = ""
+         show (AddQ x y) = ""
+         show (AndQ x y) = ""
+         show (OrQ x y) = ""
+         show (XorQ x y) = ""
+         show (SubQ x y) = ""
+         show (IMul x y) = ""
+         show (IDiv x) = ""
+         show (Shr x) = ""
+         show (Shl x) = ""
+         show (Ror x y) = ""
+         show (Cmp x y) = ""
+>>>>>>> Start working on show code for assmops
 
 handler:: STNode -> (SemanticTreeWithSymbols -> [AsmOp])
 handler node = case node of
@@ -87,15 +118,32 @@ handler node = case node of
 
 class Registerizable a where
     reg :: Register -> a
+    isReg :: a -> Bool
+    getReg :: a -> Maybe Register
 
 instance Registerizable Register where
     reg x = x
+    isReg = const True
+    getReg x = Just x 
 
 instance Registerizable DataSource where
     reg x = M (reg x)
 
+    isReg (M (Reg _)) = True
+    isReg _ = False
+
+    getReg (M (Reg x)) = Just x
+    getReg _ = Nothing
+
+
 instance Registerizable MemLoc where
     reg x = Reg x
+
+    isReg (Reg _) = True
+    isReg _ = False
+
+    getReg (Reg x) = Just x
+    getReg _ = Nothing
 
 asmBinOp :: (Registerizable a, Registerizable b) => (a -> b -> AsmOp) -> SemanticTreeWithSymbols -> [AsmOp]
 asmBinOp binop node@(MT (pos, stnode, st) (t1:t2:ts)) = asmTransform t1 ++ [Mov (reg RAX) (reg R10)] ++ asmTransform t2 ++ [binop (reg R10) (reg RAX)]
