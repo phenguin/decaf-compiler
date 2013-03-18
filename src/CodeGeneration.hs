@@ -7,7 +7,25 @@ import Semantics
 import Data.List
 import Data.Char
 
-data Register = RAX | RBX | RCX | RDX | RSP | RBP | RSI | RDI | R8 | R9 | R10 | R11 | R12 | R13 | R14 | R15 deriving (Show, Eq)
+data Register = RAX | RBX | RCX | RDX | RSP | RBP | RSI | RDI | R8 | R9 | R10 | R11 | R12 | R13 | R14 | R15 deriving (Eq)
+
+instance Show Register where
+    show RAX = "%rax"
+    show RBX = "%rbx"
+    show RCX = "%rcx"
+    show RDX = "%rdx"
+    show RSP = "%rsp"
+    show RBP = "%rbp"
+    show RSI = "%rsi"
+    show RDI = "%rdi"
+    show R8 = "%r8"
+    show R9 = "%r9"
+    show R10 = "%r10"
+    show R11 = "%r11"
+    show R12 = "%r12"
+    show R13 = "%r13"
+    show R14 = "%r14"
+    show R15 = "%r15"
 
 data MemLoc = Reg Register | BPOffset Int | Label String deriving (Eq)
 data DataSource = M MemLoc | C Int deriving (Eq) -- Placeholder, memory location, or constant (immediate value)
@@ -48,37 +66,39 @@ instance Show DataSource where
 	show (C i) = show i
 
 instance Show MemLoc where
-	show (Reg r) = map toLower (show r)
+	show (Reg r) = map toLower $ (show r)
 	show (BPOffset i) = (show i)++"(%rbp)"
 	show (Label str) = str
 
 instance Show AsmOp where
-         show (CMove x y) = "mov "++(show x)++" , "++ (show y) 
-         show (CMovne x y) = "cmove"++(show x)++" , "++ (show y)
-         show (CMovg x y) = "cmovne"++(show x)++" , "++ (show y)
-         show (CMovl x y) = "cmovl"++(show x)++" , "++ (show y)
-         show (CMovge x y) = "cmovge"++(show x)++" , "++ (show y)
-         show (CMovle x y) = "cmovle"++(show x)++" , "++ (show y)
-         show (Enter x) = "enter"++(show x)
+         show (Mov x y) = "mov "++(show x)++" , "++ (show y) 
+         show (CMove x y) = "cmove "++(show x)++" , "++ (show y) 
+         show (CMovne x y) = "cmove "++(show x)++" , "++ (show y)
+         show (CMovg x y) = "cmovne "++(show x)++" , "++ (show y)
+         show (CMovl x y) = "cmovl "++(show x)++" , "++ (show y)
+         show (CMovge x y) = "cmovge "++(show x)++" , "++ (show y)
+         show (CMovle x y) = "cmovle "++(show x)++" , "++ (show y)
+         show (Enter x) = "enter "++(show x)
          show Leave = "leave"
-         show (Push x) = "push"++(show x)
-         show (Pop x) = "pop"++(show x)
-         show (Call x) = "call"++(show x)
+         show (Push x) = "push "++(show x)
+         show (Pop x) = "pop "++(show x)
+         show (Call x) = "call "++(show x)
          show Ret = "ret"
-         show (Jmp x) = "jmp"++(show x)
-         show (Je x) = "je"++(show x)
-         show (Jne x) = "jne"++(show x)
-         show (AddQ x y) = "addq"++(show x)++" , "++ (show y)
-         show (AndQ x y) = "and"++(show x)++" , "++ (show y)
-         show (OrQ x y) = "or"++(show x)++" , "++ (show y)
-         show (XorQ x y) = "xor"++(show x)++" , "++ (show y)
-         show (SubQ x y) = "subq"++(show x)++" , "++ (show y)
-         show (IMul x y) = "imul"++(show x)++" , "++ (show y)
-         show (IDiv x) = "idiv"++(show x)
-         show (Shr x) = "shr"++(show x)
-         show (Shl x) = "shl"++(show x)
-         show (Ror x y) = "ror"++(show x)++" , "++ (show y)
-         show (Cmp x y) = "cmp"++(show x)++" , "++ (show y)
+         show (Jmp x) = "jmp "++(show x)
+         show (Je x) = "je "++(show x)
+         show (Jne x) = "jne "++(show x)
+         show (AddQ x y) = "addq "++(show x)++" , "++ (show y)
+         show (AndQ x y) = "and "++(show x)++" , "++ (show y)
+         show (OrQ x y) = "or "++(show x)++" , "++ (show y)
+         show (XorQ x y) = "xor "++(show x)++" , "++ (show y)
+         show (SubQ x y) = "subq "++(show x)++" , "++ (show y)
+         show (IMul x y) = "imul "++(show x)++" , "++ (show y)
+         show (IDiv x) = "idiv "++(show x)
+         show (Shr x) = "shr "++(show x)
+         show (Shl x) = "shl "++(show x)
+         show (Ror x y) = "ror "++(show x)++" , "++ (show y)
+         show (Cmp x y) = "cmp "++(show x)++" , "++ (show y)
+         show (Lbl x) = x ++ ":"
 
 handler:: STNode -> (SemanticTreeWithSymbols -> [AsmOp])
 handler node = case node of
@@ -118,6 +138,13 @@ handler node = case node of
             PD _                        ->asmPD
             MD _                        ->asmMD
             Prog                        ->asmProg
+            _                           -> const []
+
+asmTransform:: SemanticTreeWithSymbols -> [AsmOp]
+asmTransform node@(MT (pos, stnode, st) _) = (handler stnode) node
+
+getAssemblyStr :: SemanticTreeWithSymbols -> String
+getAssemblyStr node = concat $ intersperse "\n" $ map show $ asmTransform node
 
 class Registerizable a where
     reg :: Register -> a
@@ -151,9 +178,6 @@ instance Registerizable MemLoc where
 asmBinOp :: (Registerizable a, Registerizable b) => (a -> b -> AsmOp) -> SemanticTreeWithSymbols -> [AsmOp]
 asmBinOp binop node@(MT (pos, stnode, st) (t1:t2:ts)) = asmTransform t1 ++ [Mov (reg RAX) (reg R10)] ++ asmTransform t2 ++ [binop (reg R10) (reg RAX)]
 
-asmTransform:: SemanticTreeWithSymbols -> [AsmOp]
-asmTransform node@(MT (pos, stnode, st) _) = (handler stnode) node
-
 asmMethodCall :: SemanticTreeWithSymbols -> [AsmOp]
 asmMethodCall node@(MT (pos, (MethodCall id), st) forest) =  intercalate [Push (reg RAX)] (map asmTransform forest) ++ [Call (Label (idString id))]
 
@@ -173,85 +197,85 @@ asmMul:: SemanticTreeWithSymbols -> [AsmOp]
 asmMul = asmBinOp IMul
 
 asmMod:: SemanticTreeWithSymbols -> [AsmOp]
-asmMod node@(MT (pos, stnode, st) forest) = []
+asmMod node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
 
 asmDiv:: SemanticTreeWithSymbols -> [AsmOp]
-asmDiv node@(MT (pos, stnode, st) forest) = []
+asmDiv node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
 
 asmNot:: SemanticTreeWithSymbols -> [AsmOp]
-asmNot node@(MT (pos, stnode, st) forest) = []
+asmNot node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
 
 asmNeg:: SemanticTreeWithSymbols -> [AsmOp]
-asmNeg node@(MT (pos, stnode, st) forest) = []
+asmNeg node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
 
 asmAssignPlus:: SemanticTreeWithSymbols -> [AsmOp]
-asmAssignPlus node@(MT (pos, stnode, st) forest) = []
+asmAssignPlus node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
 
 asmAssignMinus:: SemanticTreeWithSymbols -> [AsmOp]
-asmAssignMinus node@(MT (pos, stnode, st) forest) = []
+asmAssignMinus node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
 
 asmAssign:: SemanticTreeWithSymbols -> [AsmOp]
-asmAssign node@(MT (pos, stnode, st) forest) = []
+asmAssign node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
 
 asmNeql:: SemanticTreeWithSymbols -> [AsmOp]
-asmNeql node@(MT (pos, stnode, st) forest) = []
+asmNeql node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
 
 asmEql:: SemanticTreeWithSymbols -> [AsmOp]
-asmEql node@(MT (pos, stnode, st) forest) = []
+asmEql node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
 
 asmLt:: SemanticTreeWithSymbols -> [AsmOp]
-asmLt node@(MT (pos, stnode, st) forest) = []
+asmLt node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
 
 asmLte:: SemanticTreeWithSymbols -> [AsmOp]
-asmLte node@(MT (pos, stnode, st) forest) = []
+asmLte node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
 
 asmGt:: SemanticTreeWithSymbols -> [AsmOp]
-asmGt node@(MT (pos, stnode, st) forest) = []
+asmGt node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
 
 asmGte:: SemanticTreeWithSymbols -> [AsmOp]
-asmGte node@(MT (pos, stnode, st) forest) = []
+asmGte node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
 
 asmLoc:: SemanticTreeWithSymbols -> [AsmOp]
-asmLoc node@(MT (pos, stnode, st) forest) = []
+asmLoc node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
 
 asmDStr:: SemanticTreeWithSymbols -> [AsmOp]
-asmDStr node@(MT (pos, stnode, st) forest) = []
+asmDStr node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
 
 asmDChar:: SemanticTreeWithSymbols -> [AsmOp]
-asmDChar node@(MT (pos, (DChar char) , st) forest) = []
+asmDChar node@(MT (pos, (DChar char) , st) forest) = concat $ map asmTransform forest
 
 asmDInt:: SemanticTreeWithSymbols -> [AsmOp]
-asmDInt node@(MT (pos, stnode, st) forest) = []
+asmDInt node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
 
 asmDBool:: SemanticTreeWithSymbols -> [AsmOp]
-asmDBool node@(MT (pos, stnode, st) forest) = []
+asmDBool node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
 
 asmDBlock:: SemanticTreeWithSymbols -> [AsmOp]
-asmDBlock node@(MT (pos, stnode, st) forest) = []
+asmDBlock node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
 
 asmReturn:: SemanticTreeWithSymbols -> [AsmOp]
-asmReturn node@(MT (pos, stnode, st) forest) = []
+asmReturn node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
 
 asmBreak:: SemanticTreeWithSymbols -> [AsmOp]
-asmBreak node@(MT (pos, stnode, st) forest) = []
+asmBreak node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
 
 asmContinue:: SemanticTreeWithSymbols -> [AsmOp]
-asmContinue node@(MT (pos, stnode, st) forest) = []
+asmContinue node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
 
 asmIf:: SemanticTreeWithSymbols -> [AsmOp]
-asmIf node@(MT (pos, stnode, st) forest) = []
+asmIf node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
 
 asmFor:: SemanticTreeWithSymbols -> [AsmOp]
-asmFor node@(MT (pos, stnode, st) forest) = []
+asmFor node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
 
 asmWhile:: SemanticTreeWithSymbols -> [AsmOp]
-asmWhile node@(MT (pos, stnode, st) forest) = []
+asmWhile node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
 
 asmMD:: SemanticTreeWithSymbols -> [AsmOp]
 asmMD node@(MT (pos, (MD (_,id)), st) forest) = [Lbl (idString id)] ++ (concat (map asmTransform forest ))
 
 asmPD:: SemanticTreeWithSymbols -> [AsmOp]
-asmPD node@(MT (pos, (MD (_,id)), st) forest) = []
+asmPD node@(MT (pos, _, st) forest) = concat $ map asmTransform forest
 
 asmProg:: SemanticTreeWithSymbols -> [AsmOp]
 asmProg node@(MT (pos, _ , st) forest) = concat $ map asmTransform forest

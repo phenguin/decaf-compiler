@@ -14,6 +14,7 @@ module Main where
 import Prelude hiding (readFile)
 import qualified Prelude
 
+import CodeGeneration (getAssemblyStr)
 import Control.Exception (bracket)
 import Control.Monad (forM_, void, liftM)
 import Control.Monad.Error (ErrorT(..), runErrorT)
@@ -81,6 +82,7 @@ process configuration input =
     Scan -> scan configuration input
     Parse -> parse configuration input
     Inter -> checkSemantics configuration input
+    Assembly -> assembleTree configuration input
     phase -> Left $ show phase ++ " not implemented\n"
 
 scan :: Configuration -> String -> Either String [IO ()]
@@ -127,3 +129,20 @@ checkSemantics configuration input = do
       case debug configuration of
           False -> output
           True -> prependOutput (pPrint irTree) output
+
+assembleTree :: Configuration -> String -> Either String [IO ()]
+assembleTree configuration input = do
+  let (errors, tokens) = partitionEithers $ Scanner.scan input
+  -- If errors occurred, bail out.
+  mapM_ (mungeErrorMessage configuration . Left) errors
+  parseTree <- mungeErrorMessage configuration $ Parser.parse tokens
+  let irTree = convert parseTree
+      irTreeWithST = addSymbolTables irTree
+      assemble e = do
+             actions <- e
+             return (actions ++ [putStrLn $ getAssemblyStr irTreeWithST])
+      output = assemble $ Checks.doChecks Checks.checksList $ irTreeWithST in
+      case debug configuration of
+          False -> output
+          True -> prependOutput (pPrint irTree) output
+        

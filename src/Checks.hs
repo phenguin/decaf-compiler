@@ -17,9 +17,6 @@ checkParse s = addSymbolTables $convert $fromRight $testParse s
 symbolTableContains:: Id -> SymbolTable -> Bool 
 symbolTableContains id st = isJust $ lookupSymbol id st
 
-idString:: Id -> String
-idString id@(IdWithHash _ s) = s
-
 type SemanticCheck = SemanticTreeWithSymbols -> [String]
 
 doChecks :: [SemanticCheck] -> SemanticTreeWithSymbols -> Either String [IO ()]
