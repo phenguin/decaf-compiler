@@ -179,7 +179,29 @@ asmBinOp :: (Registerizable a, Registerizable b) => (a -> b -> AsmOp) -> Semanti
 asmBinOp binop node@(MT (pos, stnode, st) (t1:t2:ts)) = asmTransform t1 ++ [Mov (reg RAX) (reg R10)] ++ asmTransform t2 ++ [binop (reg R10) (reg RAX)]
 
 asmMethodCall :: SemanticTreeWithSymbols -> [AsmOp]
-asmMethodCall node@(MT (pos, (MethodCall id), st) forest) =  intercalate [Push (reg RAX)] (map asmTransform forest) ++ [Call (Label (idString id))]
+asmMethodCall node@(MT (pos, (MethodCall id), st) forest) =  
+	params ++ intercalate [Push (reg RAX)] (map asmTransform forest) ++ [Call (Label (idString id))]
+		where 	params =  makeparam forest 0
+			makeparam:: [SemanticTreeWithSymbols] -> [AsmOp]
+			makeparam ((MT (pos,(DStr str),st) _):xs) i =  
+				[param i (Label '.':(getHashStr str)) ] ++ (makeparam xs (i+1))
+			makeparam ((MT (_,(DChar chrtr),_) _):xs) i = 
+				[param i (C (ord chrtr)) ] ++ (makeparam xs (i+1))
+			makeparam ((MT (_,(DInt intgr),_) _):xs) i = 
+				[param i (C intgr) ] ++ (makeparam xs (i+1))
+			makeparam ((MT (_,(DBool b),_) _):xs) i = 
+				[param i (C (if b then 1 else 0))] ++ (makeparam xs (i+1))
+			makeparam ((MT (_,(PD (_,id)),_) _):xs) i = 
+				[param i ()] ++ (makeparam xs (i+1))
+			makeparam _ i = []
+			param i dtsrc = case i of
+				0 -> (Mov dtsrc RDI)
+				1 -> (Mov dtsrc RSI)
+				2 -> (Mov dtsrc RDX)
+				3 -> (Mov dtsrc RCX)
+				4 -> (Mov dtsrc R8)
+				5 -> (Mov dtsrc R9)
+				otherwise -> (Push dtsrc)
 
 asmAnd:: SemanticTreeWithSymbols -> [AsmOp]
 asmAnd = asmBinOp AndQ
