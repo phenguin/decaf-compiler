@@ -65,7 +65,7 @@ instance Show AsmOp where
          show (CMovl x y) = "cmovl "++(show x)++", "++ (show y)
          show (CMovge x y) = "cmovge "++(show x)++", "++ (show y)
          show (CMovle x y) = "cmovle "++(show x)++", "++ (show y)
-         show (Enter x) = "enter "++(show x)
+         show (Enter x) = "enter $"++(show x) ++ ", $0"
          show Leave = "leave"
          show (Push x) = "push "++(show x)
          show (Pop x) = "pop "++(show x)
@@ -174,12 +174,12 @@ asmBinOp :: (Registerizable a, Registerizable b) => (a -> b -> AsmOp) -> LowIRTr
 asmBinOp binop node@(MT stnode (t1:t2:ts)) = asmTransform t1 ++ [ld RAX R10] ++ asmTransform t2 ++ [binop (reg R10) (reg RAX)]
 
 asmMethodCall :: LowIRTree -> [AsmOp]
-asmMethodCall node@(MT (MethodCallL id) forest) =  
-	params 
-	++ [Pushall] 
+asmMethodCall node@(MT (MethodCallL id) forest) = 
+    [Pushall]
+	++ params 
 	++ (if idString id == "printf" then [ld (0 :: Int) RAX] else []) 
 	++ [Call (Label (idString id))] 
-	++ [Popall]
+    ++ [Popall]
 		where 	params =  makeparam forest 0
 			makeparam ((MT (DStrL str) _):xs) i =  
 				flipAfter5 i [param i $ toDataSource (Label ("$." ++ (getHashStr str))) ] (makeparam xs (i+1))
@@ -333,21 +333,22 @@ asmDBlock node@(MT stnode forest) = concat $ map asmTransform forest
 -- asmReturn node@(MT (ReturnL str) (x:xs)) = 
 -- 					(asmTransform x) 
 -- 					++ [(Jmp (Label str))]
+--
 
 asmReturn:: LowIRTree -> [AsmOp]
-asmReturn node@(MT ReturnL forest) = concat $ map asmTransform forest
+asmReturn node@(MT ReturnL forest) = (concat $ map asmTransform forest) ++ [Leave, Ret]
 
 -- asmBreak:: LowIRTree -> [AsmOp]
 -- asmBreak node@(MT (BreakL str) forest) = [(Jmp (Label str))]
 
 asmBreak:: LowIRTree -> [AsmOp]
-asmBreak node@(MT (BreakL _) forest) = concat $ map asmTransform forest
+asmBreak node@(MT (BreakL str) _) = [Jmp (Label str)]
 
 -- asmContinue:: LowIRTree -> [AsmOp]
 -- asmContinue node@(MT (ContinueL str) forest) = [(Jmp (Label str))]
 
 asmContinue:: LowIRTree -> [AsmOp]
-asmContinue node@(MT (ContinueL _) forest) = concat $ map asmTransform forest
+asmContinue node@(MT (ContinueL str) _) = [Jmp (Label str)]
 
 asmIf:: LowIRTree -> [AsmOp]
 asmIf node@(MT (IfL elsel endl) (conde:thenb:elseb:xs)) = 
@@ -381,8 +382,14 @@ asmWhile node@(MT (WhileL startl endl) (conde:body:xs)) =
 						++ [Jmp (Label startl)] 
 						++ [Lbl endl]
 
+countFieldDecs :: LowIRTree -> Int
+countFieldDecs node@(MT _ forest) = length $ filter isFD $ concat $ map listify forest
+    where isFD (FDL _ _) = True
+          isFD _ = False
+
+
 asmMD:: LowIRTree -> [AsmOp]
-asmMD node@(MT (MDL (_,id)) forest) = [Lbl (idString id)] ++ (concat (map asmTransform forest )) ++ [Ret]
+asmMD node@(MT (MDL (_,id)) forest) = [Lbl (idString id), Enter ((countFieldDecs node) * 8)] ++ (concat (map asmTransform forest )) ++ [Leave, Ret]
 
 asmPD:: LowIRTree -> [AsmOp]
 asmPD node@(MT _ forest) = concat $ map asmTransform forest

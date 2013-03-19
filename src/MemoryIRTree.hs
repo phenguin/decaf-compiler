@@ -20,7 +20,8 @@ type LowIRTree = MultiTree IRNode
 type VarBindings = M.Map String MemLoc
 
 data Register = RAX | RBX | RCX | RDX | RSP | RBP | RSI | RDI | R8 | R9 | R10 | R11 | R12 | R13 | R14 | R15 deriving (Eq, Enum)
-regs = map show [RAX .. R15]
+-- regs = map show $ [RBP, RSP] ++ [R12 .. R15]
+regs = map show [RBX .. R15]
 
 instance ValidMemLoc Register where
     toMemLoc = Reg
@@ -113,8 +114,8 @@ data IRNode = ProgL
      deriving (Show, Eq)
 
 -- Generates new strings
-mkLabel :: Int -> String
-mkLabel i = ".label" ++ show (increment i)
+mkLabel :: String -> Int -> String
+mkLabel s i = "." ++ s ++ show (increment i)
 
 convertToLowIRTree :: SemanticTreeWithSymbols -> LowIRTree
 convertToLowIRTree = (convertToLowIRTree' Nothing Nothing) . (fmap (\(_,x,_) -> x))
@@ -155,19 +156,22 @@ convertToLowIRTree' Nothing bs (MT Continue forest) = error "No label passed to 
 convertToLowIRTree' lbls@(Just (s1, _)) bs (MT Continue forest) = (MT (ContinueL s1) (map (convertToLowIRTree' lbls bs) forest))
 convertToLowIRTree' lbls bs (MT If forest) = 
                                    (MT (IfL s1 s2) (map (convertToLowIRTree' lbls bs) forest))
-    where s1 = mkLabel 1
-          s2 = mkLabel 1
+    where s = show (increment 1)
+          s1 = ".ifend" ++ s
+          s2 = ".elseend" ++ s
 
 convertToLowIRTree' lbls Nothing (MT (For i) forest) = error "No variable bindings passed for for statement"
 convertToLowIRTree' lbls bs@(Just table) (MT (For i) forest) = 
     (MT (ForL (table ! idString i) s1 s2) (map (convertToLowIRTree' (Just (s1, s2)) bs) forest))
-    where s1 = mkLabel 1
-          s2 = mkLabel 1
+    where s = show (increment 1)
+          s1 = ".forstart" ++ s
+          s2 = ".forend" ++ s
 
 convertToLowIRTree' lbls bs (MT While forest) = 
     (MT (WhileL s1 s2) (map (convertToLowIRTree' (Just (s1, s2)) bs) forest))
-    where s1 = mkLabel 1
-          s2 = mkLabel 1
+    where s = show (increment 1)
+          s1 = ".whilestart" ++ s
+          s2 = ".whileend" ++ s
 
 convertToLowIRTree' lbls bs (MT (FD ftp ti) forest) = (MT (FDL ftp ti) (map (convertToLowIRTree' lbls bs) forest))
 convertToLowIRTree' lbls bs (MT (CD i) forest) = (MT (CDL i) (map (convertToLowIRTree' lbls bs) forest))
