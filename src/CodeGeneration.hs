@@ -367,7 +367,7 @@ asmBreak node@(MT (BreakL str) _) = Jmp (Label str)
 -- asmContinue node@(MT (ContinueL str) forest) = [(Jmp (Label str))]
 
 asmContinue:: LowIRTree -> [AsmOp]
-asmContinue node@(MT (ContinueL str) _) = Jmp (label str)
+asmContinue node@(MT (ContinueL str) _) = Jmp (Label str)
 
 asmIf:: LowIRTree -> [AsmOp]
 asmIf node@(MT stnode forest) = concat $ map asmTransform forest
