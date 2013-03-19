@@ -139,8 +139,15 @@ getAssemblyStr :: SemanticTreeWithSymbols -> String
 getAssemblyStr node = concat $ intersperse "\n" $ map show $ asmTransform $ convertToLowIRTree node
 
 ----- Assembly generation helper functions
+
+expandDomain :: (ValidDataSource a, ValidMemLoc b) => (DataSource -> MemLoc -> AsmOp) -> a -> b -> AsmOp
+expandDomain op x y = op (toDataSource x) (toMemLoc y)
+
 ld :: (ValidDataSource a, ValidMemLoc b) => a -> b -> AsmOp
-ld x y = Mov (toDataSource x) (toMemLoc y)
+ld = expandDomain Mov
+
+cmp :: (ValidDataSource a, ValidMemLoc b) => a -> b -> AsmOp
+cmp = expandDomain Cmp
 
 class ValidDataSource a where
     toDataSource :: a -> DataSource
@@ -177,8 +184,8 @@ asmBinOpFlipArgs :: (Registerizable a, Registerizable b) => (a -> b -> AsmOp) ->
 asmBinOpFlipArgs binop node@(MT stnode (t1:t2:ts)) = asmTransform t2 ++ [ld RAX R10] ++ asmTransform t1 ++ [binop (reg R10) (reg RAX)]
 
 jumpif :: Bool -> String -> [AsmOp]
-jumpif True s = [Cmp (C 1) (reg RAX), Je (Label s)]
-jumpif False s = [Cmp (C 0) (reg RAX), Je (Label s)]
+jumpif True s = [cmp (1 :: Int) RAX, Je (Label s)]
+jumpif False s = [cmp (0 :: Int) RAX, Je (Label s)]
 
 asmMethodCall :: LowIRTree -> [AsmOp]
 asmMethodCall node@(MT (MethodCallL id) forest) = 
@@ -260,7 +267,7 @@ asmCompareOp op node@(MT stnode (x:y:xs)) =
  					(asmTransform x) 
  					++ [(ld RAX R10)] 
  					++ (asmTransform y) 
- 					++ [(Cmp (reg RAX) (reg R10))] 
+ 					++ [cmp RAX R10] 
  					++ [(Mov (C 0) (reg RAX))] 
  					++ [(Mov (C 1) (reg R10))] 
  					++ [(op (reg R10) (reg RAX))]
@@ -341,7 +348,7 @@ asmFor node@(MT (ForL id startl endl) (starte:ende:body:xs)) =
 						++ [Lbl startl]
 						++ [AddQ (C 1) id]
 						++ asmTransform ende
-						++ [Cmp (reg RAX) id]
+						++ [cmp RAX id]
 						++ asmTransform body 
 						++ [Jmp (Label startl)]
 						++ [Lbl endl]
