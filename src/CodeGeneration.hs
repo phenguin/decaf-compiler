@@ -135,11 +135,14 @@ handler node = case node of
 asmTransform:: LowIRTree -> [AsmOp]
 asmTransform node@(MT stnode _) = (handler stnode) node
 
+-- Converts the final list of asmops into the correct output
 getAssemblyStr :: SemanticTreeWithSymbols -> String
 getAssemblyStr node = concat $ intersperse "\n" $ map show $ asmTransform $ convertToLowIRTree node
 
 ----- Assembly generation helper functions
 
+-- Takes a asmop constructor and makes it able to accept a broader range of inputs 
+-- to help avoiding having to wrap constructors over and over
 expandDomain :: (ValidDataSource a, ValidMemLoc b) => (DataSource -> MemLoc -> AsmOp) -> a -> b -> AsmOp
 expandDomain op x y = op (toDataSource x) (toMemLoc y)
 
@@ -304,6 +307,7 @@ asmGt = asmCompareOp CMovg
 asmGte:: LowIRTree -> [AsmOp]
 asmGte = asmCompareOp CMovge
 
+-- Partially working.. implement arrays? need to change data types a bit?
 asmLoc:: LowIRTree -> [AsmOp]
 asmLoc node@(MT (LocL m) forest) = [ld m RAX]
 
@@ -324,12 +328,6 @@ asmDBool node@(MT (DBoolL b) forest) = [ld (C (if b then 1 else 0)) RAX]
 asmDBlock:: LowIRTree -> [AsmOp]
 asmDBlock node@(MT stnode forest) = pass forest
 
--- asmReturn:: LowIRTree -> [AsmOp]
--- asmReturn node@(MT (ReturnL str) (x:xs)) = 
--- 					(asmTransform x) 
--- 					++ [(Jmp (Label str))]
---
-
 asmReturn:: LowIRTree -> [AsmOp]
 asmReturn node@(MT ReturnL forest) = (concat $ map asmTransform forest) ++ [Leave, Ret]
 
@@ -339,7 +337,10 @@ asmBreak node@(MT (BreakL str) _) = [Jmp (Label str)]
 asmContinue:: LowIRTree -> [AsmOp]
 asmContinue node@(MT (ContinueL str) _) = [Jmp (Label str)]
 
+-- Working
 asmIf:: LowIRTree -> [AsmOp]
+
+-- If-else block
 asmIf node@(MT (IfL elsel endl) (conde:thenb:elseb:xs)) = 
 						asmTransform conde
                         ++ jumpif False elsel
@@ -349,6 +350,14 @@ asmIf node@(MT (IfL elsel endl) (conde:thenb:elseb:xs)) =
 						++ asmTransform elseb
                         ++ [Lbl endl]
 
+-- If block without else
+asmIf node@(MT (IfL _ endl) (conde:thenb:xs)) = 
+						asmTransform conde
+                        ++ jumpif False endl
+						++ asmTransform thenb 
+                        ++ [Lbl endl]
+
+-- Not yet working I don't think -justin
 asmFor:: LowIRTree -> [AsmOp]
 asmFor node@(MT (ForL id startl endl) (starte:ende:body:xs)) =
 						asmTransform starte
@@ -383,6 +392,7 @@ asmMD node@(MT (MDL (_,id)) forest) = [Lbl (idString id), Enter ((countFieldDecs
 asmPD:: LowIRTree -> [AsmOp]
 asmPD node@(MT _ forest) = pass forest
 
+--- Store string constants in data section at the end of the program
 asmProg:: LowIRTree -> [AsmOp]
 asmProg node@(MT _ forest) = concat $ (map asmTransform forest) ++ makeLabels dstrs
      where f (DStrL s) = [s]
