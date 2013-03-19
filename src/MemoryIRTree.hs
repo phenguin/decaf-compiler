@@ -9,7 +9,8 @@ import Data.Map as M hiding (map, foldl, filter, singleton)
 type LowIRTree = MultiTree IRNode
 type VarBindings = M.Map String MemLoc
 
-data Register = RAX | RBX | RCX | RDX | RSP | RBP | RSI | RDI | R8 | R9 | R10 | R11 | R12 | R13 | R14 | R15 deriving (Eq)
+data Register = RAX | RBX | RCX | RDX | RSP | RBP | RSI | RDI | R8 | R9 | R10 | R11 | R12 | R13 | R14 | R15 deriving (Eq, Enum)
+regs = map show [RAX .. R15]
 
 instance ValidMemLoc Register where
     toMemLoc = Reg
