@@ -35,12 +35,14 @@ data AsmOp = Mov DataSource MemLoc
          | Ret
          | Jmp MemLoc
          | Je MemLoc
+         | Jle MemLoc
          | Jne MemLoc
          | AddQ DataSource MemLoc
          | AndQ DataSource MemLoc
          | OrQ DataSource MemLoc
          | XorQ DataSource MemLoc
          | SubQ DataSource MemLoc
+      	 | Dec Register
          | IMul DataSource MemLoc
          | IDiv DataSource
          | Shr Register
@@ -49,8 +51,8 @@ data AsmOp = Mov DataSource MemLoc
          | Cmp DataSource MemLoc
          | Lbl String
          | AsmString String
-	     | Pushall 
-	     | Popall
+     	 | Pushall 
+	 | Popall
          deriving (Eq)
 
 instance Show DataSource where
@@ -73,12 +75,14 @@ instance Show AsmOp where
          show Ret = "ret"
          show (Jmp x) = "jmp "++(show x)
          show (Je x) = "je "++(show x)
+         show (Jle x) = "jle "++(show x)
          show (Jne x) = "jne "++(show x)
          show (AddQ x y) = "addq "++(show x)++", "++ (show y)
          show (AndQ x y) = "and "++(show x)++", "++ (show y)
          show (OrQ x y) = "or "++(show x)++", "++ (show y)
          show (XorQ x y) = "xor "++(show x)++", "++ (show y)
          show (SubQ x y) = "subq "++(show x)++", "++ (show y)
+         show (Dec x) = "dec "++(show x)
          show (IMul x y) = "imul "++(show x)++", "++ (show y)
          show (IDiv x) = "idiv "++(show x)
          show (Shr x) = "shr "++(show x)
@@ -361,12 +365,21 @@ asmIf node@(MT (IfL _ endl) (conde:thenb:xs)) =
 asmFor:: LowIRTree -> [AsmOp]
 asmFor node@(MT (ForL id startl endl) (starte:ende:body:xs)) =
 						asmTransform starte
-						++ [Mov (reg RAX) id]
-						++ [Lbl startl]
-						++ [AddQ (C 1) id]
 						++ asmTransform ende
-						++ [cmp RAX id]
+						++ [Mov (reg RAX) (reg R13)]
+						++ [Mov (M id) (reg R12)]
+				--		++ [Cmp (reg R12) (reg R13)]
+				---		++ [Mov (C (-1)) (reg R14)]
+				--		++ [CMovle (reg R14) (reg R15)]
+						++ [Mov (C (1)) (reg R15)]
+				--		++ [CMovge (reg R14) (reg R15)]
+						++ [Lbl startl]
+						++ [Cmp (reg R12) (reg R13)]
+						++ [Jle (Label endl)]
 						++ asmTransform body 
+						++ [Mov (M id) (reg R12)]
+						++ [AddQ (reg R15) (reg R12)]
+						++ [Mov (reg R12) (id)]
 						++ [Jmp (Label startl)]
 						++ [Lbl endl]
  
