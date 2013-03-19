@@ -17,6 +17,7 @@ getHashStr x = case h < 0 of
     where h = hash x
 
 data Register = RAX | RBX | RCX | RDX | RSP | RBP | RSI | RDI | R8 | R9 | R10 | R11 | R12 | R13 | R14 | R15 deriving (Eq)
+regs = ["%rax","%rbx","%rcx","%rdx","%rsp","%rbp","%rsi","%rdi","%r8","%r9","%r10","%r11","%r12","%r13","%r14","%r15"]
 
 instance Show Register where
     show RAX = "%rax"
@@ -52,13 +53,13 @@ instance Monad MaybePlaceholder where
 instance Functor MaybePlaceholder where
     fmap = liftM
 
-data AsmOp = Mov (MaybePlaceholder DataSource) (MaybePlaceholder MemLoc)
-         | CMove Register Register 
-         | CMovne Register Register 
-         | CMovg Register Register 
-         | CMovl Register Register 
-         | CMovge Register Register 
-         | CMovle Register Register 
+data AsmOp = Mov DataSource MemLoc
+         | CMove DataSource MemLoc 
+         | CMovne DataSource MemLoc
+         | CMovg DataSource MemLoc
+         | CMovl DataSource MemLoc
+         | CMovge DataSource MemLoc
+         | CMovle DataSource MemLoc 
          | Enter Int
          | Leave
          | Push DataSource
@@ -81,6 +82,8 @@ data AsmOp = Mov (MaybePlaceholder DataSource) (MaybePlaceholder MemLoc)
          | Cmp DataSource MemLoc
          | Lbl String
          | AsmString String
+	 | Pushall 
+	 | Popall
          deriving (Eq)
 
 instance Show DataSource where
@@ -123,6 +126,9 @@ instance Show AsmOp where
          show (Lbl "main") = ".globl main\nmain:"
          show (Lbl x) = x ++ ":"
          show (AsmString s) = ".string " ++ show s
+	 show (Pushall) = intercalate "push" regs
+	 show (Popall)  = intercalate "pop" (reverse regs)
+
 
 handler:: STNode -> (SemanticTreeWithSymbols -> [AsmOp])
 handler node = case node of
@@ -237,23 +243,28 @@ asmBinOp binop node@(MT (pos, stnode, st) (t1:t2:ts)) = asmTransform t1 ++ [ld R
 
 asmMethodCall :: SemanticTreeWithSymbols -> [AsmOp]
 asmMethodCall node@(MT (pos, (MethodCall id), st) forest) =  
-	 params ++ (if idString id == "printf" then [ld (0 :: Int) RAX] else []) ++ [Call (Label (idString id))]
+	params 
+	++ [Pushall] 
+	++ (if idString id == "printf" then [ld (0 :: Int) RAX] else []) 
+	++ [Call (Label (idString id))] 
+	++ [Popall]
 		where 	params =  makeparam forest 0
 			makeparam ((MT (pos,(DStr str),st) _):xs) i =  
-				[param i $ toDataSource (Label ("$." ++ (getHashStr str))) ] ++ (makeparam xs (i+1))
+				flipAfter5 i [param i $ toDataSource (Label ("$." ++ (getHashStr str))) ] (makeparam xs (i+1))
 			makeparam ((MT (_,(DChar chrtr),_) _):xs) i = 
-				[param i $ toDataSource (C (ord chrtr)) ] ++ (makeparam xs (i+1))
+				flipAfter5 i [param i $ toDataSource (C (ord chrtr)) ] (makeparam xs (i+1))
 			makeparam ((MT (_,(DInt intgr),_) _):xs) i = 
-				[param i $ toDataSource (C intgr) ] ++ (makeparam xs (i+1))
+				flipAfter5 i [param i $ toDataSource (C intgr) ] (makeparam xs (i+1))
 			makeparam ((MT (_,(DBool b),_) _):xs) i = 
-				[param i $ toDataSource (C (if b then 1 else 0))] ++ (makeparam xs (i+1))
-			-- Handle local variables
-			-- makeparam ((MT (_,(PD (_,id)),_) _):xs) i = 
-			-- 	[param i ()] ++ (makeparam xs (i+1))
+				flipAfter5 i [param i $ toDataSource (C (if b then 1 else 0))] ++ (makeparam xs (i+1))
+--			makeparam ((MT (_,(PD (_,str)),_) _):xs) i = 
+--			 	flipAfter5 i [param i (Mov (Label str) (reg RAX))] (makeparam xs (i+1)
 			makeparam ys i = case ys of 
                                   (x:xs) -> (asmTransform x) ++ [param i (reg RAX)] ++ makeparam xs (i+1)
                                   [] -> []
-
+			flipAfter5 i a b 
+				|i > 5	=(b ++ a)
+				|i      =(a ++ b)
 			param i dtsrc = case i of
 				0 -> (ld dtsrc RDI)
 				1 -> (ld dtsrc RSI)
@@ -291,34 +302,76 @@ asmNeg:: SemanticTreeWithSymbols -> [AsmOp]
 asmNeg node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
 
 asmAssignPlus:: SemanticTreeWithSymbols -> [AsmOp]
-asmAssignPlus node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
+asmAssignPlus node@(MT (pos, (AssignPlus), st) ((Loc id ):v:xs)) = 
+					(asmTransform v) 
+					++ [(AddQ (reg RAX) (PH $ idString id))]
 
 asmAssignMinus:: SemanticTreeWithSymbols -> [AsmOp]
-asmAssignMinus node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
+asmAssignMinus node@(MT (pos, (AssignMinus), st) ((Loc id ):v:xs)) = 
+					(asmTransform v) 
+					++ [(SubQ (reg RAX) (PH $ idString id))]
 
 asmAssign:: SemanticTreeWithSymbols -> [AsmOp]
-asmAssign node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
+asmAssign node@(MT (pos, (Assign) , st) ((Loc id ):v:xs)) = 
+					(asmTransform v) 
+					++ [(Mov (reg RAX) (PH $ idString id))]
 
 asmNeql:: SemanticTreeWithSymbols -> [AsmOp]
-asmNeql node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
+asmNeql node@(MT (pos, stnode, st) (x:y:xs)) = 	
+					(asmTransform x) 
+					++ [(ld RAX RBX)] 
+					++ (asmTransform y) 
+					++ [(Cmp (reg RBX) (reg RAX))] 
+					++ [(Mov (C 0) (reg RAX))] 
+					++ [(CMovne (C 1) (reg RAX))]
 
 asmEql:: SemanticTreeWithSymbols -> [AsmOp]
-asmEql node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
+asmEql node@(MT (pos, stnode, st) (x:y:xs)) = 
+					(asmTransform x) 
+					++ [(ld RAX RBX)] 
+					++ (asmTransform y) 
+					++ [(Cmp (reg RBX) (reg RAX))] 
+					++ [(Mov (C 0) (reg RAX))] 
+					++ [(CMove (C 1) (reg RAX))]
 
 asmLt:: SemanticTreeWithSymbols -> [AsmOp]
-asmLt node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
+asmLt node@(MT (pos, stnode, st) (x:y:xs)) = 
+					(asmTransform x) 
+					++ [(ld RAX RBX)] 
+					++ (asmTransform y) 
+					++ [(Cmp (reg RBX) (reg RAX))] 
+					++ [(Mov (C 0) (reg RAX))] 
+					++ [(CMovl (C 1) (reg RAX))]
 
 asmLte:: SemanticTreeWithSymbols -> [AsmOp]
-asmLte node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
+asmLte node@(MT (pos, stnode, st) (x:y:xs)) = 
+					(asmTransform x) 
+					++ [(ld RAX RBX)] 
+					++ (asmTransform y) 
+					++ [(Cmp (reg RBX) (reg RAX))] 
+					++ [(Mov (C 0) (reg RAX))] 
+					++ [(CMovle (C 1) (reg RAX))]
 
-asmGt:: SemanticTreeWithSymbols -> [AsmOp]
-asmGt node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
+asmGt:: SemanticTreeWithSymbols -> [AsmOp] 
+asmGt node@(MT (pos, stnode, st) (x:y:xs)) = 
+					(asmTransform x) 
+					++ [(ld RAX RBX)] 
+					++ (asmTransform y) 
+					++ [(Cmp (reg RBX) (reg RAX))] 
+					++ [(Mov (C 0) (reg RAX))] 
+					++ [(CMovg (C 1) (reg RAX))]
 
 asmGte:: SemanticTreeWithSymbols -> [AsmOp]
-asmGte node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
+asmGte node@(MT (pos, stnode, st) (x:y:xs)) = 
+					(asmTransform x) 
+					++ [(ld RAX RBX)] 
+					++ (asmTransform y) 
+					++ [(Cmp (reg RBX) (reg RAX))] 
+					++ [(Mov (C 0) (reg RAX))] 
+					++ [(CMovge (C 1) (reg RAX))]
 
 asmLoc:: SemanticTreeWithSymbols -> [AsmOp]
-asmLoc node@(MT (pos, (Loc i), st) forest) = [Mov (PH $ idString i) (reg RAX)]
+asmLoc node@(MT (pos, (Loc i), st) forest) = [Mov (M (Label i)) (reg RAX)]
 
 asmDStr:: SemanticTreeWithSymbols -> [AsmOp]
 asmDStr node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
@@ -331,21 +384,22 @@ asmDInt:: SemanticTreeWithSymbols -> [AsmOp]
 asmDInt node@(MT (pos, (DInt i), st) forest) = [ld i RAX]
 asmDInt node@(MT (pos, _, st) forest) = []
 
-
 asmDBool:: SemanticTreeWithSymbols -> [AsmOp]
-asmDBool node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
+asmDBool node@(MT (pos, (DBool b), st) forest) = [ld (C (if b then 1 else 0)) RAX]
 
 asmDBlock:: SemanticTreeWithSymbols -> [AsmOp]
 asmDBlock node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
 
 asmReturn:: SemanticTreeWithSymbols -> [AsmOp]
-asmReturn node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
+asmReturn node@(MT (pos, (Return str), st) (x:xs)) = 
+					(asmTransform x) 
+					++ [(Jmp (Label str))]
 
 asmBreak:: SemanticTreeWithSymbols -> [AsmOp]
-asmBreak node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
+asmBreak node@(MT (pos, (Break str), st) forest) = [(Jmp (Label str))]
 
 asmContinue:: SemanticTreeWithSymbols -> [AsmOp]
-asmContinue node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
+asmContinue node@(MT (pos, (Continue str), st) forest) = [(Jmp (Label str))]
 
 asmIf:: SemanticTreeWithSymbols -> [AsmOp]
 asmIf node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
@@ -357,7 +411,11 @@ asmWhile:: SemanticTreeWithSymbols -> [AsmOp]
 asmWhile node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
 
 asmMD:: SemanticTreeWithSymbols -> [AsmOp]
-asmMD node@(MT (pos, (MD (_,id)), st) forest) = [Lbl (idString id)] ++ (concat (map asmTransform forest )) ++ [Ret]
+asmMD node@(MT (pos, (MD (_,id) end), st) forest) = 
+	[Lbl (idString id)] 
+	 ++ (concat (map asmTransform forest )) 
+	 ++ [Lbl end]
+	 ++ [Ret]
 
 asmPD:: SemanticTreeWithSymbols -> [AsmOp]
 asmPD node@(MT (pos, _, st) forest) = concat $ map asmTransform forest
