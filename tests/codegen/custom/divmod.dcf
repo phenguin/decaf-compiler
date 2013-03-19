@@ -1,0 +1,11 @@
+callout printf;
+
+void main( ) {
+    int b;
+    b = 20;
+    while (b > 0) {
+        printf("b = %d!\nb % 2 = %d!\nb / 2 = %d\n\n", b, b % 2, b / 2);
+        printf("b = %d!\nb % 3 = %d!\nb / 3 = %d\n\n", b, b % 3, b / 3);
+        b = b - 1;
+    }
+}

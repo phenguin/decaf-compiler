@@ -220,6 +220,9 @@ asmMethodCall node@(MT (MethodCallL id) forest) =
 				5 -> (ld dtsrc R9)
 				otherwise -> (Push dtsrc)
 
+pass :: [LowIRTree] -> [AsmOp]
+pass = concat . (map asmTransform)
+
 asmAnd:: LowIRTree -> [AsmOp]
 asmAnd = asmBinOp AndQ
 
@@ -236,16 +239,27 @@ asmMul:: LowIRTree -> [AsmOp]
 asmMul = asmBinOp IMul
 
 asmMod:: LowIRTree -> [AsmOp]
-asmMod node@(MT stnode forest) = concat $ map asmTransform forest
+asmMod node@(MT stnode (t1:t2:ts)) = 
+    (asmTransform t2)
+    ++ [ld RAX R10]
+    ++ asmTransform t1
+    ++ [ld (0 :: Int) RDX]
+    ++ [IDiv (toDataSource R10)]
+    ++ [ld RDX RAX]
 
 asmDiv:: LowIRTree -> [AsmOp]
-asmDiv node@(MT stnode forest) = concat $ map asmTransform forest
+asmDiv node@(MT stnode (t1:t2:ts)) = 
+    (asmTransform t2)
+    ++ [ld RAX R10]
+    ++ asmTransform t1
+    ++ [ld (0 :: Int) RDX]
+    ++ [IDiv (toDataSource R10)]
 
 asmNot:: LowIRTree -> [AsmOp]
-asmNot node@(MT stnode forest) = concat $ map asmTransform forest
+asmNot node@(MT stnode forest) = pass forest
 
 asmNeg:: LowIRTree -> [AsmOp]
-asmNeg node@(MT stnode forest) = concat $ map asmTransform forest
+asmNeg node@(MT stnode forest) = pass forest
 
 asmAssignPlus:: LowIRTree -> [AsmOp]
 asmAssignPlus node@(MT AssignPlusL ((MT (LocL ml) _):v:xs)) = 
@@ -294,7 +308,7 @@ asmLoc:: LowIRTree -> [AsmOp]
 asmLoc node@(MT (LocL m) forest) = [ld m RAX]
 
 asmDStr:: LowIRTree -> [AsmOp]
-asmDStr node@(MT stnode forest) = concat $ map asmTransform forest
+asmDStr node@(MT stnode forest) = pass forest
 
 asmDChar:: LowIRTree -> [AsmOp]
 asmDChar node@(MT (DCharL c) forest) = [ld (ord c) RAX]
@@ -308,7 +322,7 @@ asmDBool:: LowIRTree -> [AsmOp]
 asmDBool node@(MT (DBoolL b) forest) = [ld (C (if b then 1 else 0)) RAX]
 
 asmDBlock:: LowIRTree -> [AsmOp]
-asmDBlock node@(MT stnode forest) = concat $ map asmTransform forest
+asmDBlock node@(MT stnode forest) = pass forest
 
 -- asmReturn:: LowIRTree -> [AsmOp]
 -- asmReturn node@(MT (ReturnL str) (x:xs)) = 
@@ -319,14 +333,8 @@ asmDBlock node@(MT stnode forest) = concat $ map asmTransform forest
 asmReturn:: LowIRTree -> [AsmOp]
 asmReturn node@(MT ReturnL forest) = (concat $ map asmTransform forest) ++ [Leave, Ret]
 
--- asmBreak:: LowIRTree -> [AsmOp]
--- asmBreak node@(MT (BreakL str) forest) = [(Jmp (Label str))]
-
 asmBreak:: LowIRTree -> [AsmOp]
 asmBreak node@(MT (BreakL str) _) = [Jmp (Label str)]
-
--- asmContinue:: LowIRTree -> [AsmOp]
--- asmContinue node@(MT (ContinueL str) forest) = [(Jmp (Label str))]
 
 asmContinue:: LowIRTree -> [AsmOp]
 asmContinue node@(MT (ContinueL str) _) = [Jmp (Label str)]
@@ -373,7 +381,7 @@ asmMD:: LowIRTree -> [AsmOp]
 asmMD node@(MT (MDL (_,id)) forest) = [Lbl (idString id), Enter ((countFieldDecs node) * 8)] ++ (concat (map asmTransform forest )) ++ [Leave, Ret]
 
 asmPD:: LowIRTree -> [AsmOp]
-asmPD node@(MT _ forest) = concat $ map asmTransform forest
+asmPD node@(MT _ forest) = pass forest
 
 asmProg:: LowIRTree -> [AsmOp]
 asmProg node@(MT _ forest) = concat $ (map asmTransform forest) ++ makeLabels dstrs
