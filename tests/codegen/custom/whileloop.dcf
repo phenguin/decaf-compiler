@@ -1,0 +1,13 @@
+callout printf;
+int plusone (int n) {
+   return n+1;
+}
+
+void main( ) {
+    int b;
+    b = 10;
+    while (b > 0) {
+        printf("b = %d! b+1 = %d!\n", b, plusone(b));
+        b = b - 1;
+    }
+}

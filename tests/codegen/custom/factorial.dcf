@@ -1,0 +1,14 @@
+callout printf;
+int factorial (int n) {
+   if (n < 2) {
+      return 1;
+   } else {
+      return n * factorial(n-1);
+   }
+}
+
+void main( ) {
+    int b;
+    b = 10;
+    printf("Hello world %d!\n", factorial(b));
+}

@@ -384,8 +384,7 @@ asmWhile:: LowIRTree -> [AsmOp]
 asmWhile node@(MT (WhileL startl endl) (conde:body:xs)) = 
 						[Lbl startl]
 						++ asmTransform conde
-						++ [Cmp (C 1) (reg RAX)]
-						++ [Jne $ Label endl]
+						++ jumpif False endl
 						++ asmTransform body
 						++ [Jmp (Label startl)] 
 						++ [Lbl endl]
