@@ -12,11 +12,9 @@ counter = unsafePerformIO $
 		 newIORef 0
 
 increment i = unsafePerformIO $ do
-	modifyIORef counter (+1)
+	modifyIORef counter (+i)
 	x <- readIORef counter
 	return (x)
-	
-
 
 type LowIRTree = MultiTree IRNode
 type VarBindings = M.Map String MemLoc
@@ -103,99 +101,119 @@ data IRNode = ProgL
             | DBoolL Bool
             | DBlockL
             | ReturnL
-            | BreakL
-            | ContinueL
-            | IfL
-            | ForL Id
-            | WhileL
+            | BreakL String
+            | ContinueL String
+            | IfL String String
+            | ForL Id String String
+            | WhileL String String
             | FDL FDType TypedId
             | CDL Id
             | PDL TypedId
             | MDL TypedId
      deriving (Show, Eq)
 
+-- Generates new strings
+mkLabel :: Int -> String
+mkLabel i = ".label" ++ show (increment i)
+
 convertToLowIRTree :: SemanticTreeWithSymbols -> LowIRTree
-convertToLowIRTree = convertToLowIRTree' . (fmap (\(_,x,_) -> x))
+convertToLowIRTree = (convertToLowIRTree' Nothing Nothing) . (fmap (\(_,x,_) -> x))
 
-convertToLowIRTree' :: MultiTree STNode -> LowIRTree
-convertToLowIRTree' (MT Prog forest) = (MT ProgL (map convertToLowIRTree' forest))
-convertToLowIRTree' (MT (MethodCall x) forest) = (MT (MethodCallL x) (map convertToLowIRTree' forest))
-convertToLowIRTree' (MT And forest) = (MT AndL (map convertToLowIRTree' forest))
-convertToLowIRTree' (MT Or forest) = (MT OrL (map convertToLowIRTree' forest))
-convertToLowIRTree' (MT Add forest) = (MT AddL (map convertToLowIRTree' forest))
-convertToLowIRTree' (MT Sub forest) = (MT SubL (map convertToLowIRTree' forest))
-convertToLowIRTree' (MT Mul forest) = (MT MulL (map convertToLowIRTree' forest))
-convertToLowIRTree' (MT Mod forest) = (MT ModL (map convertToLowIRTree' forest))
-convertToLowIRTree' (MT Div forest) = (MT DivL (map convertToLowIRTree' forest))
-convertToLowIRTree' (MT Not forest) = (MT NotL (map convertToLowIRTree' forest))
-convertToLowIRTree' (MT Neg forest) = (MT NegL (map convertToLowIRTree' forest))
-convertToLowIRTree' (MT AssignPlus forest) = (MT AssignPlusL (map convertToLowIRTree' forest))
-convertToLowIRTree' (MT AssignMinus forest) = (MT AssignMinusL (map convertToLowIRTree' forest))
-convertToLowIRTree' (MT Assign forest) = (MT AssignL (map convertToLowIRTree' forest))
-convertToLowIRTree' (MT Neql forest) = (MT NeqlL (map convertToLowIRTree' forest))
-convertToLowIRTree' (MT Eql forest) = (MT EqlL (map convertToLowIRTree' forest))
-convertToLowIRTree' (MT Lt forest) = (MT LtL (map convertToLowIRTree' forest))
-convertToLowIRTree' (MT Lte forest) = (MT LteL (map convertToLowIRTree' forest))
-convertToLowIRTree' (MT Gt forest) = (MT GtL (map convertToLowIRTree' forest))
-convertToLowIRTree' (MT Gte forest) = (MT GteL (map convertToLowIRTree' forest))
-convertToLowIRTree' (MT (Loc i) forest) = (MT (undefined) (map convertToLowIRTree' forest))
-convertToLowIRTree' (MT (DStr s) forest) = (MT (DStrL s) (map convertToLowIRTree' forest))
-convertToLowIRTree' (MT (DChar c) forest) = (MT (DCharL c) (map convertToLowIRTree' forest))
-convertToLowIRTree' (MT (DInt n) forest) = (MT (DIntL n) (map convertToLowIRTree' forest))
-convertToLowIRTree' (MT (DBool b) forest) = (MT (DBoolL b) (map convertToLowIRTree' forest))
-convertToLowIRTree' (MT DBlock forest) = (MT DBlockL (map convertToLowIRTree' forest))
-convertToLowIRTree' (MT Return forest) = (MT ReturnL (map convertToLowIRTree' forest))
-convertToLowIRTree' (MT Break forest) = (MT BreakL (map convertToLowIRTree' forest))
-convertToLowIRTree' (MT Continue forest) = (MT ContinueL (map convertToLowIRTree' forest))
-convertToLowIRTree' (MT If forest) = (MT IfL (map convertToLowIRTree' forest))
-convertToLowIRTree' (MT (For i) forest) = (MT (ForL i) (map convertToLowIRTree' forest))
-convertToLowIRTree' (MT While forest) = (MT WhileL (map convertToLowIRTree' forest))
-convertToLowIRTree' (MT (FD ftp ti) forest) = (MT (FDL ftp ti) (map convertToLowIRTree' forest))
-convertToLowIRTree' (MT (CD i) forest) = (MT (CDL i) (map convertToLowIRTree' forest))
-convertToLowIRTree' (MT (PD ti) forest) = (MT (PDL ti) (map convertToLowIRTree' forest))
-convertToLowIRTree' node@(MT (MD ti) forest) = (MT (MDL ti) (map (fmap (fixLocations table)) forest))
+convertToLowIRTree' :: Maybe (String, String) -> Maybe VarBindings -> MultiTree STNode -> LowIRTree
+convertToLowIRTree' lbls bs (MT Prog forest) = (MT ProgL (map (convertToLowIRTree' lbls bs) forest))
+convertToLowIRTree' lbls bs (MT (MethodCall x) forest) = (MT (MethodCallL x) (map (convertToLowIRTree' lbls bs) forest))
+convertToLowIRTree' lbls bs (MT And forest) = (MT AndL (map (convertToLowIRTree' lbls bs) forest))
+convertToLowIRTree' lbls bs (MT Or forest) = (MT OrL (map (convertToLowIRTree' lbls bs) forest))
+convertToLowIRTree' lbls bs (MT Add forest) = (MT AddL (map (convertToLowIRTree' lbls bs) forest))
+convertToLowIRTree' lbls bs (MT Sub forest) = (MT SubL (map (convertToLowIRTree' lbls bs) forest))
+convertToLowIRTree' lbls bs (MT Mul forest) = (MT MulL (map (convertToLowIRTree' lbls bs) forest))
+convertToLowIRTree' lbls bs (MT Mod forest) = (MT ModL (map (convertToLowIRTree' lbls bs) forest))
+convertToLowIRTree' lbls bs (MT Div forest) = (MT DivL (map (convertToLowIRTree' lbls bs) forest))
+convertToLowIRTree' lbls bs (MT Not forest) = (MT NotL (map (convertToLowIRTree' lbls bs) forest))
+convertToLowIRTree' lbls bs (MT Neg forest) = (MT NegL (map (convertToLowIRTree' lbls bs) forest))
+convertToLowIRTree' lbls bs (MT AssignPlus forest) = (MT AssignPlusL (map (convertToLowIRTree' lbls bs) forest))
+convertToLowIRTree' lbls bs (MT AssignMinus forest) = (MT AssignMinusL (map (convertToLowIRTree' lbls bs) forest))
+convertToLowIRTree' lbls bs (MT Assign forest) = (MT AssignL (map (convertToLowIRTree' lbls bs) forest))
+convertToLowIRTree' lbls bs (MT Neql forest) = (MT NeqlL (map (convertToLowIRTree' lbls bs) forest))
+convertToLowIRTree' lbls bs (MT Eql forest) = (MT EqlL (map (convertToLowIRTree' lbls bs) forest))
+convertToLowIRTree' lbls bs (MT Lt forest) = (MT LtL (map (convertToLowIRTree' lbls bs) forest))
+convertToLowIRTree' lbls bs (MT Lte forest) = (MT LteL (map (convertToLowIRTree' lbls bs) forest))
+convertToLowIRTree' lbls bs (MT Gt forest) = (MT GtL (map (convertToLowIRTree' lbls bs) forest))
+convertToLowIRTree' lbls bs (MT Gte forest) = (MT GteL (map (convertToLowIRTree' lbls bs) forest))
+convertToLowIRTree' lbls Nothing (MT (Loc i) forest) = error "unexpected Location access outside of method body"
+convertToLowIRTree' lbls (Just table) (MT (Loc i) forest) = 
+    (MT (LocL (table ! (idString i))) (map (convertToLowIRTree' lbls (Just table)) forest))
+convertToLowIRTree' lbls bs (MT (DStr s) forest) = (MT (DStrL s) (map (convertToLowIRTree' lbls bs) forest))
+convertToLowIRTree' lbls bs (MT (DChar c) forest) = (MT (DCharL c) (map (convertToLowIRTree' lbls bs) forest))
+convertToLowIRTree' lbls bs (MT (DInt n) forest) = (MT (DIntL n) (map (convertToLowIRTree' lbls bs) forest))
+convertToLowIRTree' lbls bs (MT (DBool b) forest) = (MT (DBoolL b) (map (convertToLowIRTree' lbls bs) forest))
+convertToLowIRTree' lbls bs (MT DBlock forest) = (MT DBlockL (map (convertToLowIRTree' lbls bs) forest))
+convertToLowIRTree' lbls bs (MT Return forest) = (MT ReturnL (map (convertToLowIRTree' lbls bs) forest))
+convertToLowIRTree' Nothing bs (MT Break forest) = error "No label passed to break statement"
+convertToLowIRTree' lbls@(Just (_, s2)) bs (MT Break forest) = (MT (BreakL s2) (map (convertToLowIRTree' lbls bs) forest))
+convertToLowIRTree' Nothing bs (MT Continue forest) = error "No label passed to continue statement"
+convertToLowIRTree' lbls@(Just (s1, _)) bs (MT Continue forest) = (MT (ContinueL s1) (map (convertToLowIRTree' lbls bs) forest))
+convertToLowIRTree' lbls bs (MT If forest) = 
+                                   (MT (IfL s1 s2) (map (convertToLowIRTree' lbls bs) forest))
+    where s1 = mkLabel 1
+          s2 = mkLabel 1
+
+convertToLowIRTree' lbls bs (MT (For i) forest) = 
+    (MT (ForL i s1 s2) (map (convertToLowIRTree' (Just (s1, s2)) bs) forest))
+    where s1 = mkLabel 1
+          s2 = mkLabel 1
+
+convertToLowIRTree' lbls bs (MT While forest) = 
+    (MT (WhileL s1 s2) (map (convertToLowIRTree' (Just (s1, s2)) bs) forest))
+    where s1 = mkLabel 1
+          s2 = mkLabel 1
+
+convertToLowIRTree' lbls bs (MT (FD ftp ti) forest) = (MT (FDL ftp ti) (map (convertToLowIRTree' lbls bs) forest))
+convertToLowIRTree' lbls bs (MT (CD i) forest) = (MT (CDL i) (map (convertToLowIRTree' lbls bs) forest))
+convertToLowIRTree' lbls bs (MT (PD ti) forest) = (MT (PDL ti) (map (convertToLowIRTree' lbls bs) forest))
+convertToLowIRTree' lbls _ node@(MT (MD ti) forest) = (MT (MDL ti) (map (convertToLowIRTree' lbls (Just table)) forest))
     where table = getVarBindings' node
-convertToLowIRTree' _ = undefined
+convertToLowIRTree' _ _ _ = error "Unexpected node type in convertToLowIRTree"
 
 
-fixLocations :: VarBindings -> STNode -> IRNode
-fixLocations table (Loc i) = LocL $ (table ! idString i)
-fixLocations _ Prog = ProgL
-fixLocations _ (MethodCall i) = MethodCallL i
-fixLocations _ And = AndL
-fixLocations _ Or = OrL
-fixLocations _ Add = AddL
-fixLocations _ Sub = SubL
-fixLocations _ Mul = MulL
-fixLocations _ Mod = ModL
-fixLocations _ Div = DivL
-fixLocations _ Not = NotL
-fixLocations _ Neg = NegL
-fixLocations _ AssignPlus = AssignPlusL
-fixLocations _ AssignMinus = AssignMinusL
-fixLocations _ Assign = AssignL
-fixLocations _ Neql = NeqlL
-fixLocations _ Eql = EqlL
-fixLocations _ Lt = LtL
-fixLocations _ Lte = LteL
-fixLocations _ Gt = GtL
-fixLocations _ Gte = GteL
-fixLocations _ (DStr s) = DStrL s
-fixLocations _ (DChar c) = DCharL c
-fixLocations _ (DInt n) = DIntL n
-fixLocations _ (DBool b) = DBoolL b
-fixLocations _ DBlock = DBlockL
-fixLocations _ Return = ReturnL
-fixLocations _ Break = BreakL
-fixLocations _ Continue = ContinueL
-fixLocations _ If = IfL
-fixLocations _ (For i) = ForL i
-fixLocations _ While = WhileL
-fixLocations _ (FD fdt ti) = FDL fdt ti
-fixLocations _ (CD i) = CDL i
-fixLocations _ (PD ti) = PDL ti
-fixLocations _ (MD ti) = MDL ti
-fixLocations _ _ = undefined
+-- fixLocations :: VarBindings -> STNode -> IRNode
+-- fixLocations table (Loc i) = LocL $ (table ! idString i)
+-- fixLocations _ Prog = ProgL
+-- fixLocations _ (MethodCall i) = MethodCallL i
+-- fixLocations _ And = AndL
+-- fixLocations _ Or = OrL
+-- fixLocations _ Add = AddL
+-- fixLocations _ Sub = SubL
+-- fixLocations _ Mul = MulL
+-- fixLocations _ Mod = ModL
+-- fixLocations _ Div = DivL
+-- fixLocations _ Not = NotL
+-- fixLocations _ Neg = NegL
+-- fixLocations _ AssignPlus = AssignPlusL
+-- fixLocations _ AssignMinus = AssignMinusL
+-- fixLocations _ Assign = AssignL
+-- fixLocations _ Neql = NeqlL
+-- fixLocations _ Eql = EqlL
+-- fixLocations _ Lt = LtL
+-- fixLocations _ Lte = LteL
+-- fixLocations _ Gt = GtL
+-- fixLocations _ Gte = GteL
+-- fixLocations _ (DStr s) = DStrL s
+-- fixLocations _ (DChar c) = DCharL c
+-- fixLocations _ (DInt n) = DIntL n
+-- fixLocations _ (DBool b) = DBoolL b
+-- fixLocations _ DBlock = DBlockL
+-- fixLocations _ Return = ReturnL
+-- fixLocations _ Break = BreakL
+-- fixLocations _ Continue = ContinueL
+-- fixLocations _ If = IfL
+-- fixLocations _ (For i) = ForL i
+-- fixLocations _ While = WhileL
+-- fixLocations _ (FD fdt ti) = FDL fdt ti
+-- fixLocations _ (CD i) = CDL i
+-- fixLocations _ (PD ti) = PDL ti
+-- fixLocations _ (MD ti) = MDL ti
+-- fixLocations _ _ = undefined
  
 
 -- Should only be called on a MD node.. will not play well when called at a higher level
@@ -220,7 +238,9 @@ chillens = [ singleton (PD (IntType, mkId "n")),
     MT DBlock [ 
         singleton (FD Single (BoolType, mkId "b")),
         singleton (FD Single (IntType, mkId "a")),
-        singleton (Loc $ mkId "n")
+        singleton (Loc $ mkId "a"),
+        singleton (Loc $ mkId "n"),
+        singleton (Loc $ mkId "b")
         ]
         ]
         
