@@ -120,11 +120,11 @@ handler node = case node of
             DBoolL _                     ->asmDBool
             DBlockL                      ->asmDBlock
             ReturnL                      ->asmReturn
-            BreakL                       ->asmBreak
-            ContinueL                    ->asmContinue
-            IfL                          ->asmIf
-            ForL _                       ->asmFor
-            WhileL                       ->asmWhile
+            BreakL _                       ->asmBreak
+            ContinueL _                    ->asmContinue
+            IfL _ _                          ->asmIf
+            ForL _ _ _                       ->asmFor
+            WhileL _ _                       ->asmWhile
         --    FDL _ _                      ->asmFD
          --   CDL _                        ->asmCD
             PDL _                        ->asmPD
@@ -341,44 +341,44 @@ asmReturn node@(MT ReturnL forest) = concat $ map asmTransform forest
 -- asmBreak node@(MT (BreakL str) forest) = [(Jmp (Label str))]
 
 asmBreak:: LowIRTree -> [AsmOp]
-asmBreak node@(MT BreakL forest) = concat $ map asmTransform forest
+asmBreak node@(MT (BreakL _) forest) = concat $ map asmTransform forest
 
 -- asmContinue:: LowIRTree -> [AsmOp]
 -- asmContinue node@(MT (ContinueL str) forest) = [(Jmp (Label str))]
 
 asmContinue:: LowIRTree -> [AsmOp]
-asmContinue node@(MT ContinueL forest) = concat $ map asmTransform forest
+asmContinue node@(MT (ContinueL _) forest) = concat $ map asmTransform forest
 
 asmIf:: LowIRTree -> [AsmOp]
 asmIf node@(MT (IfL elsel endl) (conde:thenb:elseb:xs)) = 
-						[asmTransform conde]
-						++ [Cmp (C 1) RAX]
-						++ [Jne elsel]
-						++ [asmTransform thenb] 
+						asmTransform conde
+						++ [Cmp (C 1) (reg RAX)]
+						++ [Jne (Label elsel)]
+						++ asmTransform thenb 
 						++ [Lbl elsel]
-						++ [asmTransform elseb]
+						++ asmTransform elseb
 
 asmFor:: LowIRTree -> [AsmOp]
-asmFor node@(MT (ForL id startl endl) (starte:ende)) =
-						[asmTransform starte]
+asmFor node@(MT (ForL id startl endl) (starte:ende:body:xs)) =
+						asmTransform starte
 						++ [Mov (reg RAX) id]
 						++ [Lbl startl]
 						++ [AddQ (C 1) id]
-						++ [asmTransform ende]
+						++ asmTransform ende
 						++ [Cmp (reg RAX) id]
-						++ [asmTransform body] 
-						++ [Jmp startl]
+						++ asmTransform body 
+						++ [Jmp (Label startl)]
 						++ [Lbl endl]
  
 
 asmWhile:: LowIRTree -> [AsmOp]
 asmWhile node@(MT (WhileL startl endl) (conde:body:xs)) = 
 						[Lbl startl]
-						++ [asmTransform conde]
-						++ [Cmp (C 1) RAX]
-						++ [Jne endl]
-						++ [asmTransform body]
-						++ [Jmp startl] 
+						++ asmTransform conde
+						++ [Cmp (C 1) (reg RAX)]
+						++ [Jne $ Label endl]
+						++ asmTransform body
+						++ [Jmp (Label startl)] 
 						++ [Lbl endl]
 
 asmMD:: LowIRTree -> [AsmOp]

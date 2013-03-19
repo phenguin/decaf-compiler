@@ -104,7 +104,7 @@ data IRNode = ProgL
             | BreakL String
             | ContinueL String
             | IfL String String
-            | ForL Id String String
+            | ForL MemLoc String String
             | WhileL String String
             | FDL FDType TypedId
             | CDL Id
@@ -158,8 +158,9 @@ convertToLowIRTree' lbls bs (MT If forest) =
     where s1 = mkLabel 1
           s2 = mkLabel 1
 
-convertToLowIRTree' lbls bs (MT (For i) forest) = 
-    (MT (ForL i s1 s2) (map (convertToLowIRTree' (Just (s1, s2)) bs) forest))
+convertToLowIRTree' lbls Nothing (MT (For i) forest) = error "No variable bindings passed for for statement"
+convertToLowIRTree' lbls bs@(Just table) (MT (For i) forest) = 
+    (MT (ForL (table ! idString i) s1 s2) (map (convertToLowIRTree' (Just (s1, s2)) bs) forest))
     where s1 = mkLabel 1
           s2 = mkLabel 1
 
