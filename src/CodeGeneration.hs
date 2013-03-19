@@ -255,69 +255,36 @@ asmAssign node@(MT AssignL ((MT (LocL ml) _):v:xs)) =
  					(asmTransform v) 
  					++ [(Mov (reg RAX) ml )]
 
-asmNeql:: LowIRTree -> [AsmOp]
-asmNeql node@(MT stnode (x:y:xs)) = 	
+asmCompareOp :: (Register -> Register -> AsmOp) -> LowIRTree -> [AsmOp]
+asmCompareOp op node@(MT stnode (x:y:xs)) = 	
  					(asmTransform x) 
  					++ [(ld RAX R10)] 
  					++ (asmTransform y) 
- 					++ [(Cmp (reg R10) (reg RAX))] 
+ 					++ [(Cmp (reg RAX) (reg R10))] 
  					++ [(Mov (C 0) (reg RAX))] 
  					++ [(Mov (C 1) (reg R10))] 
- 					++ [(CMovne (reg R10) (reg RAX))]
+ 					++ [(op (reg R10) (reg RAX))]
+
+asmNeql:: LowIRTree -> [AsmOp]
+asmNeql = asmCompareOp CMovne
 
 asmEql:: LowIRTree -> [AsmOp]
-asmEql node@(MT stnode (x:y:xs)) = 
- 					(asmTransform x) 
- 					++ [(ld RAX R10)] 
- 					++ (asmTransform y) 
- 					++ [(Cmp (reg RAX) (reg R10))] 
- 					++ [(Mov (C 0) (reg RAX))] 
- 					++ [(Mov (C 1) (reg R10))] 
- 					++ [(CMove (reg R10) (reg RAX))]
+asmEql = asmCompareOp CMove
 
 asmLt:: LowIRTree -> [AsmOp]
-asmLt node@(MT stnode (x:y:xs)) = 
- 					(asmTransform x) 
- 					++ [(ld RAX R10)] 
- 					++ (asmTransform y) 
- 					++ [(Cmp (reg RAX) (reg R10) )] 
- 					++ [(Mov (C 0) (reg RAX))] 
- 					++ [(Mov (C 1) (reg R10))] 
- 					++ [(CMovl (reg R10) (reg RAX))]
+asmLt = asmCompareOp CMovl
 
 asmLte:: LowIRTree -> [AsmOp]
-asmLte node@(MT stnode (x:y:xs)) = 
- 					(asmTransform x) 
- 					++ [(ld RAX R10)] 
- 					++ (asmTransform y) 
- 					++ [(Cmp (reg RAX) (reg R10))] 
- 					++ [(Mov (C 0) (reg RAX))] 
- 					++ [(Mov (C 1) (reg R10))] 
- 					++ [(CMovle (reg R10) (reg RAX))]
+asmLte = asmCompareOp CMovle
 
 asmGt:: LowIRTree -> [AsmOp] 
-asmGt node@(MT stnode (x:y:xs)) = 
- 					(asmTransform x) 
- 					++ [(ld RAX R10)] 
- 					++ (asmTransform y) 
- 					++ [(Cmp (reg RAX) (reg R10))] 
- 					++ [(Mov (C 0) (reg RAX))] 
- 					++ [(Mov (C 1) (reg R10))] 
- 					++ [(CMovg (reg R10) (reg RAX))]
+asmGt = asmCompareOp CMovg
 
 asmGte:: LowIRTree -> [AsmOp]
-asmGte node@(MT stnode (x:y:xs)) = 
- 					(asmTransform x) 
- 					++ [(ld RAX R10)] 
- 					++ (asmTransform y) 
- 					++ [(Cmp (reg RAX) (reg R10))] 
- 					++ [(Mov (C 0) (reg RAX))] 
- 					++ [(Mov (C 1) (reg R10))] 
- 					++ [(CMovge (reg R10) (reg RAX))]
+asmGte = asmCompareOp CMovge
 
 asmLoc:: LowIRTree -> [AsmOp]
 asmLoc node@(MT (LocL m) forest) = [ld m RAX]
-
 
 asmDStr:: LowIRTree -> [AsmOp]
 asmDStr node@(MT stnode forest) = concat $ map asmTransform forest
