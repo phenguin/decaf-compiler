@@ -173,6 +173,13 @@ instance Registerizable DataSource where
 asmBinOp :: (Registerizable a, Registerizable b) => (a -> b -> AsmOp) -> LowIRTree -> [AsmOp]
 asmBinOp binop node@(MT stnode (t1:t2:ts)) = asmTransform t1 ++ [ld RAX R10] ++ asmTransform t2 ++ [binop (reg R10) (reg RAX)]
 
+asmBinOpFlipArgs :: (Registerizable a, Registerizable b) => (a -> b -> AsmOp) -> LowIRTree -> [AsmOp]
+asmBinOpFlipArgs binop node@(MT stnode (t1:t2:ts)) = asmTransform t2 ++ [ld RAX R10] ++ asmTransform t1 ++ [binop (reg R10) (reg RAX)]
+
+jumpif :: Bool -> String -> [AsmOp]
+jumpif True s = [Cmp (C 1) (reg RAX), Je (Label s)]
+jumpif False s = [Cmp (C 0) (reg RAX), Je (Label s)]
+
 asmMethodCall :: LowIRTree -> [AsmOp]
 asmMethodCall node@(MT (MethodCallL id) forest) = 
     [Pushall]
@@ -216,7 +223,7 @@ asmAdd:: LowIRTree -> [AsmOp]
 asmAdd = asmBinOp AddQ
 
 asmSub:: LowIRTree -> [AsmOp]
-asmSub = asmBinOp SubQ
+asmSub = asmBinOpFlipArgs SubQ
 
 asmMul:: LowIRTree -> [AsmOp]
 asmMul = asmBinOp IMul
@@ -251,62 +258,62 @@ asmAssign node@(MT AssignL ((MT (LocL ml) _):v:xs)) =
 asmNeql:: LowIRTree -> [AsmOp]
 asmNeql node@(MT stnode (x:y:xs)) = 	
  					(asmTransform x) 
- 					++ [(ld RAX RBX)] 
+ 					++ [(ld RAX R10)] 
  					++ (asmTransform y) 
- 					++ [(Cmp (reg RBX) (reg RAX))] 
+ 					++ [(Cmp (reg R10) (reg RAX))] 
  					++ [(Mov (C 0) (reg RAX))] 
- 					++ [(Mov (C 1) (reg RBX))] 
- 					++ [(CMovne (reg RBX) (reg RAX))]
+ 					++ [(Mov (C 1) (reg R10))] 
+ 					++ [(CMovne (reg R10) (reg RAX))]
 
 asmEql:: LowIRTree -> [AsmOp]
 asmEql node@(MT stnode (x:y:xs)) = 
  					(asmTransform x) 
- 					++ [(ld RAX RBX)] 
+ 					++ [(ld RAX R10)] 
  					++ (asmTransform y) 
- 					++ [(Cmp (reg RBX) (reg RAX))] 
+ 					++ [(Cmp (reg RAX) (reg R10))] 
  					++ [(Mov (C 0) (reg RAX))] 
- 					++ [(Mov (C 1) (reg RBX))] 
- 					++ [(CMove (reg RBX) (reg RAX))]
+ 					++ [(Mov (C 1) (reg R10))] 
+ 					++ [(CMove (reg R10) (reg RAX))]
 
 asmLt:: LowIRTree -> [AsmOp]
 asmLt node@(MT stnode (x:y:xs)) = 
  					(asmTransform x) 
- 					++ [(ld RAX RBX)] 
+ 					++ [(ld RAX R10)] 
  					++ (asmTransform y) 
- 					++ [(Cmp (reg RBX) (reg RAX))] 
+ 					++ [(Cmp (reg RAX) (reg R10) )] 
  					++ [(Mov (C 0) (reg RAX))] 
- 					++ [(Mov (C 1) (reg RBX))] 
- 					++ [(CMovl (reg RBX) (reg RAX))]
+ 					++ [(Mov (C 1) (reg R10))] 
+ 					++ [(CMovl (reg R10) (reg RAX))]
 
 asmLte:: LowIRTree -> [AsmOp]
 asmLte node@(MT stnode (x:y:xs)) = 
  					(asmTransform x) 
- 					++ [(ld RAX RBX)] 
+ 					++ [(ld RAX R10)] 
  					++ (asmTransform y) 
- 					++ [(Cmp (reg RBX) (reg RAX))] 
+ 					++ [(Cmp (reg RAX) (reg R10))] 
  					++ [(Mov (C 0) (reg RAX))] 
- 					++ [(Mov (C 1) (reg RBX))] 
- 					++ [(CMovle (reg RBX) (reg RAX))]
+ 					++ [(Mov (C 1) (reg R10))] 
+ 					++ [(CMovle (reg R10) (reg RAX))]
 
 asmGt:: LowIRTree -> [AsmOp] 
 asmGt node@(MT stnode (x:y:xs)) = 
  					(asmTransform x) 
- 					++ [(ld RAX RBX)] 
+ 					++ [(ld RAX R10)] 
  					++ (asmTransform y) 
- 					++ [(Cmp (reg RBX) (reg RAX))] 
+ 					++ [(Cmp (reg RAX) (reg R10))] 
  					++ [(Mov (C 0) (reg RAX))] 
- 					++ [(Mov (C 1) (reg RBX))] 
- 					++ [(CMovg (reg RBX) (reg RAX))]
+ 					++ [(Mov (C 1) (reg R10))] 
+ 					++ [(CMovg (reg R10) (reg RAX))]
 
 asmGte:: LowIRTree -> [AsmOp]
 asmGte node@(MT stnode (x:y:xs)) = 
  					(asmTransform x) 
- 					++ [(ld RAX RBX)] 
+ 					++ [(ld RAX R10)] 
  					++ (asmTransform y) 
- 					++ [(Cmp (reg RBX) (reg RAX))] 
+ 					++ [(Cmp (reg RAX) (reg R10))] 
  					++ [(Mov (C 0) (reg RAX))] 
- 					++ [(Mov (C 1) (reg RBX))] 
- 					++ [(CMovge (reg RBX) (reg RAX))]
+ 					++ [(Mov (C 1) (reg R10))] 
+ 					++ [(CMovge (reg R10) (reg RAX))]
 
 asmLoc:: LowIRTree -> [AsmOp]
 asmLoc node@(MT (LocL m) forest) = [ld m RAX]
@@ -353,11 +360,12 @@ asmContinue node@(MT (ContinueL str) _) = [Jmp (Label str)]
 asmIf:: LowIRTree -> [AsmOp]
 asmIf node@(MT (IfL elsel endl) (conde:thenb:elseb:xs)) = 
 						asmTransform conde
-						++ [Cmp (C 1) (reg RAX)]
-						++ [Jne (Label elsel)]
+                        ++ jumpif False elsel
 						++ asmTransform thenb 
+                        ++ [Jmp (Label endl)]
 						++ [Lbl elsel]
 						++ asmTransform elseb
+                        ++ [Lbl endl]
 
 asmFor:: LowIRTree -> [AsmOp]
 asmFor node@(MT (ForL id startl endl) (starte:ende:body:xs)) =
