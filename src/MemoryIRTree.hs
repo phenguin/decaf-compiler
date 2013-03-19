@@ -5,6 +5,18 @@ import Data.Char (toLower)
 import Semantics
 import Transforms
 import Data.Map as M hiding (map, foldl, filter, singleton)
+import Data.IORef
+import System.IO.Unsafe
+
+counter = unsafePerformIO $ 
+		 newIORef 0
+
+increment i = unsafePerformIO $ do
+	modifyIORef counter (+1)
+	x <- readIORef counter
+	return (x)
+	
+
 
 type LowIRTree = MultiTree IRNode
 type VarBindings = M.Map String MemLoc
