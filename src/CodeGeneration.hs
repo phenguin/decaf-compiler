@@ -361,13 +361,13 @@ asmReturn node@(MT ReturnL forest) = (concat $ map asmTransform forest) ++ [Leav
 -- asmBreak node@(MT (BreakL str) forest) = [(Jmp (Label str))]
 
 asmBreak:: LowIRTree -> [AsmOp]
-asmBreak node@(MT BreakL forest) = concat $ map asmTransform forest
+asmBreak node@(MT (BreakL str) _) = Jmp (Label str)
 
 -- asmContinue:: LowIRTree -> [AsmOp]
 -- asmContinue node@(MT (ContinueL str) forest) = [(Jmp (Label str))]
 
 asmContinue:: LowIRTree -> [AsmOp]
-asmContinue node@(MT ContinueL forest) = concat $ map asmTransform forest
+asmContinue node@(MT (ContinueL str) _) = Jmp (label str)
 
 asmIf:: LowIRTree -> [AsmOp]
 asmIf node@(MT stnode forest) = concat $ map asmTransform forest
