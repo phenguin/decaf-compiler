@@ -60,8 +60,8 @@ instance Show DataSource where
 instance Show AsmOp where
          show (Mov x y) = "mov "++(show x)++", "++ (show y) 
          show (CMove x y) = "cmove "++(show x)++", "++ (show y) 
-         show (CMovne x y) = "cmove "++(show x)++", "++ (show y)
-         show (CMovg x y) = "cmovne "++(show x)++", "++ (show y)
+         show (CMovne x y) = "cmovne "++(show x)++", "++ (show y)
+         show (CMovg x y) = "cmovg "++(show x)++", "++ (show y)
          show (CMovl x y) = "cmovl "++(show x)++", "++ (show y)
          show (CMovge x y) = "cmovge "++(show x)++", "++ (show y)
          show (CMovle x y) = "cmovle "++(show x)++", "++ (show y)

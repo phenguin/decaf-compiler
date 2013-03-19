@@ -1,0 +1,28 @@
+callout printf;
+
+void main( ) {
+    int b;
+    b = 1;
+    while (b < 25) {
+        int c;
+        c = b;
+
+        if (c > 12) {
+            break;
+        }
+
+        while (c % 7 != 0) {
+            if (c % 3 == 0) {
+                c += 1;
+                continue;
+            }
+
+            printf("%d\n", c);
+            c += 1;
+        }
+
+        b += 1;
+        printf("\n");
+
+    }
+}
