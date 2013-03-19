@@ -86,51 +86,51 @@ instance Show AsmOp where
          show (Lbl x) = x ++ ":"
          show (AsmString s) = ".string " ++ show s
 
-handler:: STNode -> (SemanticTreeWithSymbols -> [AsmOp])
+handler:: IRNode -> (LowIRTree -> [AsmOp])
 handler node = case node of
-            MethodCall _                ->asmMethodCall
-            And                         ->asmAnd
-            Or                          ->asmOr
-            Add                         ->asmAdd
-            Sub                         ->asmSub
-            Mul                         ->asmMul
-            Mod                         ->asmMod
-            Div                         ->asmDiv
-            Not                         ->asmNot
-            Neg                         ->asmNeg
-            AssignPlus                  ->asmAssignPlus
-            AssignMinus                 ->asmAssignMinus
-            Assign                      ->asmAssign
-            Neql                        ->asmNeql
-            Eql                         ->asmEql
-            Lt                          ->asmLt
-            Lte                         ->asmLte
-            Gt                          ->asmGt
-            Gte                         ->asmGte
-            Loc _                       ->asmLoc
-            DStr _                      ->asmDStr
-            DChar _                     ->asmDChar
-            DInt _                      ->asmDInt
-            DBool _                     ->asmDBool
-            DBlock                      ->asmDBlock
-            Return                      ->asmReturn
-            Break                       ->asmBreak
-            Continue                    ->asmContinue
-            If                          ->asmIf
-            For _                       ->asmFor
-            While                       ->asmWhile
-        --    FD _ _                      ->asmFD
-         --   CD _                        ->asmCD
-            PD _                        ->asmPD
-            MD _                        ->asmMD
-            Prog                        ->asmProg
+            MethodCallL _                ->asmMethodCall
+            AndL                         ->asmAnd
+            OrL                          ->asmOr
+            AddL                         ->asmAdd
+            SubL                         ->asmSub
+            MulL                         ->asmMul
+            ModL                         ->asmMod
+            DivL                         ->asmDiv
+            NotL                         ->asmNot
+            NegL                         ->asmNeg
+            AssignPlusL                  ->asmAssignPlus
+            AssignMinusL                 ->asmAssignMinus
+            AssignL                      ->asmAssign
+            NeqlL                        ->asmNeql
+            EqlL                         ->asmEql
+            LtL                          ->asmLt
+            LteL                         ->asmLte
+            GtL                          ->asmGt
+            GteL                         ->asmGte
+            LocL _                       ->asmLoc
+            DStrL _                      ->asmDStr
+            DCharL _                     ->asmDChar
+            DIntL _                      ->asmDInt
+            DBoolL _                     ->asmDBool
+            DBlockL                      ->asmDBlock
+            ReturnL                      ->asmReturn
+            BreakL                       ->asmBreak
+            ContinueL                    ->asmContinue
+            IfL                          ->asmIf
+            ForL _                       ->asmFor
+            WhileL                       ->asmWhile
+        --    FDL _ _                      ->asmFD
+         --   CDL _                        ->asmCD
+            PDL _                        ->asmPD
+            MDL _                        ->asmMD
+            ProgL                        ->asmProg
             _                           -> const []
 
-asmTransform:: SemanticTreeWithSymbols -> [AsmOp]
-asmTransform node@(MT (pos, stnode, st) _) = (handler stnode) node
+asmTransform:: LowIRTree -> [AsmOp]
+asmTransform node@(MT stnode _) = (handler stnode) node
 
 getAssemblyStr :: SemanticTreeWithSymbols -> String
-getAssemblyStr node = concat $ intersperse "\n" $ map show $ asmTransform node
+getAssemblyStr node = concat $ intersperse "\n" $ map show $ asmTransform $ convertToLowIRTree node
 
 ----- Assembly generation helper functions
 ld :: (ValidDataSource a, ValidMemLoc b) => a -> b -> AsmOp
@@ -164,23 +164,23 @@ instance Registerizable DataSource where
     getReg _ = Nothing
 
 
-asmBinOp :: (Registerizable a, Registerizable b) => (a -> b -> AsmOp) -> SemanticTreeWithSymbols -> [AsmOp]
-asmBinOp binop node@(MT (pos, stnode, st) (t1:t2:ts)) = asmTransform t1 ++ [ld RAX R10] ++ asmTransform t2 ++ [binop (reg R10) (reg RAX)]
+asmBinOp :: (Registerizable a, Registerizable b) => (a -> b -> AsmOp) -> LowIRTree -> [AsmOp]
+asmBinOp binop node@(MT stnode (t1:t2:ts)) = asmTransform t1 ++ [ld RAX R10] ++ asmTransform t2 ++ [binop (reg R10) (reg RAX)]
 
-asmMethodCall :: SemanticTreeWithSymbols -> [AsmOp]
-asmMethodCall node@(MT (pos, (MethodCall id), st) forest) =  
+asmMethodCall :: LowIRTree -> [AsmOp]
+asmMethodCall node@(MT (MethodCallL id) forest) =  
 	 params ++ (if idString id == "printf" then [ld (0 :: Int) RAX] else []) ++ [Call (Label (idString id))]
 		where 	params =  makeparam forest 0
-			makeparam ((MT (pos,(DStr str),st) _):xs) i =  
+			makeparam ((MT (DStrL str) _):xs) i =  
 				[param i $ toDataSource (Label ("$." ++ (getHashStr str))) ] ++ (makeparam xs (i+1))
-			makeparam ((MT (_,(DChar chrtr),_) _):xs) i = 
+			makeparam ((MT (DCharL chrtr) _):xs) i = 
 				[param i $ toDataSource (C (ord chrtr)) ] ++ (makeparam xs (i+1))
-			makeparam ((MT (_,(DInt intgr),_) _):xs) i = 
+			makeparam ((MT (DIntL intgr) _):xs) i = 
 				[param i $ toDataSource (C intgr) ] ++ (makeparam xs (i+1))
-			makeparam ((MT (_,(DBool b),_) _):xs) i = 
+			makeparam ((MT (DBoolL b) _):xs) i = 
 				[param i $ toDataSource (C (if b then 1 else 0))] ++ (makeparam xs (i+1))
 			-- Handle local variables
-			-- makeparam ((MT (_,(PD (_,id)),_) _):xs) i = 
+			-- makeparam ((MT (PDL (_,id)) _):xs) i = 
 			-- 	[param i ()] ++ (makeparam xs (i+1))
 			makeparam ys i = case ys of 
                                   (x:xs) -> (asmTransform x) ++ [param i (reg RAX)] ++ makeparam xs (i+1)
@@ -195,108 +195,108 @@ asmMethodCall node@(MT (pos, (MethodCall id), st) forest) =
 				5 -> (ld dtsrc R9)
 				otherwise -> (Push dtsrc)
 
-asmAnd:: SemanticTreeWithSymbols -> [AsmOp]
+asmAnd:: LowIRTree -> [AsmOp]
 asmAnd = asmBinOp AndQ
 
-asmOr:: SemanticTreeWithSymbols -> [AsmOp]
+asmOr:: LowIRTree -> [AsmOp]
 asmOr = asmBinOp OrQ
 
-asmAdd:: SemanticTreeWithSymbols -> [AsmOp]
+asmAdd:: LowIRTree -> [AsmOp]
 asmAdd = asmBinOp AddQ
 
-asmSub:: SemanticTreeWithSymbols -> [AsmOp]
+asmSub:: LowIRTree -> [AsmOp]
 asmSub = asmBinOp SubQ
 
-asmMul:: SemanticTreeWithSymbols -> [AsmOp]
+asmMul:: LowIRTree -> [AsmOp]
 asmMul = asmBinOp IMul
 
-asmMod:: SemanticTreeWithSymbols -> [AsmOp]
-asmMod node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
+asmMod:: LowIRTree -> [AsmOp]
+asmMod node@(MT stnode forest) = concat $ map asmTransform forest
 
-asmDiv:: SemanticTreeWithSymbols -> [AsmOp]
-asmDiv node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
+asmDiv:: LowIRTree -> [AsmOp]
+asmDiv node@(MT stnode forest) = concat $ map asmTransform forest
 
-asmNot:: SemanticTreeWithSymbols -> [AsmOp]
-asmNot node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
+asmNot:: LowIRTree -> [AsmOp]
+asmNot node@(MT stnode forest) = concat $ map asmTransform forest
 
-asmNeg:: SemanticTreeWithSymbols -> [AsmOp]
-asmNeg node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
+asmNeg:: LowIRTree -> [AsmOp]
+asmNeg node@(MT stnode forest) = concat $ map asmTransform forest
 
-asmAssignPlus:: SemanticTreeWithSymbols -> [AsmOp]
-asmAssignPlus node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
+asmAssignPlus:: LowIRTree -> [AsmOp]
+asmAssignPlus node@(MT stnode forest) = concat $ map asmTransform forest
 
-asmAssignMinus:: SemanticTreeWithSymbols -> [AsmOp]
-asmAssignMinus node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
+asmAssignMinus:: LowIRTree -> [AsmOp]
+asmAssignMinus node@(MT stnode forest) = concat $ map asmTransform forest
 
-asmAssign:: SemanticTreeWithSymbols -> [AsmOp]
-asmAssign node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
+asmAssign:: LowIRTree -> [AsmOp]
+asmAssign node@(MT stnode forest) = concat $ map asmTransform forest
 
-asmNeql:: SemanticTreeWithSymbols -> [AsmOp]
-asmNeql node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
+asmNeql:: LowIRTree -> [AsmOp]
+asmNeql node@(MT stnode forest) = concat $ map asmTransform forest
 
-asmEql:: SemanticTreeWithSymbols -> [AsmOp]
-asmEql node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
+asmEql:: LowIRTree -> [AsmOp]
+asmEql node@(MT stnode forest) = concat $ map asmTransform forest
 
-asmLt:: SemanticTreeWithSymbols -> [AsmOp]
-asmLt node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
+asmLt:: LowIRTree -> [AsmOp]
+asmLt node@(MT stnode forest) = concat $ map asmTransform forest
 
-asmLte:: SemanticTreeWithSymbols -> [AsmOp]
-asmLte node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
+asmLte:: LowIRTree -> [AsmOp]
+asmLte node@(MT stnode forest) = concat $ map asmTransform forest
 
-asmGt:: SemanticTreeWithSymbols -> [AsmOp]
-asmGt node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
+asmGt:: LowIRTree -> [AsmOp]
+asmGt node@(MT stnode forest) = concat $ map asmTransform forest
 
-asmGte:: SemanticTreeWithSymbols -> [AsmOp]
-asmGte node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
+asmGte:: LowIRTree -> [AsmOp]
+asmGte node@(MT stnode forest) = concat $ map asmTransform forest
 
-asmLoc:: SemanticTreeWithSymbols -> [AsmOp]
-asmLoc node@(MT (pos, (Loc i), st) forest) = concat $ map asmTransform forest
+asmLoc:: LowIRTree -> [AsmOp]
+asmLoc node@(MT (LocL m) forest) = [ld m RAX]
 
-asmDStr:: SemanticTreeWithSymbols -> [AsmOp]
-asmDStr node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
+asmDStr:: LowIRTree -> [AsmOp]
+asmDStr node@(MT stnode forest) = concat $ map asmTransform forest
 
-asmDChar:: SemanticTreeWithSymbols -> [AsmOp]
-asmDChar node@(MT (pos, (DChar c), st) forest) = [ld (ord c) RAX]
-asmDChar node@(MT (pos, _, st) forest) = []
+asmDChar:: LowIRTree -> [AsmOp]
+asmDChar node@(MT (DCharL c) forest) = [ld (ord c) RAX]
+asmDChar node@(MT _ forest) = []
 
-asmDInt:: SemanticTreeWithSymbols -> [AsmOp]
-asmDInt node@(MT (pos, (DInt i), st) forest) = [ld i RAX]
-asmDInt node@(MT (pos, _, st) forest) = []
+asmDInt:: LowIRTree -> [AsmOp]
+asmDInt node@(MT (DIntL i) forest) = [ld i RAX]
+asmDInt node@(MT _ forest) = []
 
 
-asmDBool:: SemanticTreeWithSymbols -> [AsmOp]
-asmDBool node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
+asmDBool:: LowIRTree -> [AsmOp]
+asmDBool node@(MT stnode forest) = concat $ map asmTransform forest
 
-asmDBlock:: SemanticTreeWithSymbols -> [AsmOp]
-asmDBlock node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
+asmDBlock:: LowIRTree -> [AsmOp]
+asmDBlock node@(MT stnode forest) = concat $ map asmTransform forest
 
-asmReturn:: SemanticTreeWithSymbols -> [AsmOp]
-asmReturn node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
+asmReturn:: LowIRTree -> [AsmOp]
+asmReturn node@(MT stnode forest) = concat $ map asmTransform forest
 
-asmBreak:: SemanticTreeWithSymbols -> [AsmOp]
-asmBreak node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
+asmBreak:: LowIRTree -> [AsmOp]
+asmBreak node@(MT stnode forest) = concat $ map asmTransform forest
 
-asmContinue:: SemanticTreeWithSymbols -> [AsmOp]
-asmContinue node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
+asmContinue:: LowIRTree -> [AsmOp]
+asmContinue node@(MT stnode forest) = concat $ map asmTransform forest
 
-asmIf:: SemanticTreeWithSymbols -> [AsmOp]
-asmIf node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
+asmIf:: LowIRTree -> [AsmOp]
+asmIf node@(MT stnode forest) = concat $ map asmTransform forest
 
-asmFor:: SemanticTreeWithSymbols -> [AsmOp]
-asmFor node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
+asmFor:: LowIRTree -> [AsmOp]
+asmFor node@(MT stnode forest) = concat $ map asmTransform forest
 
-asmWhile:: SemanticTreeWithSymbols -> [AsmOp]
-asmWhile node@(MT (pos, stnode, st) forest) = concat $ map asmTransform forest
+asmWhile:: LowIRTree -> [AsmOp]
+asmWhile node@(MT stnode forest) = concat $ map asmTransform forest
 
-asmMD:: SemanticTreeWithSymbols -> [AsmOp]
-asmMD node@(MT (pos, (MD (_,id)), st) forest) = [Lbl (idString id)] ++ (concat (map asmTransform forest )) ++ [Ret]
+asmMD:: LowIRTree -> [AsmOp]
+asmMD node@(MT (MDL (_,id)) forest) = [Lbl (idString id)] ++ (concat (map asmTransform forest )) ++ [Ret]
 
-asmPD:: SemanticTreeWithSymbols -> [AsmOp]
-asmPD node@(MT (pos, _, st) forest) = concat $ map asmTransform forest
+asmPD:: LowIRTree -> [AsmOp]
+asmPD node@(MT _ forest) = concat $ map asmTransform forest
 
-asmProg:: SemanticTreeWithSymbols -> [AsmOp]
-asmProg node@(MT (pos, _ , st) forest) = concat $ (map asmTransform forest) ++ makeLabels dstrs
-     where f (_, DStr s, _) = [s]
+asmProg:: LowIRTree -> [AsmOp]
+asmProg node@(MT _ forest) = concat $ (map asmTransform forest) ++ makeLabels dstrs
+     where f (DStrL s) = [s]
            f _ = []
            getDStrs = concat . (map f)
            dstrs = getDStrs (listify node)
