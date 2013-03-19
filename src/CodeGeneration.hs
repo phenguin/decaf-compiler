@@ -173,7 +173,7 @@ asmBinOp :: (Registerizable a, Registerizable b) => (a -> b -> AsmOp) -> LowIRTr
 asmBinOp binop node@(MT stnode (t1:t2:ts)) = asmTransform t1 ++ [ld RAX R10] ++ asmTransform t2 ++ [binop (reg R10) (reg RAX)]
 
 asmMethodCall :: LowIRTree -> [AsmOp]
-asmMethodCall node@(MT (MethodCallL id) forest) =  
+asmMethodCall node@(MT (MethodCallL id) forest) = 
 	params 
 	++ [Pushall] 
 	++ (if idString id == "printf" then [ld (0 :: Int) RAX] else []) 
@@ -355,7 +355,7 @@ asmDBlock node@(MT stnode forest) = concat $ map asmTransform forest
 -- 					++ [(Jmp (Label str))]
 
 asmReturn:: LowIRTree -> [AsmOp]
-asmReturn node@(MT ReturnL forest) = concat $ map asmTransform forest
+asmReturn node@(MT ReturnL forest) = (concat $ map asmTransform forest) ++ [Leave] ++ [Ret]
 
 -- asmBreak:: LowIRTree -> [AsmOp]
 -- asmBreak node@(MT (BreakL str) forest) = [(Jmp (Label str))]
