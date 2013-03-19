@@ -1,12 +1,19 @@
 module MultiTree where
 
-import Control.Monad
+import Prelude hiding (mapM)
+import Control.Monad hiding (mapM)
+import Control.Monad.State hiding (mapM)
 import Data.Maybe 
 import Control.Applicative
+import Data.Monoid(Monoid(..))
+import Data.Traversable (Traversable(traverse), mapM)
+import Data.Foldable (Foldable(foldMap))
 
 data MultiTree a = MT { nodeName :: a, children :: (Forest a) } deriving (Eq)
 
 data Cxt a = Cxt { parentLabel :: a, lefts :: [MultiTree a], rights :: [MultiTree a] } deriving (Eq, Show)
+
+type Forest a = [MultiTree a]
 
 type Context a = [Cxt a]
 newtype FocusedMultiTree a = FMT { extractFMT :: (MultiTree a, Context a) } deriving (Eq)
@@ -25,7 +32,17 @@ listify t = (nodeName t) : (concat $ map listify (children t))
 instance (Show a) => Show (FocusedMultiTree a) where
     show (FMT t) = show t
 
-type Forest a = [MultiTree a]
+-- Stolen from standard Data.Tree
+instance Applicative MultiTree where
+  pure x = MT x []
+  MT f tfs <*> tx@(MT x txs) =
+    MT (f x) (map (f <$>) txs ++ map (<*> tx) tfs)
+
+instance Traversable MultiTree where
+  traverse f (MT x ts) = MT <$> f x <*> traverse (traverse f) ts
+
+instance Foldable MultiTree where
+  foldMap f (MT x ts) = f x `mappend` foldMap (foldMap f) ts
 
 instance (Show a) => Show (MultiTree a) where
     show (MT a []) = show a
@@ -165,6 +182,13 @@ levels n = (n, take n $ repeat (n-1))
 
 countup :: Int -> (Int, [Int])
 countup n = (n, [1..n-1])
+
+statefulNumber :: a -> State Int (a, Int)
+statefulNumber x = state $  \s -> ((x, s), s+1)
+
+numberTree :: MultiTree a -> MultiTree (a, Int)
+numberTree t = fst $ runState (mapM statefulNumber t) 0
+
 
 testTree = unfoldTree countup 5
 testTreef = focusedTree testTree
