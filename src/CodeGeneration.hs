@@ -417,17 +417,11 @@ asmFor node@(MT (ForL id startl endl) (starte:ende:body:xs)) =
 						++ asmTransform ende
 						++ [Mov (reg RAX) (reg R13)]
 						++ [Mov (M id) (reg R12)]
-				--		++ [Cmp (reg R12) (reg R13)]
-				---		++ [Mov (C (-1)) (reg R14)]
-				--		++ [CMovle (reg R14) (reg R15)]
-						++ [Mov (C (1)) (reg R15)]
-				--		++ [CMovge (reg R14) (reg R15)]
 						++ [Lbl startl]
 						++ [Cmp (reg R12) (reg R13)]
 						++ [Jle (Label endl)]
 						++ asmTransform body 
-						++ [Mov (M id) (reg R12)]
-						++ [AddQ (reg R15) (reg R12)]
+						++ [AddQ (C 1) (reg R12)]
 						++ [Mov (reg R12) (id)]
 						++ [Jmp (Label startl)]
 						++ [Lbl endl]
