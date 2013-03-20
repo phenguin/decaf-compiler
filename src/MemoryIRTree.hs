@@ -72,8 +72,8 @@ instance ValidMemLoc MemLoc where
 
 data IRNode = ProgL
             | MethodCallL Id
-            | AndL
-            | OrL
+            | AndL Int
+            | OrL Int
             | AddL
             | SubL
             | MulL
@@ -116,8 +116,8 @@ convertToLowIRTree' lbls _ node@(MT (Prog, _) forest) = (MT ProgL (map (convertT
     where table = getVarBindings node
 
 convertToLowIRTree' lbls bs (MT ((MethodCall x), _) forest) = (MT (MethodCallL x) (map (convertToLowIRTree' lbls bs) forest))
-convertToLowIRTree' lbls bs (MT (And, _) forest) = (MT AndL (map (convertToLowIRTree' lbls bs) forest))
-convertToLowIRTree' lbls bs (MT (Or, _) forest) = (MT OrL (map (convertToLowIRTree' lbls bs) forest))
+convertToLowIRTree' lbls bs (MT (And, n) forest) = (MT (AndL n) (map (convertToLowIRTree' lbls bs) forest))
+convertToLowIRTree' lbls bs (MT (Or, n) forest) = (MT (OrL n) (map (convertToLowIRTree' lbls bs) forest))
 convertToLowIRTree' lbls bs (MT (Add, _) forest) = (MT AddL (map (convertToLowIRTree' lbls bs) forest))
 convertToLowIRTree' lbls bs (MT (Sub, _) forest) = (MT SubL (map (convertToLowIRTree' lbls bs) forest))
 convertToLowIRTree' lbls bs (MT (Mul, _) forest) = (MT MulL (map (convertToLowIRTree' lbls bs) forest))

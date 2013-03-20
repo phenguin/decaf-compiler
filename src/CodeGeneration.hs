@@ -107,8 +107,8 @@ instance Show AsmOp where
 handler:: IRNode -> (LowIRTree -> [AsmOp])
 handler node = case node of
             MethodCallL _                ->asmMethodCall
-            AndL                         ->asmAnd
-            OrL                          ->asmOr
+            AndL _                         ->asmAnd
+            OrL _                          ->asmOr
             AddL                         ->asmAdd
             SubL                         ->asmSub
             MulL                         ->asmMul
@@ -245,11 +245,25 @@ asmMethodCall node@(MT (MethodCallL id) forest) =
 pass :: [LowIRTree] -> [AsmOp]
 pass = concat . (map asmTransform)
 
-asmAnd:: LowIRTree -> [AsmOp]
-asmAnd = asmBinOp AndQ
+asmAnd :: LowIRTree -> [AsmOp]
+asmAnd node@(MT (AndL n) (t1:t2:ts)) = asmTransform t1 
+                                    ++ jumpif False myLabel
+                                    ++ [ld RAX R10] 
+                                    ++ asmTransform t2 
+                                    ++ [AndQ (reg R10) (reg RAX)]
+                                    ++ [Lbl myLabel]
+                where myLabel = ".shortcircuit_" ++ show n
+asmAnd node@(MT _ forest) = pass forest
 
-asmOr:: LowIRTree -> [AsmOp]
-asmOr = asmBinOp OrQ
+asmOr :: LowIRTree -> [AsmOp]
+asmOr node@(MT (OrL n) (t1:t2:ts)) = asmTransform t1 
+                                    ++ jumpif True myLabel
+                                    ++ [ld RAX R10] 
+                                    ++ asmTransform t2 
+                                    ++ [OrQ (reg R10) (reg RAX)]
+                                    ++ [Lbl myLabel]
+                where myLabel = ".shortcircuit_" ++ show n
+asmOr node@(MT _ forest) = pass forest
 
 asmAdd:: LowIRTree -> [AsmOp]
 asmAdd = asmBinOp AddQ
