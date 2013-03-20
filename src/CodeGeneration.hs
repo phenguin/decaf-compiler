@@ -490,7 +490,7 @@ asmMD:: LowIRTree -> [AsmOp]
 asmMD node@(MT (MDL (leType,id)) forest) = [Lbl (idString id), Enter ((countFieldDecs node) * 8)] 
                                       ++ (concat (map asmTransform forest )) 
                                       ++ [Leave]
-                                      ++ if leType == VoidType then [Jmp (Label ".err_methodrunoff")] else []
+                                      ++ if leType /= VoidType then [Jmp (Label ".err_methodrunoff")] else []
                                       ++ [Ret]
 
 asmPD:: LowIRTree -> [AsmOp]
