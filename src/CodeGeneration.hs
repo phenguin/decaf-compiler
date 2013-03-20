@@ -145,7 +145,7 @@ handler node = case node of
             _                           -> const []
 
 asmTransform:: LowIRTree -> [AsmOp]
-asmTransform node@(MT stnode _) = (handler stnode) node
+asmTransform node@(MT stnode _) = [push R10] ++ (handler stnode) node ++ [pop R10]
 
 -- Converts the final list of asmops into the correct output
 getAssemblyStr :: SemanticTreeWithSymbols -> String
@@ -160,6 +160,12 @@ expandDomain op x y = op (toDataSource x) (toMemLoc y)
 
 ld :: (ValidDataSource a, ValidMemLoc b) => a -> b -> AsmOp
 ld = expandDomain Mov
+
+push :: (ValidDataSource a) => a -> AsmOp
+push x = Push (toDataSource x)
+
+pop :: (ValidMemLoc a) => a -> AsmOp
+pop x = Pop (toMemLoc x)
 
 cmp :: (ValidDataSource a, ValidMemLoc b) => a -> b -> AsmOp
 cmp = expandDomain Cmp
@@ -422,11 +428,11 @@ asmFor node@(MT (ForL id startl endl) (starte:ende:body:xs)) =
 						++ [Lbl startl]
 						++ [Cmp (reg R12) (reg R13)]
 						++ [Jle (Label endl)]
-						++ [Push (reg R12)]
-						++ [Push (reg R13)]
+                        ++ [push R12]
+                        ++ [push R13]
 						++ asmTransform body 
-						++ [Pop (reg R13)]
-						++ [Pop (reg R12)]
+                        ++ [pop R13]
+                        ++ [pop R12]
 						++ [AddQ (C 1) (reg R12)]
 						++ [Mov (reg R12) (id)]
 						++ [Jmp (Label startl)]
