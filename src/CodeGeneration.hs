@@ -265,10 +265,14 @@ asmDiv node@(MT stnode (t1:t2:ts)) =
     ++ [IDiv (toDataSource R10)]
 
 asmNot:: LowIRTree -> [AsmOp]
-asmNot node@(MT stnode forest) = pass forest
+asmNot node@(MT stnode (x:xs)) = asmTransform x
+                                   ++ [Mov (C 1) (reg R10)]
+                                   ++ [SubQ (reg RAX) (reg R10)]
+                                   ++ [Mov (reg R10) (reg RAX)]
 
 asmNeg:: LowIRTree -> [AsmOp]
-asmNeg node@(MT stnode forest) = pass forest
+asmNeg node@(MT stnode (x:xs)) = asmTransform x
+                                   ++ [NegQ (reg RAX)]
 
 asmAssignPlus:: LowIRTree -> [AsmOp]
 
