@@ -15,7 +15,7 @@ data Register = RAX | RBX | RCX | RDX | RSP | RBP | RSI | RDI | R8 | R9 | R10 | 
 -- regs = map show $ [RBP, RSP] ++ [R12 .. R15]
 regs = map show [RBX .. R15]
 
-data MemLoc = Reg Register | EffectiveA Int Register Register | BPOffset Int | Label String deriving (Eq)
+data MemLoc = Reg Register | EffectiveA Int MemLoc Register | BPOffset Int | Label String deriving (Eq)
 
 instance ValidMemLoc Register where
     toMemLoc = Reg
@@ -42,7 +42,7 @@ instance Show MemLoc where
 	show (Reg r) = map toLower $ (show r)
 	show (BPOffset i) = (show i)++"(%rbp)"
 	show (Label str) = str
-	show (EffectiveA i r1 r2) = show i ++ "(" ++ show r1 ++ ", " ++ show r2 ++ ", 8)"
+	show (EffectiveA i ml r) = show i ++ "(" ++ show ml ++ ", " ++ show r ++ ", 8)"
 
 instance Show Register where
     show RAX = "%rax"
@@ -110,7 +110,9 @@ convertToLowIRTree :: SemanticTreeWithSymbols -> LowIRTree
 convertToLowIRTree = (convertToLowIRTree' Nothing Nothing) . numberTree . (fmap (\(_,x,_) -> x))
 
 convertToLowIRTree' :: Maybe (String, String) -> Maybe VarBindings -> MultiTree (STNode, Int) -> LowIRTree
-convertToLowIRTree' lbls bs (MT (Prog, _) forest) = (MT ProgL (map (convertToLowIRTree' lbls bs) forest))
+convertToLowIRTree' lbls _ node@(MT (Prog, _) forest) = (MT ProgL (map (convertToLowIRTree' lbls (Just table)) forest))
+    where table = getVarBindings node
+
 convertToLowIRTree' lbls bs (MT ((MethodCall x), _) forest) = (MT (MethodCallL x) (map (convertToLowIRTree' lbls bs) forest))
 convertToLowIRTree' lbls bs (MT (And, _) forest) = (MT AndL (map (convertToLowIRTree' lbls bs) forest))
 convertToLowIRTree' lbls bs (MT (Or, _) forest) = (MT OrL (map (convertToLowIRTree' lbls bs) forest))
@@ -136,7 +138,7 @@ convertToLowIRTree' lbls Nothing (MT ((Loc i), _) forest) = error "unexpected Lo
 convertToLowIRTree' lbls (Just table) (MT ((Loc i), _) forest@(x:xs)) = 
     (MT (LocL ml) (map (convertToLowIRTree' lbls (Just table)) forest))
     where ml = f (table ! (idString i))
-          f (BPOffset off) = EffectiveA off RBP RAX
+          f (BPOffset off) = EffectiveA off (toMemLoc RBP) RAX
           f _ = error "Cannot have array valued parameters"
 
 convertToLowIRTree' lbls (Just table) (MT ((Loc i), _) forest) = 
@@ -179,8 +181,11 @@ convertToLowIRTree' lbls bs (MT ((FD ftp ti), _) forest) = (MT (FDL ftp ti) (map
 convertToLowIRTree' lbls bs (MT ((CD i), _) forest) = (MT (CDL i) (map (convertToLowIRTree' lbls bs) forest))
 convertToLowIRTree' lbls bs (MT ((PD ti), _) forest) = (MT (PDL ti) (map (convertToLowIRTree' lbls bs) forest))
 
-convertToLowIRTree' lbls _ node@(MT ((MD ti), _) forest) = (MT (MDL ti) (map (convertToLowIRTree' lbls (Just table)) forest))
-    where table = getVarBindings' $ fmap (\(x,_)->x) node
+convertToLowIRTree' lbls bs node@(MT ((MD ti), _) forest) = (MT (MDL ti) (map (convertToLowIRTree' lbls (Just combinedTable)) forest))
+    where table = getVarBindings node
+          combinedTable = case bs of
+              Nothing -> table
+              (Just bindings) -> M.union table bindings  -- Combine with global bindings.. shadowing where neccessary
 
 convertToLowIRTree' _ _ _ = error "Unexpected node type in convertToLowIRTree"
 
@@ -189,11 +194,15 @@ convertToLowIRTree' _ _ _ = error "Unexpected node type in convertToLowIRTree"
 -- parameters negative rbp offset, locals positive
 paramBindings :: [MemLoc]
 paramBindings = map reg [RDI, RSI, RDX, RCX, R8, R9] ++ map (BPOffset . (*(8))) [1..]
-getVarBindings :: SemanticTreeWithSymbols -> VarBindings
-getVarBindings = getVarBindings' . fmap second
-    where second (_, x, _) = x
+getVarBindings :: MultiTree (STNode, Int) -> VarBindings
+getVarBindings = getVarBindings' . fmap fst
 
 getVarBindings' :: MultiTree STNode -> VarBindings
+getVarBindings' (MT Prog forest) = foldl f (M.empty) $ map nodeName forest
+    where f bs (FD Single (_, i)) = M.insert (idString i) (Label $ "global_" ++ idString i) bs
+          f bs (FD (Array _) (_, i)) = M.insert (idString i) (EffectiveA 0 (Label $ "global_" ++ idString i) RAX) bs
+          f bs _ = bs
+
 getVarBindings' node = third $ foldl f (1, paramBindings, M.empty) $ listify node
     where f (n, (x:xs), bs) (PD (_, i)) = (n, xs, M.insert (idString i) x bs)
           f (n, xs, bs) (FD _ (_, i)) = (n+1, xs, M.insert (idString i) (BPOffset (-8*n)) bs)
