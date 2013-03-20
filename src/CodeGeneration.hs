@@ -38,6 +38,8 @@ data AsmOp = Mov DataSource MemLoc
          | Jmp MemLoc
          | Je MemLoc
          | Jle MemLoc
+         | Jl MemLoc
+         | Jge MemLoc
          | Jne MemLoc
          | AddQ DataSource MemLoc
          | AndQ DataSource MemLoc
@@ -84,6 +86,8 @@ instance Show AsmOp where
          show (Jmp x) = "jmp "++(show x)
          show (Je x) = "je "++(show x)
          show (Jle x) = "jle "++(show x)
+         show (Jl x) = "jl "++(show x)
+         show (Jge x) = "jge "++(show x)
          show (Jne x) = "jne "++(show x)
          show (AddQ x y) = "addq "++(show x)++", "++ (show y)
          show (AndQ x y) = "and "++(show x)++", "++ (show y)
@@ -127,7 +131,7 @@ handler node = case node of
             LteL                         ->asmLte
             GtL                          ->asmGt
             GteL                         ->asmGte
-            LocL _                       ->asmLoc
+            LocL _ _                       ->asmLoc
             DStrL _                      ->asmDStr
             DCharL _                     ->asmDChar
             DIntL _                      ->asmDInt
@@ -309,40 +313,50 @@ isGlobalAccess :: MemLoc -> Bool
 isGlobalAccess (EffectiveA _ (Label _) _) = True
 isGlobalAccess _ = False
 
-asmAssignPlus node@(MT AssignPlusL ((MT (LocL ml) (x:xs)):v:vs)) = 
+-- Assumes value of index for array lookup is in RAX
+checkArraySize :: Int -> [AsmOp]
+checkArraySize n = [cmp (n :: Int) RAX]
+                ++ [Jge (Label ".err_bound")]
+                ++ [cmp (0 :: Int) RAX]
+                ++ [Jl (Label ".err_bound")]
+
+asmAssignPlus node@(MT AssignPlusL ((MT (LocL size ml) (x:xs)):v:vs)) = 
 					(asmTransform v) 
                     ++ [ld RAX R10]
                     ++ asmTransform x
+                    ++ checkArraySize size
                     ++ (if isGlobalAccess ml then [] else [NegQ RAX])
  					++ [(AddQ (reg RAX) ml)]
 
-asmAssignPlus node@(MT AssignPlusL ((MT (LocL ml) _):v:vs)) = 
+asmAssignPlus node@(MT AssignPlusL ((MT (LocL _ ml) _):v:vs)) = 
 					(asmTransform v) 
  					++ [(AddQ (reg RAX) ml)]
 
 asmAssignMinus:: LowIRTree -> [AsmOp]
 
-asmAssignMinus node@(MT AssignMinusL ((MT (LocL ml) (x:xs)):v:vs)) = 
+asmAssignMinus node@(MT AssignMinusL ((MT (LocL size ml) (x:xs)):v:vs)) = 
  					(asmTransform v) 
                     ++ [ld RAX R10]
                     ++ asmTransform x
+                    ++ checkArraySize size
                     ++ (if isGlobalAccess ml then [] else [NegQ RAX])
  					++ [(SubQ (reg RAX) ml )]
 
-asmAssignMinus node@(MT AssignMinusL ((MT (LocL ml) _ ):v:vs)) = 
+asmAssignMinus node@(MT AssignMinusL ((MT (LocL _ ml) _ ):v:vs)) = 
  					(asmTransform v) 
  					++ [(SubQ (reg RAX) ml )]
 
 asmAssign:: LowIRTree -> [AsmOp]
 
-asmAssign node@(MT AssignL ((MT (LocL ml) (x:xs)):v:vs)) = 
+asmAssign node@(MT AssignL ((MT (LocL size ml) (x:xs)):v:vs)) = 
  					(asmTransform v) 
                     ++ [ld RAX R10]
                     ++ asmTransform x
+                    ++ checkArraySize size
                     ++ (if isGlobalAccess ml then [] else [NegQ RAX])
  					++ [ld R10 ml]
 
-asmAssign node@(MT AssignL ((MT (LocL ml) _):v:xs)) = 
+asmAssign node@(MT AssignL ((MT (LocL _ ml) _):v:xs)) = 
  					(asmTransform v) 
  					++ [(Mov (reg RAX) ml )]
 
@@ -378,12 +392,13 @@ asmGte = asmCompareOp CMovge
 -- What are we doing with global variables? -justin
 asmLoc:: LowIRTree -> [AsmOp]
 
-asmLoc node@(MT (LocL ml) (x:xs)) = 
+asmLoc node@(MT (LocL size ml) (x:xs)) = 
              asmTransform x
+             ++ checkArraySize size
              ++ (if isGlobalAccess ml then [] else [NegQ RAX])
              ++ [ld ml RAX]
 
-asmLoc node@(MT (LocL m) _) = [ld m RAX]
+asmLoc node@(MT (LocL _ m) _) = [ld m RAX]
 
 asmLoc node@(MT _ _) = []
 
@@ -472,29 +487,26 @@ countFieldDecs node@(MT _ forest) = sum $ map convertFD $ concat $ map listify f
 
 
 asmMD:: LowIRTree -> [AsmOp]
-asmMD node@(MT (MDL (_,id)) forest) = [Lbl (idString id), Enter ((countFieldDecs node) * 8)] ++ (concat (map asmTransform forest )) ++ [Leave, Ret]
+asmMD node@(MT (MDL (leType,id)) forest) = [Lbl (idString id), Enter ((countFieldDecs node) * 8)] 
+                                      ++ (concat (map asmTransform forest )) 
+                                      ++ [Leave]
+                                      ++ if leType == VoidType then [Jmp (Label ".err_methodrunoff")] else []
+                                      ++ [Ret]
 
 asmPD:: LowIRTree -> [AsmOp]
 asmPD node@(MT _ forest) = pass forest
-
-runtimeError:: String -> [AsmOp]
-runtimeError str = [Pushall]
-		++ [Mov (M (Label strlabel)) (reg RDI)]
-		++ [Call (Label "error")]
-		++ [Popall]
-	where strlabel = getHashStr str
 
 --- Store string constants in data section at the end of the program
 asmProg:: LowIRTree -> [AsmOp]
 asmProg node@(MT _ forest) = concat $ ( 
 			(map asmTransform forest) 
-			++ [[Lbl ".err_bound:"]] 
+			++ [[Lbl ".err_bound"]] 
 			++ [[Enter 0]]
 			++ [[Mov (M (Label $ "$."++(getHashStr "Bounds Error!"))) (reg RDI)]]
 			++ [[Mov (C 0) (reg RAX)]]
 			++ [[(Call (Label "printf"))]]
 			++ [[(Call (Label "exit"))]]
-			++ [[Lbl ".err_methodrunoff:"]] 
+			++ [[Lbl ".err_methodrunoff"]] 
 			++ [[Enter 0]]
 			++ [[Mov (M (Label $ "$."++(getHashStr "Runoff Error!"))) (reg RDI)]]
 			++ [[Mov (C 0) (reg RAX)]]
