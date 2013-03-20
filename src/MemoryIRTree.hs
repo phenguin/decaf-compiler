@@ -197,7 +197,7 @@ convertToLowIRTree' _ _ _ = error "Unexpected node type in convertToLowIRTree"
 -- bindings for parameters in order
 -- parameters negative rbp offset, locals positive
 paramBindings :: [MemLoc]
-paramBindings = map reg [RDI, RSI, RDX, RCX, R8, R9] ++ map (BPOffset . (*(8))) [1..]
+paramBindings = map reg [RDI, RSI, RDX, RCX, R8, R9] ++ map (BPOffset . (\x-> (x*8)+8)) [1..]
 getVarBindings :: MultiTree (STNode, Int) -> VarBindings
 getVarBindings = getVarBindings' . fmap fst
 

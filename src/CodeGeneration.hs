@@ -207,7 +207,8 @@ asmMethodCall node@(MT (MethodCallL id) forest) =
     [Pushall]
 	++ params 
 	++ (if idString id == "printf" then [ld (0 :: Int) RAX] else []) 
-	++ [Call (Label (idString id))] 
+	++ [Call (Label (idString id))]
+	++ [(Pop (reg RBX)) | x<- [1..((length forest) - 6)]] 
     ++ [Popall]
 		where 	params =  makeparam forest 0
 			makeparam ((MT (DStrL str) _):xs) i =  
@@ -421,7 +422,11 @@ asmFor node@(MT (ForL id startl endl) (starte:ende:body:xs)) =
 						++ [Lbl startl]
 						++ [Cmp (reg R12) (reg R13)]
 						++ [Jle (Label endl)]
+						++ [Push (reg R12)]
+						++ [Push (reg R13)]
 						++ asmTransform body 
+						++ [Pop (reg R13)]
+						++ [Pop (reg R12)]
 						++ [AddQ (C 1) (reg R12)]
 						++ [Mov (reg R12) (id)]
 						++ [Jmp (Label startl)]
