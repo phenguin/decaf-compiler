@@ -21,6 +21,7 @@ getHashStr x = case h < 0 of
 data DataSource = M MemLoc | C Int deriving (Eq) --memory location, or constant (immediate value)
 
 data AsmOp = Mov DataSource MemLoc
+         | NegQ Register
          | CMove Register Register 
          | CMovne Register Register 
          | CMovg Register Register 
@@ -60,6 +61,7 @@ instance Show DataSource where
 	show (C i) = '$' : show i
 
 instance Show AsmOp where
+         show (NegQ r) = "neg " ++ show r
          show (Mov x y) = "mov "++(show x)++", "++ (show y) 
          show (CMove x y) = "cmove "++(show x)++", "++ (show y) 
          show (CMovne x y) = "cmovne "++(show x)++", "++ (show y)
@@ -269,16 +271,40 @@ asmNeg:: LowIRTree -> [AsmOp]
 asmNeg node@(MT stnode forest) = pass forest
 
 asmAssignPlus:: LowIRTree -> [AsmOp]
-asmAssignPlus node@(MT AssignPlusL ((MT (LocL ml) _):v:xs)) = 
+
+asmAssignPlus node@(MT AssignPlusL ((MT (LocL ml) (x:xs)):v:vs)) = 
+					(asmTransform v) 
+                    ++ [ld RAX R10]
+                    ++ asmTransform x
+                    ++ [NegQ RAX]
+ 					++ [(AddQ (reg RAX) ml)]
+
+asmAssignPlus node@(MT AssignPlusL ((MT (LocL ml) _):v:vs)) = 
 					(asmTransform v) 
  					++ [(AddQ (reg RAX) ml)]
 
 asmAssignMinus:: LowIRTree -> [AsmOp]
-asmAssignMinus node@(MT AssignMinusL ((MT (LocL ml) _ ):v:xs)) = 
+
+asmAssignMinus node@(MT AssignMinusL ((MT (LocL ml) (x:xs)):v:vs)) = 
+ 					(asmTransform v) 
+                    ++ [ld RAX R10]
+                    ++ asmTransform x
+                    ++ [NegQ RAX]
+ 					++ [(SubQ (reg RAX) ml )]
+
+asmAssignMinus node@(MT AssignMinusL ((MT (LocL ml) _ ):v:vs)) = 
  					(asmTransform v) 
  					++ [(SubQ (reg RAX) ml )]
 
 asmAssign:: LowIRTree -> [AsmOp]
+
+asmAssign node@(MT AssignL ((MT (LocL ml) (x:xs)):v:vs)) = 
+ 					(asmTransform v) 
+                    ++ [ld RAX R10]
+                    ++ asmTransform x
+                    ++ [NegQ RAX]
+ 					++ [ld R10 ml]
+
 asmAssign node@(MT AssignL ((MT (LocL ml) _):v:xs)) = 
  					(asmTransform v) 
  					++ [(Mov (reg RAX) ml )]
@@ -312,8 +338,17 @@ asmGte:: LowIRTree -> [AsmOp]
 asmGte = asmCompareOp CMovge
 
 -- Partially working.. implement arrays? need to change data types a bit?
+-- What are we doing with global variables? -justin
 asmLoc:: LowIRTree -> [AsmOp]
-asmLoc node@(MT (LocL m) forest) = [ld m RAX]
+
+asmLoc node@(MT (LocL m) (x:xs)) = 
+             asmTransform x
+             ++ [NegQ RAX]
+             ++ [ld m RAX]
+
+asmLoc node@(MT (LocL m) _) = [ld m RAX]
+
+asmLoc node@(MT _ _) = []
 
 asmDStr:: LowIRTree -> [AsmOp]
 asmDStr node@(MT stnode forest) = pass forest
@@ -394,9 +429,10 @@ asmWhile node@(MT (WhileL startl endl) (conde:body:xs)) =
 						++ [Lbl endl]
 
 countFieldDecs :: LowIRTree -> Int
-countFieldDecs node@(MT _ forest) = length $ filter isFD $ concat $ map listify forest
-    where isFD (FDL _ _) = True
-          isFD _ = False
+countFieldDecs node@(MT _ forest) = sum $ map convertFD $ concat $ map listify forest
+    where convertFD (FDL Single _) = 1
+          convertFD (FDL (Array n) _) = n
+          convertFD _ = 0
 
 
 asmMD:: LowIRTree -> [AsmOp]

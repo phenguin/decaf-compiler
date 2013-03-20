@@ -1,0 +1,11 @@
+callout printf;
+
+void main( ) {
+    int A[5];
+    A[0] = 5;
+    A[1] = 4;
+    A[2] = 3;
+    A[3] = 2;
+    A[4] = 1;
+    printf("%d %d %d %d %d!\n", A[0], A[1], A[2], A[3], A[4]);
+}

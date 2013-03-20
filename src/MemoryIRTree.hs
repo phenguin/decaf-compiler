@@ -15,6 +15,8 @@ data Register = RAX | RBX | RCX | RDX | RSP | RBP | RSI | RDI | R8 | R9 | R10 | 
 -- regs = map show $ [RBP, RSP] ++ [R12 .. R15]
 regs = map show [RBX .. R15]
 
+data MemLoc = Reg Register | EffectiveA Int Register Register | BPOffset Int | Label String deriving (Eq)
+
 instance ValidMemLoc Register where
     toMemLoc = Reg
 
@@ -28,8 +30,6 @@ instance Registerizable Register where
     isReg = const True
     getReg x = Just x 
 
-data MemLoc = Reg Register | BPOffset Int | Label String deriving (Eq)
-
 instance Registerizable MemLoc where
     reg x = Reg x
 
@@ -42,6 +42,7 @@ instance Show MemLoc where
 	show (Reg r) = map toLower $ (show r)
 	show (BPOffset i) = (show i)++"(%rbp)"
 	show (Label str) = str
+	show (EffectiveA i r1 r2) = show i ++ "(" ++ show r1 ++ ", " ++ show r2 ++ ", 8)"
 
 instance Show Register where
     show RAX = "%rax"
@@ -131,6 +132,13 @@ convertToLowIRTree' lbls bs (MT (Gt, _) forest) = (MT GtL (map (convertToLowIRTr
 convertToLowIRTree' lbls bs (MT (Gte, _) forest) = (MT GteL (map (convertToLowIRTree' lbls bs) forest))
 
 convertToLowIRTree' lbls Nothing (MT ((Loc i), _) forest) = error "unexpected Location access outside of method body"
+
+convertToLowIRTree' lbls (Just table) (MT ((Loc i), _) forest@(x:xs)) = 
+    (MT (LocL ml) (map (convertToLowIRTree' lbls (Just table)) forest))
+    where ml = f (table ! (idString i))
+          f (BPOffset off) = EffectiveA off RBP RAX
+          f _ = error "Cannot have array valued parameters"
+
 convertToLowIRTree' lbls (Just table) (MT ((Loc i), _) forest) = 
     (MT (LocL (table ! (idString i))) (map (convertToLowIRTree' lbls (Just table)) forest))
 
