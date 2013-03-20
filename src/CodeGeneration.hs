@@ -505,12 +505,14 @@ asmProg node@(MT _ forest) = concat $ (
 			++ [[Mov (M (Label $ "$."++(getHashStr "Bounds Error!"))) (reg RDI)]]
 			++ [[Mov (C 0) (reg RAX)]]
 			++ [[(Call (Label "printf"))]]
+			++ [[Mov (C -1) (reg RDI)]]
 			++ [[(Call (Label "exit"))]]
 			++ [[Lbl ".err_methodrunoff"]] 
 			++ [[Enter 0]]
 			++ [[Mov (M (Label $ "$."++(getHashStr "Runoff Error!"))) (reg RDI)]]
 			++ [[Mov (C 0) (reg RAX)]]
 			++ [[(Call (Label "printf"))]]
+			++ [[Mov (C -2) (reg RDI)]]
 			++ [[(Call (Label "exit"))]]
 			++ (makeLabels dstrs) 
 			++ ([Data]:(map makeDatum globals)))
