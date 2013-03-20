@@ -54,6 +54,8 @@ data AsmOp = Mov DataSource MemLoc
          | AsmString String
      	 | Pushall 
 	 | Popall
+	 | Data 
+	 | Res Int
          deriving (Eq)
 
 instance Show DataSource where
@@ -96,6 +98,8 @@ instance Show AsmOp where
          show (AsmString s) = ".string " ++ show s
          show (Pushall) = intercalate "\n" $ map ("push " ++) regs
          show (Popall)  = intercalate "\n" $ map ("pop " ++) (reverse regs)
+         show Data = ".Data"
+         show (Res n) = intercalate "\n" [".word"  | x <- [1..4*n] ] 
 
 
 handler:: IRNode -> (LowIRTree -> [AsmOp])
@@ -131,7 +135,7 @@ handler node = case node of
             IfL _ _                          ->asmIf
             ForL _ _ _                       ->asmFor
             WhileL _ _                       ->asmWhile
-        --    FDL _ _                      ->asmFD
+         --   FDL _ _                      ->asmFD
          --   CDL _                        ->asmCD
             PDL _                        ->asmPD
             MDL _                        ->asmMD
@@ -445,12 +449,23 @@ asmMD node@(MT (MDL (_,id)) forest) = [Lbl (idString id), Enter ((countFieldDecs
 asmPD:: LowIRTree -> [AsmOp]
 asmPD node@(MT _ forest) = pass forest
 
+
+
 --- Store string constants in data section at the end of the program
 asmProg:: LowIRTree -> [AsmOp]
-asmProg node@(MT _ forest) = concat $ (map asmTransform forest) ++ makeLabels dstrs
+asmProg node@(MT _ forest) = concat $ (map asmTransform forest) ++ (makeLabels dstrs) ++ ([Data]:(map makeDatum globals))
      where f (DStrL s) = [s]
            f _ = []
            getDStrs = concat . (map f)
            dstrs = getDStrs (listify node)
            g s = [Lbl $ '.' : getHashStr s, AsmString s]
            makeLabels = map g
+	   h (MT (FDL t (_,id)) _) = [(t,id)]
+           h _ = []
+	   globals = concat $ map h forest
+	   makeDatum ((Array n),id) = [(Lbl $ idString id)]
+					++ [Res n]
+	   makeDatum (_,id) =  [(Lbl $ idString id)]
+					++ [Res 1]
+
+		
