@@ -56,6 +56,7 @@ data AsmOp = Mov DataSource MemLoc
 	 | Popall
 	 | Data 
 	 | Res Int
+	 | Code String
          deriving (Eq)
 
 instance Show DataSource where
@@ -102,7 +103,7 @@ instance Show AsmOp where
          show (Popall)  = intercalate "\n" $ map ("pop " ++) (reverse regs)
          show Data = ".Data"
          show (Res n) = intercalate "\n" [".long 8"  | x <- [1..4*n] ] 
-
+	 show (Code str) = str
 
 handler:: IRNode -> (LowIRTree -> [AsmOp])
 handler node = case node of
@@ -475,17 +476,29 @@ asmMD node@(MT (MDL (_,id)) forest) = [Lbl (idString id), Enter ((countFieldDecs
 asmPD:: LowIRTree -> [AsmOp]
 asmPD node@(MT _ forest) = pass forest
 
-
+runtimeError:: String -> [AsmOp]
+runtimeError str = [Pushall]
+		++ [Mov (M (Label strlabel)) (reg RDI)]
+		++ [Call (Label "error")]
+		++ [Popall]
+	where strlabel = getHashStr str
 
 --- Store string constants in data section at the end of the program
 asmProg:: LowIRTree -> [AsmOp]
-asmProg node@(MT _ forest) = concat $ (map asmTransform forest) ++ (makeLabels dstrs) ++ ([Data]:(map makeDatum globals))
+asmProg node@(MT _ forest) = concat $ ( 
+			(map asmTransform forest) 
+			++ [[Lbl "error:"]] 
+			++ [[Enter 0]]
+			++ [[Mov (C 0) (reg RAX)]]
+			++ [[(Call (Label "printf"))]]
+			++ (makeLabels dstrs) 
+			++ ([Data]:(map makeDatum globals)))
      where f (DStrL s) = [s]
            f _ = []
            getDStrs = concat . (map f)
            dstrs = nub $ getDStrs (listify node)
            g s = [Lbl $ '.' : getHashStr s, AsmString s]
-           makeLabels = map g
+           makeLabels x = (map g x) ++ [g "Bounds Error!"]
 	   h (MT (FDL t (_,id)) _) = [(t,id)]
            h _ = []
 	   globals = concat $ map h forest
