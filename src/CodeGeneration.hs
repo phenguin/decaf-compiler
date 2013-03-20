@@ -415,7 +415,7 @@ asmIf node@(MT (IfL _ endl) (conde:thenb:xs)) =
 asmFor:: LowIRTree -> [AsmOp]
 asmFor node@(MT (ForL id startl endl) (starte:ende:body:xs)) =
 						asmTransform starte
-						++ [Mov (reg RAX) (id)]
+                        ++ [ld RAX id]
 						++ asmTransform ende
 						++ [Mov (reg RAX) (reg R13)]
 						++ [Mov (M id) (reg R12)]
