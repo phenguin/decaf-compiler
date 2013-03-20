@@ -64,6 +64,8 @@ instance Show DataSource where
 
 instance Show AsmOp where
          show (NegQ r) = "neg " ++ show r
+         show (Mov x@(M (EffectiveA _ (Label s) _)) y) = "mov $" ++ s ++ ", %r11\n" ++ "mov "++(show x)++", "++ (show y) 
+         show (Mov x y@(EffectiveA _ (Label s) _)) = "mov $" ++ s ++ ", %r11\n" ++ "mov "++(show x)++", "++ (show y) 
          show (Mov x y) = "mov "++(show x)++", "++ (show y) 
          show (CMove x y) = "cmove "++(show x)++", "++ (show y) 
          show (CMovne x y) = "cmovne "++(show x)++", "++ (show y)
@@ -280,11 +282,15 @@ asmNeg node@(MT stnode (x:xs)) = asmTransform x
 
 asmAssignPlus:: LowIRTree -> [AsmOp]
 
+isGlobalAccess :: MemLoc -> Bool
+isGlobalAccess (EffectiveA _ (Label _) _) = True
+isGlobalAccess _ = False
+
 asmAssignPlus node@(MT AssignPlusL ((MT (LocL ml) (x:xs)):v:vs)) = 
 					(asmTransform v) 
                     ++ [ld RAX R10]
                     ++ asmTransform x
-                    ++ [NegQ RAX]
+                    ++ (if isGlobalAccess ml then [] else [NegQ RAX])
  					++ [(AddQ (reg RAX) ml)]
 
 asmAssignPlus node@(MT AssignPlusL ((MT (LocL ml) _):v:vs)) = 
@@ -297,7 +303,7 @@ asmAssignMinus node@(MT AssignMinusL ((MT (LocL ml) (x:xs)):v:vs)) =
  					(asmTransform v) 
                     ++ [ld RAX R10]
                     ++ asmTransform x
-                    ++ [NegQ RAX]
+                    ++ (if isGlobalAccess ml then [] else [NegQ RAX])
  					++ [(SubQ (reg RAX) ml )]
 
 asmAssignMinus node@(MT AssignMinusL ((MT (LocL ml) _ ):v:vs)) = 
@@ -310,7 +316,7 @@ asmAssign node@(MT AssignL ((MT (LocL ml) (x:xs)):v:vs)) =
  					(asmTransform v) 
                     ++ [ld RAX R10]
                     ++ asmTransform x
-                    ++ [NegQ RAX]
+                    ++ (if isGlobalAccess ml then [] else [NegQ RAX])
  					++ [ld R10 ml]
 
 asmAssign node@(MT AssignL ((MT (LocL ml) _):v:xs)) = 
@@ -349,10 +355,10 @@ asmGte = asmCompareOp CMovge
 -- What are we doing with global variables? -justin
 asmLoc:: LowIRTree -> [AsmOp]
 
-asmLoc node@(MT (LocL m) (x:xs)) = 
+asmLoc node@(MT (LocL ml) (x:xs)) = 
              asmTransform x
-             ++ [NegQ RAX]
-             ++ [ld m RAX]
+             ++ (if isGlobalAccess ml then [] else [NegQ RAX])
+             ++ [ld ml RAX]
 
 asmLoc node@(MT (LocL m) _) = [ld m RAX]
 
@@ -457,15 +463,15 @@ asmProg node@(MT _ forest) = concat $ (map asmTransform forest) ++ (makeLabels d
      where f (DStrL s) = [s]
            f _ = []
            getDStrs = concat . (map f)
-           dstrs = getDStrs (listify node)
+           dstrs = nub $ getDStrs (listify node)
            g s = [Lbl $ '.' : getHashStr s, AsmString s]
            makeLabels = map g
 	   h (MT (FDL t (_,id)) _) = [(t,id)]
            h _ = []
 	   globals = concat $ map h forest
-	   makeDatum ((Array n),id) = [(Lbl $ idString id)]
+	   makeDatum ((Array n),id) = [(Lbl $ ".global_" ++ idString id)]
 					++ [Res n]
-	   makeDatum (_,id) =  [(Lbl $ idString id)]
+	   makeDatum (_,id) =  [(Lbl $ ".global_" ++ idString id)]
 					++ [Res 1]
 
 		

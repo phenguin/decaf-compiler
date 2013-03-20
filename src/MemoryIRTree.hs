@@ -42,7 +42,9 @@ instance Show MemLoc where
 	show (Reg r) = map toLower $ (show r)
 	show (BPOffset i) = (show i)++"(%rbp)"
 	show (Label str) = str
-	show (EffectiveA i ml r) = show i ++ "(" ++ show ml ++ ", " ++ show r ++ ", 8)"
+	show (EffectiveA i (Reg r1) r2) = show i ++ "(" ++ show r1 ++ ", " ++ show r2 ++ ", 8)"
+    -- Temporary.. this is kind of shitty.. but we are going to move the label value into r11
+	show (EffectiveA i (Label _) r) = show i ++ "(" ++ show R11 ++ ", " ++ show r ++ ", 8)"
 
 instance Show Register where
     show RAX = "%rax"
@@ -139,6 +141,8 @@ convertToLowIRTree' lbls (Just table) (MT ((Loc i), _) forest@(x:xs)) =
     (MT (LocL ml) (map (convertToLowIRTree' lbls (Just table)) forest))
     where ml = f (table ! (idString i))
           f (BPOffset off) = EffectiveA off (toMemLoc RBP) RAX
+          f ml@(Label str) = EffectiveA 0 ml RAX
+          f ml@(EffectiveA _ _ _) = ml
           f _ = error "Cannot have array valued parameters"
 
 convertToLowIRTree' lbls (Just table) (MT ((Loc i), _) forest) = 
@@ -199,8 +203,8 @@ getVarBindings = getVarBindings' . fmap fst
 
 getVarBindings' :: MultiTree STNode -> VarBindings
 getVarBindings' (MT Prog forest) = foldl f (M.empty) $ map nodeName forest
-    where f bs (FD Single (_, i)) = M.insert (idString i) (Label $ "global_" ++ idString i) bs
-          f bs (FD (Array _) (_, i)) = M.insert (idString i) (EffectiveA 0 (Label $ "global_" ++ idString i) RAX) bs
+    where f bs (FD Single (_, i)) = M.insert (idString i) (Label $ ".global_" ++ idString i) bs
+          f bs (FD (Array _) (_, i)) = M.insert (idString i) (EffectiveA 0 (Label $ ".global_" ++ idString i) RAX) bs
           f bs _ = bs
 
 getVarBindings' node = third $ foldl f (1, paramBindings, M.empty) $ listify node
