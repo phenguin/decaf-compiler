@@ -101,7 +101,7 @@ instance Show AsmOp where
          show (Pushall) = intercalate "\n" $ map ("push " ++) regs
          show (Popall)  = intercalate "\n" $ map ("pop " ++) (reverse regs)
          show Data = ".Data"
-         show (Res n) = intercalate "\n" [".word"  | x <- [1..4*n] ] 
+         show (Res n) = intercalate "\n" [".long 8"  | x <- [1..4*n] ] 
 
 
 handler:: IRNode -> (LowIRTree -> [AsmOp])
@@ -414,6 +414,7 @@ asmIf node@(MT (IfL _ endl) (conde:thenb:xs)) =
 asmFor:: LowIRTree -> [AsmOp]
 asmFor node@(MT (ForL id startl endl) (starte:ende:body:xs)) =
 						asmTransform starte
+						++ [Mov (reg RAX) (id)]
 						++ asmTransform ende
 						++ [Mov (reg RAX) (reg R13)]
 						++ [Mov (M id) (reg R12)]
