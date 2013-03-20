@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 
+
 module CodeGeneration where
 
 import Transforms
@@ -487,10 +488,18 @@ runtimeError str = [Pushall]
 asmProg:: LowIRTree -> [AsmOp]
 asmProg node@(MT _ forest) = concat $ ( 
 			(map asmTransform forest) 
-			++ [[Lbl "error:"]] 
+			++ [[Lbl ".err_bound:"]] 
 			++ [[Enter 0]]
+			++ [[Mov (M (Label $ "$."++(getHashStr "Bounds Error!"))) (reg RDI)]]
 			++ [[Mov (C 0) (reg RAX)]]
 			++ [[(Call (Label "printf"))]]
+			++ [[(Call (Label "exit"))]]
+			++ [[Lbl ".err_methodrunoff:"]] 
+			++ [[Enter 0]]
+			++ [[Mov (M (Label $ "$."++(getHashStr "Runoff Error!"))) (reg RDI)]]
+			++ [[Mov (C 0) (reg RAX)]]
+			++ [[(Call (Label "printf"))]]
+			++ [[(Call (Label "exit"))]]
 			++ (makeLabels dstrs) 
 			++ ([Data]:(map makeDatum globals)))
      where f (DStrL s) = [s]
@@ -498,7 +507,7 @@ asmProg node@(MT _ forest) = concat $ (
            getDStrs = concat . (map f)
            dstrs = nub $ getDStrs (listify node)
            g s = [Lbl $ '.' : getHashStr s, AsmString s]
-           makeLabels x = (map g x) ++ [g "Bounds Error!"]
+           makeLabels x = (map g x) ++ [g "Bounds Error!"] ++ [g "Runoff Error!"]
 	   h (MT (FDL t (_,id)) _) = [(t,id)]
            h _ = []
 	   globals = concat $ map h forest
