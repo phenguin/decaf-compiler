@@ -1,7 +1,0 @@
-// OK
-void main ( ) {
-  if ( ( ( 1 > 2 ) == ( true == false ) ) && ( 3 != 2 ) ) {
-  }
-  else {
-  }
-}

@@ -1,8 +1,0 @@
-callout getpid;
-// 14. The <location> and <expr> in an assignment, <location> = <expr>, 
-// must have the same type.
-void main ( ) {
-  boolean b;
-  b = getpid ( );
-  // Error: callouts return ints
-}

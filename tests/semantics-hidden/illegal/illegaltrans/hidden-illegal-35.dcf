@@ -1,4 +1,0 @@
-// 2. identifier used before it is declared
-void main ( ) {
-  foo ( );
-}

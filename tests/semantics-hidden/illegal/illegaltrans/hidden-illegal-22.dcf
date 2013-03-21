@@ -1,8 +1,0 @@
-// 2. No identifier is used before it is declared 
-void foo ( ) {
-  bar ( );
-}
-void bar ( ) {
-}
-void main ( ) {
-}
