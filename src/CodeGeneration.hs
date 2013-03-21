@@ -502,17 +502,17 @@ asmProg node@(MT _ forest) = concat $ (
 			(map asmTransform forest) 
 			++ [[Lbl ".err_bound"]] 
 			++ [[Enter 0]]
-			++ [[Mov (M (Label $ "$."++(getHashStr "Bounds Error!"))) (reg RDI)]]
+			++ [[Mov (M (Label $ "$."++(getHashStr "Bounds Error!\n"))) (reg RDI)]]
 			++ [[Mov (C 0) (reg RAX)]]
 			++ [[(Call (Label "printf"))]]
-			++ [[Mov (C -1) (reg RDI)]]
+			++ [[Mov (C (-1)) (reg RDI)]]
 			++ [[(Call (Label "exit"))]]
 			++ [[Lbl ".err_methodrunoff"]] 
 			++ [[Enter 0]]
-			++ [[Mov (M (Label $ "$."++(getHashStr "Runoff Error!"))) (reg RDI)]]
+			++ [[Mov (M (Label $ "$."++(getHashStr "Runoff Error!\n"))) (reg RDI)]]
 			++ [[Mov (C 0) (reg RAX)]]
 			++ [[(Call (Label "printf"))]]
-			++ [[Mov (C -2) (reg RDI)]]
+			++ [[Mov (C (-2)) (reg RDI)]]
 			++ [[(Call (Label "exit"))]]
 			++ (makeLabels dstrs) 
 			++ ([Data]:(map makeDatum globals)))
@@ -521,7 +521,7 @@ asmProg node@(MT _ forest) = concat $ (
            getDStrs = concat . (map f)
            dstrs = nub $ getDStrs (listify node)
            g s = [Lbl $ '.' : getHashStr s, AsmString s]
-           makeLabels x = (map g x) ++ [g "Bounds Error!"] ++ [g "Runoff Error!"]
+           makeLabels x = (map g x) ++ [g "Bounds Error!\n"] ++ [g "Runoff Error!\n"]
 	   h (MT (FDL t (_,id)) _) = [(t,id)]
            h _ = []
 	   globals = concat $ map h forest
