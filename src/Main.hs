@@ -29,7 +29,7 @@ import Util (mungeErrorMessage)
 import MultiTree (pPrint)
 
 import qualified CLI
-import Configuration (Configuration, CompilerStage(..), OptimizationSpecification(..))
+import Configuration (Configuration(outputFileName), CompilerStage(..), OptimizationSpecification(..))
 import Configuration.Types (debug)
 import qualified Configuration
 import qualified Parser
@@ -140,7 +140,10 @@ assembleTree configuration input = do
       irTreeWithST = addSymbolTables irTree
       assemble e = do
              actions <- e
-             return (actions ++ [putStrLn $ getAssemblyStr irTreeWithST])
+             return (actions ++ [theAction $ getAssemblyStr irTreeWithST])
+         where theAction = case outputFileName configuration of
+                         Nothing -> putStrLn
+                         Just fp -> writeFile fp
       output = assemble $ Checks.doChecks Checks.checksList $ irTreeWithST in
       case debug configuration of
           False -> output
