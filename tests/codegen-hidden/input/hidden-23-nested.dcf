@@ -1,22 +1,31 @@
 callout printf;
 int a, b, c;
-void main ( ) {
-  a = 1;
-  b = 2;
-  {
-    int a, b;
-    a = 3;
-    b = 4;
-    {
-      int a, b;
-      a = 5;
-      b = 6;
-      c = a + b;
-      printf ( "result should be 11: %d\n", c );
+
+void func1 ( ) {
+  int A[10];
+  int i,sum;
+  a += 1;
+  for ( i = 0, 10 ) {
+    if (A[i] != 0) {
+      printf("Fail");
     }
-    c = a + b;
-    printf ( "result should be 7: %d\n", c );
+    A[i] = a + i;
+    printf("%d\n", A[i]);
   }
-  c = a + b;
-  printf ( "result should be 3: %d\n", c );
+
+  for ( i = 0, 10) {
+    sum += A[i];
+  }
+  
+  c = sum;
+}
+
+
+void main ( ) {
+  func1 ( );  
+  printf ( "result should be 55: %d\n", c );
+  func1 ( );  
+  printf ( "result should be 65: %d\n", c );
+  func1 ( );  
+  printf ( "result should be 75: %d\n", c );
 }

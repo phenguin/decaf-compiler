@@ -2,6 +2,7 @@ callout printf;
 int x[10];
 int y[20];
 void main ( ) {
+  int i;
   for ( i = 0, 10 ) {
     x[i] = 2 * i;
     y[2 * i] = 20 - 2 * i;
