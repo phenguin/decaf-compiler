@@ -1,0 +1,13 @@
+int A[100];
+int y;
+void clobbery ( ) {
+  y = y + 1;
+}
+void main ( ) {
+  for ( i = 0, 30 ) {
+    for ( j = 0, y + 1 ) {
+      A[2*i + j] = 1;
+      clobbery ( );
+    }
+  }
+}
