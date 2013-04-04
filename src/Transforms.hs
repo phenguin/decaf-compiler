@@ -5,7 +5,7 @@ import Parser
 import MultiTree
 import Data.Hashable (hash)
 
-data LitType = IntType | BoolType | VoidType | StrType deriving (Show, Eq)
+data LitType = IntType | BoolType | VoidType | StrType deriving (Show, Eq, Ord)
 data FDType = Single | Array Int deriving (Show, Eq, Ord)
 
 data Id = IdWithHash {hashInt::Int , idString::String} deriving (Ord)
@@ -58,7 +58,7 @@ data STNode = Prog
             | CD Id
             | PD TypedId
             | MD TypedId
-     deriving (Show, Eq)
+     deriving (Show, Eq, Ord)
 
 class ConvertibleToST a where
     convert :: a -> SemanticTree
