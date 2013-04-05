@@ -1,4 +1,4 @@
-module ControlFlow where
+module CFGConcrete where
 
 import qualified Data.Map as M
 import PrettyPrint

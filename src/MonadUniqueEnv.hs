@@ -1,5 +1,5 @@
 {-# LANGUAGE FlexibleInstances, MultiParamTypeClasses #-}
-module UniqueStringEnv where
+module MonadUniqueEnv where
 
 import Control.Monad
 import Control.Monad.State
