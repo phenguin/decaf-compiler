@@ -1,6 +1,8 @@
 module ControlFlow where
 
 import qualified Data.Map as M
+import PrettyPrint
+import Text.PrettyPrint.HughesPJ
 
 -- Implement control flow graph based off of GHCs own implementation
 -- and the paper "An Applicative Control Flow Graph based on Huet's Zipper"
@@ -9,6 +11,9 @@ type BlockLookup m l = M.Map BlockId (Block m l)
 type BlockId = Int
 
 newtype SuccBlocks = SuccBlocks { getSuccBlocks :: [BlockId] } deriving (Show, Eq, Ord)
+
+instance PrettyPrint SuccBlocks where
+    ppr (SuccBlocks bs) = vcat $ map ppr bs
 
 data ZLast l = LastExit | LastOther l deriving (Show, Eq)
 
@@ -82,6 +87,8 @@ listToZTail [] Nothing = ZLast LastExit
 listToZTail [] (Just l) = ZLast (LastOther l)
 listToZTail (m:ms) ml = ZTail m (listToZTail ms ml)
 
+listToBlock ms ml = (\zt -> Block 0 zt) $ listToZTail ms ml
+
 -- Block manipulations
 zipB :: ZBlock m l -> Block m l
 unzipB :: Block m l -> ZBlock m l
@@ -154,6 +161,41 @@ emptyZGraph bid = ZGraph bid (unzipB (initBlock bid)) M.empty
 entry :: LGraph m l -> ZGraph m l -- Focus first edge in entry block
 entry = undefined
 
+--- Pretty printing of control flow graph structures.. largely stolen from GHC
 
+instance (PrettyPrint m, PrettyPrint l) => PrettyPrint (ZTail m l) where
+    ppr = pprZTail
 
+instance (PrettyPrint l) => PrettyPrint (ZLast l) where
+    ppr = pprLast
 
+instance (PrettyPrint m, PrettyPrint l) => PrettyPrint (Graph m l) where
+    ppr = pprGraph
+
+instance (PrettyPrint m, PrettyPrint l) => PrettyPrint (LGraph m l) where
+    ppr = pprLGraph
+
+instance (PrettyPrint m, PrettyPrint l) => PrettyPrint (Block m l) where
+    ppr = pprBlock
+
+instance (PrettyPrint m, PrettyPrint l) => PrettyPrint (ZBlock m l) where
+    ppr = pprBlock . zipB
+
+pprZTail :: (PrettyPrint m, PrettyPrint l) => ZTail m l -> Doc
+pprZTail (ZTail m t) = ppr m $$ ppr t
+pprZTail (ZLast l) = ppr l
+
+pprLast :: (PrettyPrint l) => ZLast l -> Doc
+pprLast LastExit = text "<exit>"
+pprLast (LastOther l) = ppr l
+
+pprBlock :: (PrettyPrint m, PrettyPrint l) => Block m l -> Doc
+pprBlock (Block bid tl) = text "Block" <> ppr bid <> colon
+                                       $$ (nest 3 (ppr tl))
+
+pprGraph = undefined
+pprLGraph = undefined
+
+-- Test data
+testBlock :: Block Int SuccBlocks
+testBlock = listToBlock [1..10] Nothing
