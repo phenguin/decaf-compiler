@@ -10,37 +10,50 @@ type BlockId = Int
 
 newtype SuccBlocks = SuccBlocks { getSuccBlocks :: [BlockId] } deriving (Show, Eq, Ord)
 
-data ZLast l = LastExit | LastOther l deriving (Show)
+data ZLast l = LastExit | LastOther l deriving (Show, Eq)
 
 data ZHead m = ZFirst BlockId
-             | ZHead (ZHead m) m deriving (Show)
+             | ZHead (ZHead m) m deriving (Show, Eq)
 
 data ZTail m l = ZLast (ZLast l)
-             | ZTail m (ZTail m l) deriving (Show)
+             | ZTail m (ZTail m l) deriving (Show, Eq)
 
 data Block m l = Block { bId :: BlockId,
-                         bTail :: ZTail m l } deriving (Show)
+                         bTail :: ZTail m l } deriving (Show, Eq)
 
 data ZBlock m l = ZBlock { zbHead :: ZHead m, 
-                         zbTail :: ZTail m l } deriving (Show)
+                         zbTail :: ZTail m l } deriving (Show, Eq)
 
 data Graph m l = Graph { gEntry :: ZTail m l,
-                   gBlocks :: BlockLookup m l } deriving (Show)
+                   gBlocks :: BlockLookup m l } deriving (Show, Eq)
 
-data LGgraph m l = LGraph { lgEntry :: BlockId,
-                            lgBlocks :: BlockLookup m l } deriving (Show)
+data LGraph m l = LGraph { lgEntry :: BlockId,
+                            lgBlocks :: BlockLookup m l } deriving (Show, Eq)
 
 data ZGraph m l = ZGraph { fgEntry :: BlockId,
                             fgFocus :: ZBlock m l, 
-                            fgBlocks :: BlockLookup m l } deriving (Show)
+                            fgBlocks :: BlockLookup m l } deriving (Show, Eq)
 
 class HavingZLast a where
     getZLast :: (a l) -> ZLast l
+
+class HavingBlockId a where
+    getBlockId :: a -> BlockId
 
 class HavingSuccessors l where
     succs :: l -> [BlockId]
     foldSuccs :: (BlockId -> a -> a) -> l -> a -> a
     foldSuccs add l z = foldr add z $ succs l
+
+instance HavingBlockId (ZHead m) where
+    getBlockId (ZFirst bid) = bid
+    getBlockId (ZHead h m) = getBlockId h
+
+instance HavingBlockId (Block m l) where
+    getBlockId (Block bid _) = bid
+
+instance HavingBlockId (ZBlock m l) where
+    getBlockId (ZBlock h _) = getBlockId h
 
 instance HavingZLast (ZTail m) where
     getZLast (ZTail _ t) = getZLast t
@@ -89,6 +102,10 @@ unzipToEndB (Block bid t) = ZBlock h t
 
 zipB (ZBlock h t) = htToBlock h t
 
+-- Block construction
+initBlock :: BlockId -> Block m l
+initBlock bid = Block bid (ZLast LastExit)
+
 -- ZBlock Movement
 nextEdge :: ZBlock m l -> ZBlock m l
 prevEdge :: ZBlock m l -> ZBlock m l
@@ -111,30 +128,31 @@ lastEdge zb@(ZBlock _ tl) = case tl of
     ZLast _ -> zb
     _ -> firstEdge $ nextEdge zb
 
+-- Graph conversion and creation
+focus :: BlockId -> LGraph m l -> ZGraph m l
+unfocus :: ZGraph m l -> LGraph m l
+emptyGraph :: Graph m l
 
+-- Need blockid for iniital block for these
+emptyLGraph :: BlockId -> LGraph m l
+emptyZGraph :: BlockId -> ZGraph m l
 
+focus bid (LGraph eid blocks) = case M.lookup bid blocks of
+    Nothing -> error "Attempt to focus non-existent block"
+    (Just block) -> ZGraph eid (unzipB block) (M.delete bid blocks)
 
+unfocus (ZGraph eid fb@(ZBlock h t) blocks) = case M.lookup focusBid blocks of
+    Just _ -> error "Focused block in blocks table during unfocus op"
+    Nothing -> LGraph eid (M.insert focusBid (zipB fb) blocks)
+    where focusBid = getBlockId fb
 
+emptyGraph = Graph (ZLast LastExit) M.empty
+emptyLGraph bid = LGraph bid (M.insert bid (initBlock bid) M.empty)
+emptyZGraph bid = ZGraph bid (unzipB (initBlock bid)) M.empty
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+-- ZGraph Movement
+entry :: LGraph m l -> ZGraph m l -- Focus first edge in entry block
+entry = undefined
 
 
 
