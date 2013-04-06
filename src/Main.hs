@@ -139,7 +139,9 @@ assembleTree configuration input = do
   let irTree = convert parseTree
   let irTreeWithST = Optimization.doIROpts configuration $ addSymbolTables irTree 
   let midir = Optimization.toMidIR irTreeWithST
-  Right $ Optimization.printMidIR midir
+  if debug configuration
+	then Right $ Optimization.printMidIR midir
+	else Right [return ()]
   {--       assList = toAsmList irTreeWithST in 
          optedAssList = Optimization.doAsmOpts configuration assList
 assemble e = do
