@@ -28,6 +28,7 @@ executable decafc
                      , hashable
                      , containers
                      , unordered-containers
+                     , pretty
   build-tools:         alex >=3.0.2
                      , happy
 

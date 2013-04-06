@@ -137,6 +137,11 @@ statementIR (MT (_,T.If,st) (cond:ifthen:ifelse:_)) = [If cond' ifthen' ifelse']
 	  cond' = expressionIR cond
 	  ifthen' = statementIR ifthen		
 	  ifelse' = statementIR ifelse		
+
+statementIR (MT (_,T.If,st) (cond:ifthen:_)) = [If cond' ifthen' []]
+	where
+	  cond' = expressionIR cond
+	  ifthen' = statementIR ifthen		
 	  
 statementIR (MT (_,(T.MethodCall id'),st) params) =  case lookupSymbol id' st of
 		(Just (CODesc)) -> [Callout (T.idString id') (map expressionIR params) ]
