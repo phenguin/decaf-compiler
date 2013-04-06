@@ -1,6 +1,8 @@
 module Optimization where
 
 import Configuration
+import PrettyPrint
+import Text.PrettyPrint.HughesPJ hiding (Str)
 import CodeGeneration
 import Control.Monad.State
 import Semantics
@@ -478,3 +480,47 @@ equivalent expr expr
 
 --}
 
+-- Pretty printing..
+
+instance PrettyPrint Expression where
+    ppr (Add e1 e2) = parens $ (ppr e1) <+> text "+" <+> (ppr e2)
+    ppr (Sub e1 e2) = parens $ (ppr e1) <+> text "-" <+> (ppr e2)
+    ppr (Mul e1 e2) = parens $ (ppr e1) <+> text "*" <+> (ppr e2)
+    ppr (Div e1 e2) = parens $ (ppr e1) <+> text "/" <+> (ppr e2)
+    ppr (Mod e1 e2) = parens $ (ppr e1) <+> text "%" <+> (ppr e2)
+    ppr (And e1 e2) = parens $ (ppr e1) <+> text "&&" <+> (ppr e2)
+    ppr (Or e1 e2) = parens $ (ppr e1) <+> text "||" <+> (ppr e2)
+    ppr (Eq e1 e2) = parens $ (ppr e1) <+> text "==" <+> (ppr e2)
+    ppr (Lt e1 e2) = parens $ (ppr e1) <+> text "<" <+> (ppr e2)
+    ppr (Gt e1 e2) = parens $ (ppr e1) <+> text ">" <+> (ppr e2)
+    ppr (Le e1 e2) = parens $ (ppr e1) <+> text "<=" <+> (ppr e2)
+    ppr (Ge e1 e2) = parens $ (ppr e1) <+> text ">=" <+> (ppr e2)
+    ppr (Ne e1 e2) = parens $ (ppr e1) <+> text "!=" <+> (ppr e2)
+    ppr (Not e) = text "!" <+> parens (ppr e)
+    ppr (Neg e) = text "-" <+> parens (ppr e)
+    ppr (Const i) = int i
+    ppr (Str s) = doubleQuotes $ text s
+    ppr (Loc v) = ppr v
+    ppr (FuncCall name ps) = text name <+> prettyParams
+        where prettyParams = foldl f lparen ps <+> rparen
+              f acc p = acc <+> ppr p <> comma
+
+instance PrettyPrint Variable where
+    ppr (Var name) = text name
+    ppr (Varray name e) = text name <> lbrack <+>
+                          ppr e <+> rbrack
+
+instance PrettyPrint Statement where
+    ppr (If _ _ _) = text "If Statement which shouldnt be here"
+    ppr (While _ _) = text "While Statement which shouldn't be here"
+    ppr (Return e) = text "return" <+> ppr e
+    ppr Break = text "break"
+    ppr Continue = text "continue"
+    ppr (Set v e) = ppr v <+> text "=" <+> ppr e
+    ppr (DVar v e) = ppr v <+> text "=" <+> ppr e
+    ppr (Function name ps) = text name <+> prettyParams
+        where prettyParams = foldl f lparen ps <+> rparen
+              f acc p = acc <+> ppr p <> comma
+    ppr (Callout name ps) = text name <+> prettyParams
+        where prettyParams = foldl f lparen ps <+> rparen
+              f acc p = acc <+> ppr p <> comma

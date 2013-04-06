@@ -43,50 +43,35 @@ stmtToAGraph (DFun name params body) =
 
 stmtToAGraph x = mkMiddle x
 
+-- -- Skeleton code for santiago --- asm conversion
+-- ===================================================
+-- type LowCFG :: LGraph ProtoASM [ProtoASM]
+-- toLowIRCFG :: ControlFlowGraph -> LowCFG
+-- toLowIRCFG cfg = mapLGraphNodes mapStmtToAsm mapBranchToAsm cfgLGraph
+--     where cfgLGraph = lgraphFromAGraphBlocks (BID "main")
+
+-- -- Converts regular statements to the pseudo-asm code
+-- mapStmtToAsm :: Statement -> [ProtoASM]
+-- mapStmtToAsm = undefined
+
+-- -- Need newtype because the type needs to be made instance of LastNode
+-- newtype BranchSeq = BranchSeq [ProtoASM] deriving (Eq, Ord)
+
+-- -- converts branching statements to a branch seq of asm ops and 
+-- -- possibly some additional preamble.  probably will want to return
+-- -- ([], BranchSeq <stuff>)
+-- mapBranchToAsm :: BranchingStatement -> ([ProtoASM], BranchSeq)
+-- mapBranchToAsm = undefined
+
+-- instance HavingSuccessors BranchingStatement where
+--     succs (BranchSeq istrs) = length $ filter f istrs
+--         where f (Jump _) = True
+--               f _ = False
+
+-- instance LastNode BranchingStatement where
+--     mkBranchNode bid = BranchSeq [Jump bid]
+
 -- Pretty Printing
-
-instance PrettyPrint Expression where
-    ppr (Add e1 e2) = parens $ (ppr e1) <+> text "+" <+> (ppr e2)
-    ppr (Sub e1 e2) = parens $ (ppr e1) <+> text "-" <+> (ppr e2)
-    ppr (Mul e1 e2) = parens $ (ppr e1) <+> text "*" <+> (ppr e2)
-    ppr (Div e1 e2) = parens $ (ppr e1) <+> text "/" <+> (ppr e2)
-    ppr (Mod e1 e2) = parens $ (ppr e1) <+> text "%" <+> (ppr e2)
-    ppr (And e1 e2) = parens $ (ppr e1) <+> text "&&" <+> (ppr e2)
-    ppr (Or e1 e2) = parens $ (ppr e1) <+> text "||" <+> (ppr e2)
-    ppr (Eq e1 e2) = parens $ (ppr e1) <+> text "==" <+> (ppr e2)
-    ppr (Lt e1 e2) = parens $ (ppr e1) <+> text "<" <+> (ppr e2)
-    ppr (Gt e1 e2) = parens $ (ppr e1) <+> text ">" <+> (ppr e2)
-    ppr (Le e1 e2) = parens $ (ppr e1) <+> text "<=" <+> (ppr e2)
-    ppr (Ge e1 e2) = parens $ (ppr e1) <+> text ">=" <+> (ppr e2)
-    ppr (Ne e1 e2) = parens $ (ppr e1) <+> text "!=" <+> (ppr e2)
-    ppr (Not e) = text "!" <+> parens (ppr e)
-    ppr (Neg e) = text "-" <+> parens (ppr e)
-    ppr (Const i) = int i
-    ppr (Str s) = doubleQuotes $ text s
-    ppr (Loc v) = ppr v
-    ppr (FuncCall name ps) = text name <+> prettyParams
-        where prettyParams = foldl f lparen ps <+> rparen
-              f acc p = acc <+> ppr p <> comma
-
-instance PrettyPrint Variable where
-    ppr (Var name) = text name
-    ppr (Varray name e) = text name <> lbrack <+>
-                          ppr e <+> rbrack
-
-instance PrettyPrint Statement where
-    ppr (If _ _ _) = text "If Statement which shouldnt be here"
-    ppr (While _ _) = text "While Statement which shouldn't be here"
-    ppr (Return e) = text "return" <+> ppr e
-    ppr Break = text "break"
-    ppr Continue = text "continue"
-    ppr (Set v e) = ppr v <+> text "=" <+> ppr e
-    ppr (DVar v e) = ppr v <+> text "=" <+> ppr e
-    ppr (Function name ps) = text name <+> prettyParams
-        where prettyParams = foldl f lparen ps <+> rparen
-              f acc p = acc <+> ppr p <> comma
-    ppr (Callout name ps) = text name <+> prettyParams
-        where prettyParams = foldl f lparen ps <+> rparen
-              f acc p = acc <+> ppr p <> comma
 
 instance PrettyPrint BranchingStatement where
     ppr (Jump bid) = text "Jump" <+> ppr bid
