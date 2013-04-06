@@ -14,7 +14,7 @@ module Main where
 import Prelude hiding (readFile)
 import qualified Prelude
 
-import CodeGeneration (getAssemblyStr)
+import CodeGeneration (getAssemblyStr, toAsmList)
 import Control.Exception (bracket)
 import Control.Monad (forM_, void, liftM)
 import Control.Monad.Error (ErrorT(..), runErrorT)
@@ -37,7 +37,7 @@ import qualified Checks
 import qualified Scanner
 import Transforms (convert)
 import Semantics (addSymbolTables)
-
+import qualified Optimization (doAsmOpts, doIROpts)
 
 ------------------------ Impure code: Fun with ErrorT -------------------------
 
@@ -137,10 +137,12 @@ assembleTree configuration input = do
   mapM_ (mungeErrorMessage configuration . Left) errors
   parseTree <- mungeErrorMessage configuration $ Parser.parse tokens
   let irTree = convert parseTree
-      irTreeWithST = addSymbolTables irTree
+      irTreeWithST = Optimization.doIROpts configuration $ addSymbolTables irTree
+      assList = toAsmList irTreeWithST
+      optedAssList = Optimization.doAsmOpts configuration assList
       assemble e = do
              actions <- e
-             return (actions ++ [theAction $ getAssemblyStr irTreeWithST])
+             return (actions ++ [theAction $ getAssemblyStr $ optedAssList])
          where theAction = case outputFileName configuration of
                          Nothing -> putStrLn
                          Just fp -> writeFile fp
