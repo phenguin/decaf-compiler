@@ -69,9 +69,11 @@ data Statement =  Set Variable Expression
 		| Callout {calloutName::String, calloutParams::[Expression]}
 		| Function {functionName::String, params::[Expression]}
 		deriving (Show,Eq) 
+
 data Variable = Var {symbol::String}
 		| Varray {symbol::String, index::Expression}
 		deriving (Show,Eq) 
+
 data Expression = Add {x::Expression, y::Expression}
 		| Sub {x::Expression, y::Expression}
 		| Mul {x::Expression, y::Expression}
