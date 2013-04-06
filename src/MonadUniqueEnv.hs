@@ -24,8 +24,8 @@ instance Applicative (UniqEnv s) where
     pure x = UniqSE $ pure x
     (<*>) = ap
 
-removeEnv :: UniqEnv s a -> a
-removeEnv (UniqSE sf) = fst $ runState sf M.empty
+removeUniqEnv :: UniqEnv s a -> a
+removeUniqEnv (UniqSE sf) = fst $ runState sf M.empty
 
 getUniqString :: String -> UniqStringEnv String
 getUniqString s = do

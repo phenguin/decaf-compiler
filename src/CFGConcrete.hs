@@ -8,7 +8,13 @@ import Text.PrettyPrint.HughesPJ
 -- and the paper "An Applicative Control Flow Graph based on Huet's Zipper"
 
 type BlockLookup m l = M.Map BlockId (Block m l)
-type BlockId = Int
+newtype BlockId = BID { getStr :: String } deriving (Show, Eq, Ord)
+
+-- Wrappers around Data.Map functions for ease of reading
+insertBlock = M.insert
+removeBlock = M.delete
+lookupBlock = M.lookup
+emptyBlockLookup = M.empty
 
 newtype SuccBlocks = SuccBlocks { getSuccBlocks :: [BlockId] } deriving (Show, Eq, Ord)
 
@@ -50,6 +56,15 @@ class HavingSuccessors l where
     foldSuccs :: (BlockId -> a -> a) -> l -> a -> a
     foldSuccs add l z = foldr add z $ succs l
 
+class (HavingSuccessors l) => LastNode l where
+    mkBranchNode :: [BlockId] -> l
+    mkSingleBranchNode :: BlockId -> l
+    isUnconditionalBranch :: l -> Bool
+    mkSingleBranchNode x = mkBranchNode [x]
+    isUnconditionalBranch x = case succs x of
+        [x] -> True
+        _ -> False
+
 instance HavingBlockId (ZHead m) where
     getBlockId (ZFirst bid) = bid
     getBlockId (ZHead h m) = getBlockId h
@@ -87,7 +102,7 @@ listToZTail [] Nothing = ZLast LastExit
 listToZTail [] (Just l) = ZLast (LastOther l)
 listToZTail (m:ms) ml = ZTail m (listToZTail ms ml)
 
-listToBlock ms ml = (\zt -> Block 0 zt) $ listToZTail ms ml
+listToBlock bid ms ml = (\zt -> Block bid zt) $ listToZTail ms ml
 
 -- Block manipulations
 zipB :: ZBlock m l -> Block m l
@@ -144,18 +159,29 @@ emptyGraph :: Graph m l
 emptyLGraph :: BlockId -> LGraph m l
 emptyZGraph :: BlockId -> ZGraph m l
 
-focus bid (LGraph eid blocks) = case M.lookup bid blocks of
+focus bid (LGraph eid blocks) = case lookupBlock bid blocks of
     Nothing -> error "Attempt to focus non-existent block"
-    (Just block) -> ZGraph eid (unzipB block) (M.delete bid blocks)
+    (Just block) -> ZGraph eid (unzipB block) (removeBlock bid blocks)
 
-unfocus (ZGraph eid fb@(ZBlock h t) blocks) = case M.lookup focusBid blocks of
+unfocus (ZGraph eid fb@(ZBlock h t) blocks) = case lookupBlock focusBid blocks of
     Just _ -> error "Focused block in blocks table during unfocus op"
-    Nothing -> LGraph eid (M.insert focusBid (zipB fb) blocks)
+    Nothing -> LGraph eid (insertBlock focusBid (zipB fb) blocks)
     where focusBid = getBlockId fb
 
-emptyGraph = Graph (ZLast LastExit) M.empty
-emptyLGraph bid = LGraph bid (M.insert bid (initBlock bid) M.empty)
-emptyZGraph bid = ZGraph bid (unzipB (initBlock bid)) M.empty
+emptyGraph = Graph (ZLast LastExit) emptyBlockLookup
+emptyLGraph bid = LGraph bid (insertBlock bid (initBlock bid) emptyBlockLookup)
+emptyZGraph bid = ZGraph bid (unzipB (initBlock bid)) emptyBlockLookup
+
+lgraphToGraph :: LGraph m l -> Graph m l
+lgraphToGraph (LGraph bid blocks) = case lookupBlock bid blocks of
+    Nothing -> error "Lgraph entry points to non-existent block"
+    Just (Block _ ztail) -> Graph ztail (removeBlock bid blocks)
+
+graphToLGraph :: BlockId -> Graph m l -> LGraph m l
+graphToLGraph bid (Graph ztail blocks) = case lookupBlock bid blocks of
+    Nothing -> LGraph bid blocks'
+    Just _ -> error "Block Id for LGraph entry already in use"
+  where blocks' = insertBlock bid (Block bid ztail) blocks
 
 -- ZGraph Movement
 entry :: LGraph m l -> ZGraph m l -- Focus first edge in entry block
@@ -181,6 +207,9 @@ instance (PrettyPrint m, PrettyPrint l) => PrettyPrint (Block m l) where
 instance (PrettyPrint m, PrettyPrint l) => PrettyPrint (ZBlock m l) where
     ppr = pprBlock . zipB
 
+instance PrettyPrint BlockId where
+    ppr = text . getStr
+
 pprZTail :: (PrettyPrint m, PrettyPrint l) => ZTail m l -> Doc
 pprZTail (ZTail m t) = ppr m $$ ppr t
 pprZTail (ZLast l) = ppr l
@@ -190,12 +219,12 @@ pprLast LastExit = text "<exit>"
 pprLast (LastOther l) = ppr l
 
 pprBlock :: (PrettyPrint m, PrettyPrint l) => Block m l -> Doc
-pprBlock (Block bid tl) = text "Block" <> ppr bid <> colon
-                                       $$ (nest 3 (ppr tl))
+pprBlock (Block bid tl) = ppr bid <> colon
+                                  $$ (nest 3 (ppr tl))
 
 pprGraph = undefined
 pprLGraph = undefined
 
 -- Test data
 testBlock :: Block Int SuccBlocks
-testBlock = listToBlock [1..10] Nothing
+testBlock = listToBlock (BID "Heyo") [1..10] Nothing
