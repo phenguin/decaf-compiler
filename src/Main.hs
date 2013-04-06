@@ -26,7 +26,6 @@ import qualified System.Exit
 import System.IO (IOMode(..), hClose, hPutStrLn, openFile, stdout, stderr)
 import Text.Printf (printf)
 import Util (mungeErrorMessage)
-import MultiTree (pPrint)
 
 import qualified CLI
 import Configuration (Configuration(outputFileName), CompilerStage(..), OptimizationSpecification(..))
@@ -36,6 +35,7 @@ import qualified Parser
 import qualified Checks
 import qualified Scanner
 import Transforms (convert)
+import PrettyPrint
 import Semantics (addSymbolTables)
 import qualified Optimization (printMidIR,toMidIR,doAsmOpts, doIROpts)
 

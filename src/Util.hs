@@ -3,7 +3,8 @@ module Util where
 import System.IO.Unsafe (unsafePerformIO)
 
 import Transforms (SemanticTree, convert)
-import MultiTree (pPrint, pPrintTabbed)
+import MultiTree (pPrintTabbed)
+import PrettyPrint
 import qualified Parser
 import Data.Either
 import Configuration (Configuration, CompilerStage(..), OptimizationSpecification(..))
