@@ -76,7 +76,10 @@ withNewBlockId s bidFunc = AGraph f
 outOfLine :: (LastNode l, PrettyPrint l, PrettyPrint m) => 
                 AGraph m l -> AGraph m l
 
-outOfLine = undefined
+outOfLine (AGraph f) = AGraph f'
+    where f' (Graph ztail' blocks') = do
+                Graph ztail blocks <- f emptyGraph
+                return Graph ztail' (mergeBlockLookups blocks blocks')
 
 -- Converting AGraphs to concrete types
 graphFromAGraph :: AGraph m l -> Graph m l
