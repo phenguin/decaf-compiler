@@ -154,8 +154,12 @@ asmTransform:: LowIRTree -> [AsmOp]
 asmTransform node@(MT stnode _) = [push R10] ++ (handler stnode) node ++ [pop R10]
 
 -- Converts the final list of asmops into the correct output
-getAssemblyStr :: SemanticTreeWithSymbols -> String
-getAssemblyStr node = concat $ intersperse "\n" $ map show $ asmTransform $ convertToLowIRTree node
+getAssemblyStr :: [AsmOp] -> String
+getAssemblyStr asmops = concat $ intersperse "\n" $ map show $ asmops
+-- Converts to asm list.
+toAsmList::SemanticTreeWithSymbols -> [AsmOp] 
+toAsmList node = asmTransform $ convertToLowIRTree node
+
 
 ----- Assembly generation helper functions
 

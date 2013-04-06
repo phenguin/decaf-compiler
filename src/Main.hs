@@ -37,7 +37,7 @@ import qualified Checks
 import qualified Scanner
 import Transforms (convert)
 import Semantics (addSymbolTables)
-import qualified Optimization (doAsmOpts, doIROpts)
+import qualified Optimization (printMidIR,toMidIR,doAsmOpts, doIROpts)
 
 ------------------------ Impure code: Fun with ErrorT -------------------------
 
@@ -137,10 +137,12 @@ assembleTree configuration input = do
   mapM_ (mungeErrorMessage configuration . Left) errors
   parseTree <- mungeErrorMessage configuration $ Parser.parse tokens
   let irTree = convert parseTree
-      irTreeWithST = Optimization.doIROpts configuration $ addSymbolTables irTree
-      assList = toAsmList irTreeWithST
-      optedAssList = Optimization.doAsmOpts configuration assList
-      assemble e = do
+  let irTreeWithST = Optimization.doIROpts configuration $ addSymbolTables irTree 
+  let midir = Optimization.toMidIR irTreeWithST
+  Right $ Optimization.printMidIR midir
+  {--       assList = toAsmList irTreeWithST in 
+         optedAssList = Optimization.doAsmOpts configuration assList
+assemble e = do
              actions <- e
              return (actions ++ [theAction $ getAssemblyStr $ optedAssList])
          where theAction = case outputFileName configuration of
@@ -150,4 +152,4 @@ assembleTree configuration input = do
       case debug configuration of
           False -> output
           True -> prependOutput (pPrint irTree) output
-        
+  --}      
