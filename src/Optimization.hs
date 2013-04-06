@@ -499,7 +499,7 @@ instance PrettyPrint Expression where
     ppr (Not e) = text "!" <+> parens (ppr e)
     ppr (Neg e) = text "-" <+> parens (ppr e)
     ppr (Const i) = int i
-    ppr (Str s) = doubleQuotes $ text s
+    ppr (Str s) = text $ show s
     ppr (Loc v) = ppr v
     ppr (FuncCall name ps) = text name <+> prettyParams
         where prettyParams = foldl f lparen ps <+> rparen

@@ -2,13 +2,22 @@ module CFGConcrete where
 
 import qualified Data.Map as M
 import PrettyPrint
+import Data.Set (Set)
+import qualified Data.Set as Set
 import Text.PrettyPrint.HughesPJ
 
 -- Implement control flow graph based off of GHCs own implementation
 -- and the paper "An Applicative Control Flow Graph based on Huet's Zipper"
 
-type BlockLookup m l = M.Map BlockId (Block m l)
 newtype BlockId = BID { getStr :: String } deriving (Show, Eq, Ord)
+
+type BlockSet = Set BlockId
+emptyBlockSet = Set.empty
+insertBlockSet = Set.insert
+singleBlockSet = Set.singleton
+elemBlockSet = Set.member
+
+type BlockLookup m l = M.Map BlockId (Block m l)
 
 -- Wrappers around Data.Map functions for ease of reading
 mapBlocks = M.map
@@ -34,7 +43,13 @@ data ZTail m l = ZLast (ZLast l)
              | ZTail m (ZTail m l) deriving (Show, Eq)
 
 data Block m l = Block { bId :: BlockId,
-                         bTail :: ZTail m l } deriving (Show, Eq)
+                         bTail :: ZTail m l } deriving (Show)
+
+instance Eq (Block m l) where
+    (Block bid1 _) == (Block bid2 _) = bid1 == bid2
+
+instance Ord (Block m l) where
+    (Block bid1 _) `compare` (Block bid2 _) = bid1 `compare` bid2
 
 data ZBlock m l = ZBlock { zbHead :: ZHead m, 
                          zbTail :: ZTail m l } deriving (Show, Eq)
@@ -96,6 +111,12 @@ instance HavingSuccessors l => HavingSuccessors (ZLast l) where
 
 instance HavingSuccessors l => HavingSuccessors (ZTail m l) where
     succs zt = succs $ getZLast zt
+
+instance HavingSuccessors l => HavingSuccessors (Block m l) where
+    succs (Block _ ztail) = succs ztail
+
+instance HavingSuccessors l => HavingSuccessors (ZBlock m l) where
+    succs zb = succs $ zipB zb
 
 instance HavingSuccessors SuccBlocks where
     succs = getSuccBlocks
@@ -190,45 +211,76 @@ graphToLGraph bid (Graph ztail blocks) = case lookupBlock bid blocks of
 
 -- ZGraph Movement
 entry :: LGraph m l -> ZGraph m l -- Focus first edge in entry block
-entry = undefined
+entry lgraph@(LGraph entryId _) = focus entryId lgraph
 
---- Pretty printing of control flow graph structures.. largely stolen from GHC
+-- List blocks in order close to program flow -
+-- Implementation taken from GHC
+postorderDFS :: (LastNode l) => LGraph m l -> [Block m l]
+postorderDFS g@(LGraph _ blockenv) =
+    let ZGraph bid eblock _ = entry g in
+     zipB eblock : postOrderDFSfromExcept blockenv eblock (singleBlockSet bid)
 
-instance (PrettyPrint m, PrettyPrint l) => PrettyPrint (ZTail m l) where
+postOrderDFSfromExcept :: (HavingSuccessors b, LastNode l)
+                          => BlockLookup m l -> b -> BlockSet -> [Block m l]
+
+postOrderDFSfromExcept blocks b visited =
+  vchildren (get_children b) (\acc _visited -> acc) [] visited
+  where
+    -- vnode ::
+    --    Block m l -> ([Block m l] -> BlockSet -> a) -> [Block m l] -> BlockSet -> a
+    vnode block@(Block bid _) cont acc visited =
+        if elemBlockSet bid visited then
+            cont acc visited
+        else
+            let cont' acc visited = cont (block:acc) visited in
+            vchildren (get_children block) cont' acc (insertBlockSet bid visited)
+    vchildren bs cont acc visited =
+        let next children acc visited =
+                case children of []     -> cont acc visited
+                                 (b:bs) -> vnode b (next bs) acc visited
+        in next bs acc visited
+    get_children block = foldl add_id [] (succs block)
+    add_id rst bid = case lookupBlock bid blocks of
+                      Just b -> b : rst
+                      Nothing -> rst
+
+--- Pretty printing of control flow graph structures.. 
+
+instance (PrettyPrint m, PrettyPrint l, LastNode l) => PrettyPrint (ZTail m l) where
     ppr = pprZTail
 
-instance (PrettyPrint l) => PrettyPrint (ZLast l) where
+instance (PrettyPrint l, LastNode l) => PrettyPrint (ZLast l) where
     ppr = pprLast
 
-instance (PrettyPrint m, PrettyPrint l) => PrettyPrint (Graph m l) where
+instance (PrettyPrint m, PrettyPrint l, LastNode l) => PrettyPrint (Graph m l) where
     ppr = pprGraph
 
-instance (PrettyPrint m, PrettyPrint l) => PrettyPrint (LGraph m l) where
+instance (PrettyPrint m, PrettyPrint l, LastNode l) => PrettyPrint (LGraph m l) where
     ppr = pprLGraph
 
-instance (PrettyPrint m, PrettyPrint l) => PrettyPrint (Block m l) where
+instance (PrettyPrint m, PrettyPrint l, LastNode l) => PrettyPrint (Block m l) where
     ppr = pprBlock
 
-instance (PrettyPrint m, PrettyPrint l) => PrettyPrint (ZBlock m l) where
+instance (PrettyPrint m, PrettyPrint l, LastNode l) => PrettyPrint (ZBlock m l) where
     ppr = pprBlock . zipB
 
 instance PrettyPrint BlockId where
     ppr = text . getStr
 
-pprZTail :: (PrettyPrint m, PrettyPrint l) => ZTail m l -> Doc
+pprZTail :: (PrettyPrint m, PrettyPrint l, LastNode l) => ZTail m l -> Doc
 pprZTail (ZTail m t) = ppr m $$ ppr t
 pprZTail (ZLast l) = ppr l
 
-pprLast :: (PrettyPrint l) => ZLast l -> Doc
+pprLast :: (PrettyPrint l, LastNode l) => ZLast l -> Doc
 pprLast LastExit = text "<exit>"
 pprLast (LastOther l) = ppr l
 
-pprBlock :: (PrettyPrint m, PrettyPrint l) => Block m l -> Doc
+pprBlock :: (PrettyPrint m, PrettyPrint l, LastNode l) => Block m l -> Doc
 pprBlock (Block bid tl) = ppr bid <> colon
                                   $$ (nest 3 (ppr tl))
 
 pprGraph (Graph ztail blocks) = vcat $ (ppr ztail) : map ppr (listBlocks blocks)
-pprLGraph (LGraph _ blocks) = vcat $ map ppr (listBlocks blocks)
+pprLGraph lgraph = vcat $ map ppr (postorderDFS lgraph)
 
 -- Test data
 testBlock :: Block Int SuccBlocks
