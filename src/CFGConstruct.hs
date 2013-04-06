@@ -2,6 +2,7 @@ module CFGConstruct where
 
 import Control.Monad
 import PrettyPrint
+import Data.Char
 import CFGConcrete
 import MonadUniqueEnv
 
@@ -102,6 +103,40 @@ labelAGraph :: BlockId -> AGraph m l -> UniqStringEnv (LGraph m l)
 labelAGraph bid (AGraph f) = do
     Graph ztail blocks <- f emptyGraph
     return $ LGraph bid $ insertBlock bid (Block bid ztail) blocks
+
+
+-- Convenience
+ztailFromMiddles :: (PrettyPrint m, PrettyPrint l, LastNode l) =>
+    [m] -> ZLast l -> ZTail m l
+ztailFromMiddles [] zl = ZLast zl
+ztailFromMiddles (m:ms) zl = ZTail m (ztailFromMiddles ms zl)
+
+ztailCollectMiddles :: (PrettyPrint m, PrettyPrint l, LastNode l) =>
+    ZTail m l -> [m]
+ztailCollectMiddles (ZLast _) = []
+ztailCollectMiddles (ZTail m zt) = m : ztailCollectMiddles zt
+
+mapZTailMiddles :: (PrettyPrint l, PrettyPrint m1, PrettyPrint m2, LastNode l) =>
+    (m1 -> [m2]) -> ZTail m1 l -> ZTail m2 l
+mapZTailMiddles f ztail = mapZTail f (\x -> ([], x)) ztail
+
+mapZTail:: (PrettyPrint l1, PrettyPrint l2, PrettyPrint m1, PrettyPrint m2, LastNode l1, LastNode l2) =>
+    (m1 -> [m2]) -> (ZLast l1 -> ([m2], ZLast l2)) -> ZTail m1 l1 -> ZTail m2 l2
+
+mapZTail fm fl ztail = let zl = getZLast ztail
+                           (endMids, zl') = fl zl in
+                              ztailFromMiddles (mappedMiddles ++ endMids) zl'
+    where mappedMiddles = concatMap fm $ ztailCollectMiddles ztail
+
+mapBlock:: (PrettyPrint l1, LastNode l1, PrettyPrint l2, LastNode l2, PrettyPrint m1, PrettyPrint m2) =>
+    (BlockId -> m1 -> [m2]) -> (BlockId -> ZLast l1 -> ([m2], ZLast l2)) -> Block m1 l1 -> Block m2 l2
+mapBlock mf lf (Block bid ztail) = Block bid (mapZTail (mf bid) (lf bid) ztail)
+
+mapLGraphNodes :: (PrettyPrint l1, LastNode l1, PrettyPrint l2, LastNode l2, PrettyPrint m1, PrettyPrint m2) => 
+    (BlockId -> m1 -> [m2]) -> (BlockId -> ZLast l1 -> ([m2], ZLast l2)) -> LGraph m1 l1 -> LGraph m2 l2
+
+mapLGraphNodes mf lf (LGraph entryId blocks) = LGraph entryId blocks'
+    where blocks' = mapBlocks (mapBlock mf lf) blocks
 
 -- Pretty Printing
 

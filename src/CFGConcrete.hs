@@ -11,6 +11,7 @@ type BlockLookup m l = M.Map BlockId (Block m l)
 newtype BlockId = BID { getStr :: String } deriving (Show, Eq, Ord)
 
 -- Wrappers around Data.Map functions for ease of reading
+mapBlocks = M.map
 insertBlock = M.insert
 listBlocks = M.elems
 removeBlock = M.delete
