@@ -3,6 +3,7 @@ module MultiTree where
 import Prelude hiding (mapM)
 import Control.Monad hiding (mapM)
 import Control.Monad.State hiding (mapM)
+import PrettyPrint
 import Data.Maybe 
 import Control.Applicative
 import Data.Monoid(Monoid(..))
@@ -17,9 +18,6 @@ type Forest a = [MultiTree a]
 
 type Context a = [Cxt a]
 newtype FocusedMultiTree a = FMT { extractFMT :: (MultiTree a, Context a) } deriving (Eq)
-
-class PrettyPrint a where
-    pPrint :: a -> String
 
 pPrintTabbed :: (Show a) => MultiTree a -> String
 pPrintTabbed = pPrintTabbed' 0
@@ -62,10 +60,6 @@ instance (Show a) => PrettyPrint (FocusedMultiTree a) where
 
 instance (Show a) => PrettyPrint (MultiTree a) where
     pPrint = drawTree . fmap show
-
-instance (PrettyPrint a) => PrettyPrint (Maybe a) where
-    pPrint Nothing = "Nothing!\n"
-    pPrint (Just a) = pPrint a
 
 singleton :: a -> MultiTree a
 singleton x = MT x []
