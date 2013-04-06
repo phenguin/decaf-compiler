@@ -12,6 +12,7 @@ newtype BlockId = BID { getStr :: String } deriving (Show, Eq, Ord)
 
 -- Wrappers around Data.Map functions for ease of reading
 insertBlock = M.insert
+listBlocks = M.elems
 removeBlock = M.delete
 lookupBlock = M.lookup
 emptyBlockLookup = M.empty
@@ -19,7 +20,7 @@ emptyBlockLookup = M.empty
 newtype SuccBlocks = SuccBlocks { getSuccBlocks :: [BlockId] } deriving (Show, Eq, Ord)
 
 instance PrettyPrint SuccBlocks where
-    ppr (SuccBlocks bs) = vcat $ map ppr bs
+    ppr (SuccBlocks bs) = text "<End Block>" $$ text "Branch Targets:" <+> (hsep $ map ppr bs) $$ text ""
 
 data ZLast l = LastExit | LastOther l deriving (Show, Eq)
 
@@ -57,13 +58,11 @@ class HavingSuccessors l where
     foldSuccs add l z = foldr add z $ succs l
 
 class (HavingSuccessors l) => LastNode l where
-    mkBranchNode :: [BlockId] -> l
-    mkSingleBranchNode :: BlockId -> l
-    isUnconditionalBranch :: l -> Bool
-    mkSingleBranchNode x = mkBranchNode [x]
-    isUnconditionalBranch x = case succs x of
-        [x] -> True
-        _ -> False
+    mkBranchNode :: BlockId -> l
+    isBranchNode :: l -> Bool
+
+instance LastNode SuccBlocks where
+    mkBranchNode x = SuccBlocks [x]
 
 instance HavingBlockId (ZHead m) where
     getBlockId (ZFirst bid) = bid
@@ -222,8 +221,8 @@ pprBlock :: (PrettyPrint m, PrettyPrint l) => Block m l -> Doc
 pprBlock (Block bid tl) = ppr bid <> colon
                                   $$ (nest 3 (ppr tl))
 
-pprGraph = undefined
-pprLGraph = undefined
+pprGraph (Graph ztail blocks) = vcat $ (ppr ztail) : map ppr (listBlocks blocks)
+pprLGraph (LGraph _ blocks) = vcat $ map ppr (listBlocks blocks)
 
 -- Test data
 testBlock :: Block Int SuccBlocks

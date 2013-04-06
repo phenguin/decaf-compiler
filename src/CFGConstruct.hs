@@ -21,8 +21,11 @@ emptyAGraph = AGraph return
 mkLabel :: (LastNode l) => BlockId -> AGraph m l
 mkLabel bid = AGraph f
     where f (Graph ztail blocks) = return $ 
-            Graph (ZLast $ LastOther (mkSingleBranchNode bid))
+            Graph (ZLast $ LastOther (mkBranchNode bid))
                   (insertBlock bid (Block bid ztail) blocks)
+
+mkLabelFromStr :: (LastNode l) => String -> AGraph m l
+mkLabelFromStr = mkLabel . BID
 
 mkMiddle :: m -> AGraph m l
 mkMiddle m = AGraph f
@@ -32,11 +35,33 @@ mkMiddle m = AGraph f
 mkMiddles :: [m] -> AGraph m l
 mkMiddles ms = foldAGraphs $ map mkMiddle ms
 
-mkIfElse = undefined
-mkWhile = undefined
+mkIfElse :: (PrettyPrint m, PrettyPrint l, LastNode l) => 
+    (BlockId -> BlockId -> AGraph m l) -> AGraph m l -> AGraph m l -> AGraph m l
+mkIfElse condBranch tBlk fBlk = 
+    withNewBlockId "endif" $ \endLbl ->
+    withNewBlockId "if_true" $ \trueLbl ->
+    withNewBlockId "if_false" $ \falseLbl ->
+        condBranch trueLbl falseLbl <&>
+        mkLabel trueLbl <&> tBlk <&> mkBranch endLbl <&>
+        mkLabel falseLbl <&> fBlk <&> mkLabel endLbl
+
+mkWhile :: (PrettyPrint m, PrettyPrint l, LastNode l) => 
+    (BlockId -> BlockId -> AGraph m l) -> AGraph m l -> AGraph m l
+mkWhile condBranch body = 
+    withNewBlockId "loop_test" $ \testId ->
+    withNewBlockId "loop_body" $ \bodyId ->
+    withNewBlockId "loop_end" $ \endId ->
+        mkBranch testId <&> mkLabel bodyId <&>
+        body <&> mkLabel testId <&> condBranch bodyId endId <&>
+        mkLabel endId
+
 
 mkLast :: (PrettyPrint m, PrettyPrint l, LastNode l) => l -> AGraph m l
-mkLast = undefined
+mkLast l = AGraph f
+    where f (Graph _ blocks) = return $ Graph (ZLast (LastOther l)) blocks
+
+mkBranch :: (PrettyPrint m, PrettyPrint l, LastNode l) => BlockId -> AGraph m l
+mkBranch bid = mkLast $ mkBranchNode bid
 
 newBlockId :: String -> UniqStringEnv BlockId
 newBlockId s = getUniqString s >>= return . BID
@@ -58,7 +83,16 @@ graphFromAGraph :: AGraph m l -> Graph m l
 graphFromAGraph (AGraph f) = removeUniqEnv $ f emptyGraph
 
 lgraphFromAGraph :: AGraph m l -> LGraph m l
-lgraphFromAGraph = undefined
+lgraphFromAGraph g = removeUniqEnv $ do
+    bid <- newBlockId "Graph starting point"
+    labelAGraph bid g
 
-labelAGraph :: AGraph m l -> LGraph m l
-labelAGraph (AGraph f) = undefined
+labelAGraph :: BlockId -> AGraph m l -> UniqStringEnv (LGraph m l)
+labelAGraph bid (AGraph f) = do
+    Graph ztail blocks <- f emptyGraph
+    return $ LGraph bid $ insertBlock bid (Block bid ztail) blocks
+
+-- Pretty Printing
+
+instance (PrettyPrint m, PrettyPrint l) => PrettyPrint (AGraph m l) where
+    ppr = ppr . lgraphFromAGraph
