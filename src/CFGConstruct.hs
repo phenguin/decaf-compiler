@@ -94,6 +94,10 @@ lgraphFromAGraph g = removeUniqEnv $ do
     bid <- newBlockId "Graph starting point"
     labelAGraph bid g
 
+lgraphFromAGraphBlocks :: BlockId -> AGraph m l -> LGraph m l
+lgraphFromAGraphBlocks bid (AGraph f) = let Graph _ blocks = removeUniqEnv $ f emptyGraph in
+                                            LGraph bid blocks
+
 labelAGraph :: BlockId -> AGraph m l -> UniqStringEnv (LGraph m l)
 labelAGraph bid (AGraph f) = do
     Graph ztail blocks <- f emptyGraph
@@ -102,4 +106,4 @@ labelAGraph bid (AGraph f) = do
 -- Pretty Printing
 
 instance (PrettyPrint m, PrettyPrint l) => PrettyPrint (AGraph m l) where
-    ppr = ppr . lgraphFromAGraph
+    ppr = ppr . lgraphFromAGraphBlocks (BID "main")
