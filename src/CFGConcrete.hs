@@ -16,6 +16,8 @@ listBlocks = M.elems
 removeBlock = M.delete
 lookupBlock = M.lookup
 emptyBlockLookup = M.empty
+mergeBlockLookups :: BlockLookup m l -> BlockLookup m l -> BlockLookup m l
+mergeBlockLookups = (M.union)
 
 newtype SuccBlocks = SuccBlocks { getSuccBlocks :: [BlockId] } deriving (Show, Eq, Ord)
 
@@ -63,6 +65,9 @@ class (HavingSuccessors l) => LastNode l where
 
 instance LastNode SuccBlocks where
     mkBranchNode x = SuccBlocks [x]
+    isBranchNode (SuccBlocks xs) = case xs of
+        [x] -> True
+        _ -> False
 
 instance HavingBlockId (ZHead m) where
     getBlockId (ZFirst bid) = bid

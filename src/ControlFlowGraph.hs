@@ -1,6 +1,7 @@
 module ControlFlowGraph where
 
 import CFGConcrete
+import Debug.Trace
 import Text.PrettyPrint.HughesPJ hiding (Str)
 import PrettyPrint
 import CFGConstruct
@@ -36,30 +37,35 @@ stmtToAGraph (While cond body) =
             mkWhile cbranch (stmtsToAGraph body)
     where cbranch bid1 bid2 = mkLast $ WhileBranch cond bid1 bid2
 
+-- Ignore parameters for now.. perhaps this should be a statement..
+stmtToAGraph (DFun name params body) = 
+    mkMethod name $ stmtsToAGraph body
+
 stmtToAGraph x = mkMiddle x
 
 -- Pretty Printing
 
 instance PrettyPrint Expression where
-    ppr (Sub e1 e2) = parens (ppr e1) <+> text "-" <+> parens (ppr e1)
-    ppr (Mul e1 e2) = parens (ppr e1) <+> text "*" <+> parens (ppr e1)
-    ppr (Div e1 e2) = parens (ppr e1) <+> text "/" <+> parens (ppr e1)
-    ppr (Mod e1 e2) = parens (ppr e1) <+> text "%" <+> parens (ppr e1)
-    ppr (And e1 e2) = parens (ppr e1) <+> text "&&" <+> parens (ppr e1)
-    ppr (Or e1 e2) = parens (ppr e1) <+> text "||" <+> parens (ppr e1)
-    ppr (Eq e1 e2) = parens (ppr e1) <+> text "==" <+> parens (ppr e1)
-    ppr (Lt e1 e2) = parens (ppr e1) <+> text "<" <+> parens (ppr e1)
-    ppr (Gt e1 e2) = parens (ppr e1) <+> text ">" <+> parens (ppr e1)
-    ppr (Le e1 e2) = parens (ppr e1) <+> text "<=" <+> parens (ppr e1)
-    ppr (Ge e1 e2) = parens (ppr e1) <+> text ">=" <+> parens (ppr e1)
-    ppr (Ne e1 e2) = parens (ppr e1) <+> text "!=" <+> parens (ppr e1)
+    ppr (Add e1 e2) = parens (ppr e1) <+> text "+" <+> parens (ppr e2)
+    ppr (Sub e1 e2) = parens (ppr e1) <+> text "-" <+> parens (ppr e2)
+    ppr (Mul e1 e2) = parens (ppr e1) <+> text "*" <+> parens (ppr e2)
+    ppr (Div e1 e2) = parens (ppr e1) <+> text "/" <+> parens (ppr e2)
+    ppr (Mod e1 e2) = parens (ppr e1) <+> text "%" <+> parens (ppr e2)
+    ppr (And e1 e2) = parens (ppr e1) <+> text "&&" <+> parens (ppr e2)
+    ppr (Or e1 e2) = parens (ppr e1) <+> text "||" <+> parens (ppr e2)
+    ppr (Eq e1 e2) = parens (ppr e1) <+> text "==" <+> parens (ppr e2)
+    ppr (Lt e1 e2) = parens (ppr e1) <+> text "<" <+> parens (ppr e2)
+    ppr (Gt e1 e2) = parens (ppr e1) <+> text ">" <+> parens (ppr e2)
+    ppr (Le e1 e2) = parens (ppr e1) <+> text "<=" <+> parens (ppr e2)
+    ppr (Ge e1 e2) = parens (ppr e1) <+> text ">=" <+> parens (ppr e2)
+    ppr (Ne e1 e2) = parens (ppr e1) <+> text "!=" <+> parens (ppr e2)
     ppr (Not e) = text "!" <+> parens (ppr e)
     ppr (Neg e) = text "-" <+> parens (ppr e)
     ppr (Const i) = int i
-    ppr (Str s) = text s
+    ppr (Str s) = doubleQuotes $ text s
     ppr (Loc v) = ppr v
     ppr (FuncCall name ps) = text name <+> prettyParams
-        where prettyParams = foldl f lparen ps
+        where prettyParams = foldl f lparen ps <+> rparen
               f acc p = acc <+> ppr p <> comma
 
 instance PrettyPrint Variable where
@@ -76,10 +82,10 @@ instance PrettyPrint Statement where
     ppr (Set v e) = ppr v <+> text "=" <+> ppr e
     ppr (DVar v e) = ppr v <+> text "=" <+> ppr e
     ppr (Function name ps) = text name <+> prettyParams
-        where prettyParams = foldl f lparen ps
+        where prettyParams = foldl f lparen ps <+> rparen
               f acc p = acc <+> ppr p <> comma
     ppr (Callout name ps) = text name <+> prettyParams
-        where prettyParams = foldl f lparen ps
+        where prettyParams = foldl f lparen ps <+> rparen
               f acc p = acc <+> ppr p <> comma
 
 instance PrettyPrint BranchingStatement where

@@ -55,6 +55,10 @@ mkWhile condBranch body =
         body <&> mkLabel testId <&> condBranch bodyId endId <&>
         mkLabel endId
 
+-- Makes the CFG for a method declaration
+mkMethod :: (PrettyPrint m, PrettyPrint l, LastNode l) =>
+    String -> AGraph m l -> AGraph m l
+mkMethod name methodBody = outOfLine $ mkLabel (BID name) <&> methodBody
 
 mkLast :: (PrettyPrint m, PrettyPrint l, LastNode l) => l -> AGraph m l
 mkLast l = AGraph f
@@ -79,7 +83,7 @@ outOfLine :: (LastNode l, PrettyPrint l, PrettyPrint m) =>
 outOfLine (AGraph f) = AGraph f'
     where f' (Graph ztail' blocks') = do
                 Graph ztail blocks <- f emptyGraph
-                return Graph ztail' (mergeBlockLookups blocks blocks')
+                return $ Graph ztail' (mergeBlockLookups blocks blocks')
 
 -- Converting AGraphs to concrete types
 graphFromAGraph :: AGraph m l -> Graph m l

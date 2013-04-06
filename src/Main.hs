@@ -14,6 +14,7 @@ module Main where
 import Prelude hiding (readFile)
 import qualified Prelude
 
+import ControlFlowGraph (makeCFG)
 import CodeGeneration (getAssemblyStr, toAsmList)
 import Control.Exception (bracket)
 import Control.Monad (forM_, void, liftM)
@@ -140,8 +141,9 @@ assembleTree configuration input = do
   let irTreeWithST = Optimization.doIROpts configuration $ addSymbolTables irTree 
   let midir = Optimization.toMidIR irTreeWithST
   if debug configuration
-	then Right $ Optimization.printMidIR midir
+	then Right $ [pprIO (makeCFG midir)]
 	else Right [return ()]
+
   {--       assList = toAsmList irTreeWithST in 
          optedAssList = Optimization.doAsmOpts configuration assList
 assemble e = do
