@@ -14,11 +14,21 @@ import Data.Set (Set)
 import Optimization 
 import qualified Data.Set as Set
 import qualified Data.Map as M
+import Text.PrettyPrint.HughesPJ
 
 data DataflowResults m l s = DFR (LGraph m l) (M.Map BlockId s) deriving (Eq)
 
 instance (Eq s, Show s) => Show (DataflowResults m l s) where
     show (DFR _ mp) = show mp
+
+instance (PrettyPrint s, PrettyPrint m, PrettyPrint l, LastNode l) => PrettyPrint (DataflowResults m l s) where
+    ppr (DFR lgraph resMap) = foldl f (text "") dfsBlocks
+        where dfsBlocks = postorderDFS lgraph
+              f doc blk@(Block bid _) = case M.lookup bid resMap of
+                  Nothing -> doc $$ ppr blk
+                  Just x -> doc $$ text "" $$
+                            lbrack <+> ppr x <+> rbrack $$
+                            ppr blk
 
 data DFAnalysis m l s = DFAnalysis {
     -- Computes output state of block from input state
@@ -80,8 +90,11 @@ countUpTo n = DFAnalysis trans join 0
 
 type GenSet = M.Map Expression Int
 type KillSet = Set Variable
-type AvailExprState = (GenSet, KillSet)
+newtype AvailExprState = AES { extractAES :: (GenSet, KillSet) } deriving (Eq, Ord, Show)
 
+instance PrettyPrint AvailExprState where
+    ppr (AES (gen, kill)) = text "Gen:" <+> (hsep $ map ppr (M.keys gen)) $$
+                            text "Kill:" <+> (hsep $ map ppr (Set.toList kill))
 
 -- Available expressions analysis
 
@@ -89,7 +102,7 @@ availableExprAnalysis :: (PrettyPrint l, LastNode l) => DFAnalysis Statement l A
 availableExprAnalysis = DFAnalysis availExprTrans availExprJoin availExprInit
 
 stepTrans :: Statement -> AvailExprState -> AvailExprState 
-stepTrans (Set v e) (gen, kill) = (gen', kill')
+stepTrans (Set v e) (AES (gen, kill)) = AES (gen', kill')
     -- temporary for gen
     where gen' = M.union gen (M.fromList $ zip (subexpressions e) [0..])
           kill' = Set.insert v kill
@@ -100,12 +113,12 @@ availExprTrans :: (PrettyPrint l, LastNode l) =>
 availExprTrans block inState = foldl (flip stepTrans) inState $ blockMiddles block
 
 availExprJoin :: AvailExprState -> AvailExprState -> AvailExprState
-availExprJoin (gen, kill) (gen', kill') = (gen'', kill'')
+availExprJoin (AES (gen, kill)) (AES (gen', kill')) = AES (gen'', kill'')
     where gen'' = M.intersection gen gen'
           kill'' = Set.union kill kill'
 
 availExprInit :: AvailExprState
-availExprInit = (M.empty, Set.empty)
+availExprInit = AES (M.empty, Set.empty)
 
 removeKilled :: Variable -> GenSet -> GenSet
 removeKilled var gen = M.filterWithKey (\e _ -> not (killsExpr var e)) gen
