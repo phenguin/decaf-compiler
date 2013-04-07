@@ -257,6 +257,10 @@ predsOfBlock bLookup bid =
   where predIds = M.keys $ fst $ M.partitionWithKey f bLookup
         f _ (Block bid' _) = bid' == bid
 
+blockMiddles :: Block m l -> [m]
+blockMiddles (Block _ (ZLast l)) = []
+blockMiddles (Block bid (ZTail m zt)) = m : blockMiddles (Block bid zt)
+
 --- Pretty printing of control flow graph structures.. 
 
 instance (PrettyPrint m, PrettyPrint l, LastNode l) => PrettyPrint (ZTail m l) where

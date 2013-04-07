@@ -74,7 +74,7 @@ data Statement =  Set Variable Expression
 
 data Variable = Var {symbol::String}
 		| Varray {symbol::String, index::Expression}
-		deriving (Show,Eq) 
+		deriving (Show,Eq, Ord) 
 
 data Expression = Add {x::Expression, y::Expression}
 		| Sub {x::Expression, y::Expression}
@@ -95,7 +95,7 @@ data Expression = Add {x::Expression, y::Expression}
 		| Str String
 		| Loc Variable
 		| FuncCall  {funcName::String, callParams::[Expression]}
-		deriving (Show,Eq) 
+		deriving (Show,Eq, Ord) 
 
 progIR:: SemanticTreeWithSymbols -> Program
 progIR (MT (_,T.Prog,st) block) = Prg $ concat $ map statementIR block

@@ -9,7 +9,9 @@ import CFGConstruct
 import Control.Monad
 import Control.Monad.State
 import Data.Maybe (isJust, fromJust)
+import qualified Data.Set as Set
 import Data.Set (Set)
+import Optimization 
 import qualified Data.Set as Set
 import qualified Data.Map as M
 
@@ -68,10 +70,94 @@ runAnalysis analysis lgraph@(LGraph entryId bLookup) =
         DFR lgraph blockStates
         
 --- Test analysis
-
+--
+-- SHitty test analysis
 countUpTo :: (PrettyPrint m, PrettyPrint l, LastNode l) => Int -> DFAnalysis m l Int
 countUpTo n = DFAnalysis trans join 0
     where trans (Block (BID str) (ZLast _)) s = min (s + 1) n
           trans (Block bid (ZTail _ zt)) s = trans (Block bid zt) $ min (s+1) n
           join s1 s2 = min n $ max s1 s2
+
+type GenSet = M.Map Expression Int
+type KillSet = Set Variable
+type AvailExprState = (GenSet, KillSet)
+
+
+-- Available expressions analysis
+
+availableExprAnalysis :: (PrettyPrint l, LastNode l) => DFAnalysis Statement l AvailExprState
+availableExprAnalysis = DFAnalysis availExprTrans availExprJoin availExprInit
+
+stepTrans :: Statement -> AvailExprState -> AvailExprState 
+stepTrans (Set v e) (gen, kill) = (gen', kill')
+    -- temporary for gen
+    where gen' = M.union gen (M.fromList $ zip (subexpressions e) [0..])
+          kill' = Set.insert v kill
+stepTrans _ s = s
+
+availExprTrans :: (PrettyPrint l, LastNode l) =>
+    Block Statement l -> AvailExprState -> AvailExprState
+availExprTrans block inState = foldl (flip stepTrans) inState $ blockMiddles block
+
+availExprJoin :: AvailExprState -> AvailExprState -> AvailExprState
+availExprJoin (gen, kill) (gen', kill') = (gen'', kill'')
+    where gen'' = M.intersection gen gen'
+          kill'' = Set.union kill kill'
+
+availExprInit :: AvailExprState
+availExprInit = (M.empty, Set.empty)
+
+removeKilled :: Variable -> GenSet -> GenSet
+removeKilled var gen = M.filterWithKey (\e _ -> not (killsExpr var e)) gen
+
+subexpressions :: Expression -> [Expression]
+subexpressions e = case e of
+    expr@(Sub e e') -> expr : concatMap subexpressions [e,e']
+    expr@(Mul e e') -> expr : concatMap subexpressions [e,e']
+    expr@(Div e e') -> expr : concatMap subexpressions [e,e']
+    expr@(Mod e e') -> expr : concatMap subexpressions [e,e']
+    expr@(And e e') -> expr : concatMap subexpressions [e,e']
+    expr@(Or e e') -> expr : concatMap subexpressions [e,e']
+    expr@(Eq e e') -> expr : concatMap subexpressions [e,e']
+    expr@(Lt e e') -> expr : concatMap subexpressions [e,e']
+    expr@(Gt e e') -> expr : concatMap subexpressions [e,e']
+    expr@(Le e e') -> expr : concatMap subexpressions [e,e']
+    expr@(Ge e e') -> expr : concatMap subexpressions [e,e']
+    expr@(Ne e e') -> expr : concatMap subexpressions [e,e']
+    expr@(Not e) -> expr : subexpressions e
+    expr@(Neg e) -> expr : subexpressions e
+    _ -> []
+
+killsExpr :: Variable -> Expression -> Bool
+killsExpr var@(Var s) e = case e of
+        Sub e1 e2 -> killsExpr var e1 || killsExpr var e2
+        Mul e1 e2 -> killsExpr var e1 || killsExpr var e2
+        Div e1 e2 -> killsExpr var e1 || killsExpr var e2
+        Mod e1 e2 -> killsExpr var e1 || killsExpr var e2
+        And e1 e2 -> killsExpr var e1 || killsExpr var e2
+        Or e1 e2  -> killsExpr var e1 || killsExpr var e2
+        Eq e1 e2  -> killsExpr var e1 || killsExpr var e2
+        Lt e1 e2  -> killsExpr var e1 || killsExpr var e2
+        Gt e1 e2  -> killsExpr var e1 || killsExpr var e2
+        Le e1 e2  -> killsExpr var e1 || killsExpr var e2
+        Ge e1 e2  -> killsExpr var e1 || killsExpr var e2
+        Ne e1 e2  -> killsExpr var e1 || killsExpr var e2
+        Loc v -> v == var
+        _ -> False
+
+killsExpr var@(Varray s _) e = case e of
+        Sub e1 e2 -> killsExpr var e1 || killsExpr var e2
+        Mul e1 e2 -> killsExpr var e1 || killsExpr var e2
+        Div e1 e2 -> killsExpr var e1 || killsExpr var e2
+        Mod e1 e2 -> killsExpr var e1 || killsExpr var e2
+        And e1 e2 -> killsExpr var e1 || killsExpr var e2
+        Or e1 e2  -> killsExpr var e1 || killsExpr var e2
+        Eq e1 e2  -> killsExpr var e1 || killsExpr var e2
+        Lt e1 e2  -> killsExpr var e1 || killsExpr var e2
+        Gt e1 e2  -> killsExpr var e1 || killsExpr var e2
+        Le e1 e2  -> killsExpr var e1 || killsExpr var e2
+        Ge e1 e2  -> killsExpr var e1 || killsExpr var e2
+        Ne e1 e2  -> killsExpr var e1 || killsExpr var e2
+        Loc (Varray s' _) -> s == s'
+        _ -> False
 
