@@ -55,4 +55,18 @@ doAnalysis analysis bLookup startStates blocks =
         (res, workSet) = runState partialResult Set.empty
         partialResult = foldM fm startStates $ map getBID blocks
         getBID (Block bid _) = bid
+
+runAnalysis :: (Eq s, PrettyPrint l, PrettyPrint m, LastNode l) => 
+    DFAnalysis m l s -> LGraph m l -> DataflowResults m l s
+
+runAnalysis analysis lgraph@(LGraph entryId bLookup) =
+    let blockStates = doAnalysis analysis bLookup M.empty (postorderDFS lgraph) in
+        DFR lgraph blockStates
         
+--- Test analysis
+
+countUpTo :: (PrettyPrint m, PrettyPrint l, LastNode l) => Int -> DFAnalysis m l Int
+countUpTo n = DFAnalysis trans join 0
+    where trans (Block _ (ZLast _)) s = s + 1
+          trans (Block bid (ZTail _ zt)) s = trans (Block bid zt) (s+1)
+          join s1 s2 = max n (s1 + s2)
