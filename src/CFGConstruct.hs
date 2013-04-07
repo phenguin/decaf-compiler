@@ -140,5 +140,5 @@ mapLGraphNodes mf lf (LGraph entryId blocks) = LGraph entryId blocks'
 
 -- Pretty Printing
 
-instance (PrettyPrint m, PrettyPrint l) => PrettyPrint (AGraph m l) where
+instance (PrettyPrint m, PrettyPrint l, LastNode l) => PrettyPrint (AGraph m l) where
     ppr = ppr . lgraphFromAGraphBlocks (BID "main")
