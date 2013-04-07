@@ -3,6 +3,7 @@ module CFGConcrete where
 import qualified Data.Map as M
 import PrettyPrint
 import Data.Set (Set)
+import Data.Maybe (fromJust, isJust)
 import qualified Data.Set as Set
 import Text.PrettyPrint.HughesPJ
 
@@ -243,6 +244,18 @@ postOrderDFSfromExcept blocks b visited =
     add_id rst bid = case lookupBlock bid blocks of
                       Just b -> b : rst
                       Nothing -> rst
+
+-- Graph querying
+
+-- Get the predecessors of a block with certain blockid in the graph
+predsOfBlock :: BlockLookup m l -> BlockId -> [Block m l]
+predsOfBlock bLookup bid = 
+    map fromJust $
+    filter isJust $ 
+    map ((flip lookupBlock) bLookup) $
+    predIds
+  where predIds = M.keys $ fst $ M.partitionWithKey f bLookup
+        f _ (Block bid' _) = bid' == bid
 
 --- Pretty printing of control flow graph structures.. 
 
