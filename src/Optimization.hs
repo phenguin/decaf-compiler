@@ -67,7 +67,7 @@ data Statement =  Set Variable Expression
 			, parameters::[Variable] 
 			, body::[Statement]
 			}
-		| DVar Variable Expression
+		| DVar Variable 
 		| Callout {calloutName::String, calloutParams::[Expression]}
 		| Function {functionName::String, params::[Expression]}
 		deriving (Show,Eq) 
@@ -102,11 +102,8 @@ progIR (MT (_,T.Prog,st) block) = Prg $ concat $ map statementIR block
 
 statementIR:: SemanticTreeWithSymbols -> [Statement]
 statementIR (MT (_,(T.FD fdType (_,fdId)),st)  forest)= case fdType of
-	T.Single -> [(DVar (Var (T.idString fdId)) val')]
-	(T.Array size) -> [(DVar (Varray (T.idString fdId) (Const size)) val' )] 
-	where val' = case forest of 
-			(x:xs) -> (expressionIR $ head forest)
-			[] -> (Const 0)
+	T.Single -> [(DVar (Var (T.idString fdId)) )]
+	(T.Array size) -> [(DVar (Varray (T.idString fdId) (Const size)) )] 
 statementIR (MT (_,(T.MD (_,iD)),st)  forest)= [DFun (T.idString iD) params body]
 	where 
 	  params = map variableIR $ init forest
@@ -517,7 +514,7 @@ instance PrettyPrint Statement where
     ppr Break = text "break"
     ppr Continue = text "continue"
     ppr (Set v e) = ppr v <+> text "=" <+> ppr e
-    ppr (DVar v e) = ppr v <+> text "=" <+> ppr e
+    ppr (DVar v ) = ppr v
     ppr (Function name ps) = text name <+> prettyParams
         where prettyParams = foldl f lparen ps <+> rparen
               f acc p = acc <+> ppr p <> comma
