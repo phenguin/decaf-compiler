@@ -7,10 +7,12 @@ import Control.Monad
 import qualified Parser
 
 import PrettyPrint
+import CFGConstruct (lgraphFromAGraphBlocks)
+import CFGConcrete (LGraph, BlockId(..))
 import Semantics (SemanticTreeWithSymbols, addSymbolTables)
 import Transforms
-import Optimization (progIR, Program)
-import ControlFlowGraph (ControlFlowGraph, makeCFG)
+import Optimization (progIR, Program, Statement)
+import ControlFlowGraph (ControlFlowGraph, makeCFG, BranchingStatement)
 import DataflowAnalysis
 
 parse :: String -> Either String Parser.Program
@@ -32,8 +34,12 @@ midIRFromFile fp = do
     stWithSymbols <- semanticTreeFromFile fp
     return $ progIR stWithSymbols
 
-cfgFromFile :: FilePath -> Either String ControlFlowGraph
+cfgFromFile :: FilePath -> Either String (LGraph Statement BranchingStatement)
 cfgFromFile fp = do
     midIR <- midIRFromFile fp
-    return $ makeCFG midIR
+    return $ lgraphFromAGraphBlocks (BID "main") (makeCFG midIR)
+
+pPrintE :: (PrettyPrint a) => Either String a -> IO ()
+pPrintE (Left s) = putStrLn s
+pPrintE (Right x) = putStrLn $ pPrint x
 

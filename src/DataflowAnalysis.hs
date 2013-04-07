@@ -1,6 +1,7 @@
 module DataflowAnalysis where
 
 import CFGConcrete
+import Debug.Trace (trace)
 import Data.List (foldl1)
 import Control.Applicative
 import PrettyPrint
@@ -13,6 +14,9 @@ import qualified Data.Set as Set
 import qualified Data.Map as M
 
 data DataflowResults m l s = DFR (LGraph m l) (M.Map BlockId s) deriving (Eq)
+
+instance (Eq s, Show s) => Show (DataflowResults m l s) where
+    show (DFR _ mp) = show mp
 
 data DFAnalysis m l s = DFAnalysis {
     -- Computes output state of block from input state
@@ -67,6 +71,7 @@ runAnalysis analysis lgraph@(LGraph entryId bLookup) =
 
 countUpTo :: (PrettyPrint m, PrettyPrint l, LastNode l) => Int -> DFAnalysis m l Int
 countUpTo n = DFAnalysis trans join 0
-    where trans (Block _ (ZLast _)) s = s + 1
-          trans (Block bid (ZTail _ zt)) s = trans (Block bid zt) (s+1)
-          join s1 s2 = max n (s1 + s2)
+    where trans (Block (BID str) (ZLast _)) s = min (s + 1) n
+          trans (Block bid (ZTail _ zt)) s = trans (Block bid zt) $ min (s+1) n
+          join s1 s2 = min n $ max s1 s2
+
