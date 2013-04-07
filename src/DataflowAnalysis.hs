@@ -38,7 +38,7 @@ data DFAnalysis m l s = DFAnalysis {
     initState :: s
     }
 
-stepAnalysis :: (Eq s, PrettyPrint m, PrettyPrint l, LastNode l) => 
+stepAnalysis :: (Eq s, PrettyPrint m, PrettyPrint l, LastNode l, PrettyPrint s) => 
     DFAnalysis m l s -> BlockLookup m l -> M.Map BlockId s -> BlockId -> State (Set BlockId) (M.Map BlockId s)
 
 stepAnalysis (DFAnalysis trans join initState) bLookup res bid = do
@@ -52,13 +52,13 @@ stepAnalysis (DFAnalysis trans join initState) bLookup res bid = do
         predecessors = predsOfBlock bLookup bid
         predsWithStates = map ((,) <$> id <*> g) predecessors
         oldInState = f bid
-        bInState = foldl join initState $ map (uncurry trans) predsWithStates
+        bInState = foldl join initState $  map (uncurry trans) predsWithStates
     modify (Set.delete bid)
     when (bInState /= oldInState) $ modify (Set.union (Set.fromList $ succs block))
     return $ M.insert bid bInState res
 
 -- Terminates if fixed point for analysis found
-doAnalysis :: (Eq s, PrettyPrint l, PrettyPrint m, LastNode l) => 
+doAnalysis :: (PrettyPrint s, Eq s, PrettyPrint l, PrettyPrint m, LastNode l) => 
     DFAnalysis m l s -> BlockLookup m l -> M.Map BlockId s -> [Block m l] -> M.Map BlockId s
 doAnalysis analysis bLookup startStates blocks =
     case Set.null workSet of
@@ -72,7 +72,7 @@ doAnalysis analysis bLookup startStates blocks =
         partialResult = foldM fm startStates $ map getBID blocks
         getBID (Block bid _) = bid
 
-runAnalysis :: (Eq s, PrettyPrint l, PrettyPrint m, LastNode l) => 
+runAnalysis :: (Eq s, PrettyPrint s, PrettyPrint l, PrettyPrint m, LastNode l) => 
     DFAnalysis m l s -> LGraph m l -> DataflowResults m l s
 
 runAnalysis analysis lgraph@(LGraph entryId bLookup) =
@@ -93,7 +93,7 @@ type KillSet = Set Variable
 newtype AvailExprState = AES { extractAES :: (GenSet, KillSet) } deriving (Eq, Ord, Show)
 
 instance PrettyPrint AvailExprState where
-    ppr (AES (gen, kill)) = text "Gen:" <+> (hsep $ map ppr (M.keys gen)) $$
+    ppr (AES (gen, kill)) = trace ("gen:" ++ pPrint gen) $ text "Gen:" <+> (hsep $ map ppr (M.keys gen)) $$
                             text "Kill:" <+> (hsep $ map ppr (Set.toList kill))
 
 -- Available expressions analysis
@@ -125,6 +125,7 @@ removeKilled var gen = M.filterWithKey (\e _ -> not (killsExpr var e)) gen
 
 subexpressions :: Expression -> [Expression]
 subexpressions e = case e of
+    expr@(Add e e') -> expr : concatMap subexpressions [e,e']
     expr@(Sub e e') -> expr : concatMap subexpressions [e,e']
     expr@(Mul e e') -> expr : concatMap subexpressions [e,e']
     expr@(Div e e') -> expr : concatMap subexpressions [e,e']
