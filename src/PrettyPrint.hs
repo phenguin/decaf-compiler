@@ -22,6 +22,9 @@ instance PrettyPrint Char where
 instance (PrettyPrint a, PrettyPrint b) => PrettyPrint (a,b) where
     ppr (a,b) = lparen <+> ppr a <> comma <+> ppr b  <+> rparen
 
+instance (PrettyPrint a, PrettyPrint b, PrettyPrint c) => PrettyPrint (a,b,c) where
+    ppr (a,b,c) = lparen <+> ppr a <> comma <+> ppr b <> comma <+> ppr c <+> rparen
+
 instance PrettyPrint Int where
     ppr = int
 
@@ -29,7 +32,7 @@ instance (PrettyPrint a) => PrettyPrint [a] where
     ppr xs = lbrack $$ ppr' xs $$ rbrack
        where ppr' [] = text ""
              ppr' (x:xs) = ppr x <> comma $$
-                           ppr xs
+                           ppr' xs
 
 instance (PrettyPrint a, PrettyPrint b) => PrettyPrint (M.Map a b) where
     ppr mp = foldl f (text "") $ M.toList mp

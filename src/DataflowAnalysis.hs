@@ -8,7 +8,7 @@ import PrettyPrint
 import CFGConstruct
 import Control.Monad
 import Control.Monad.State
-import Data.Maybe (isJust, fromJust)
+import Data.Maybe (catMaybes, isJust, fromJust)
 import qualified Data.Set as Set
 import Data.Set (Set)
 import Optimization 
@@ -32,16 +32,21 @@ instance (PrettyPrint s, PrettyPrint m, PrettyPrint l, LastNode l) => PrettyPrin
 
 data DFAnalysis m l s = DFAnalysis {
     -- Computes output state of block from input state
-    transfer_func :: Block m l -> s -> s,
+    -- maybe need to add update state for last node?
+    update_state :: m -> s -> s,
     -- Combines states
     join_func :: s -> s -> s,
     initState :: s
     }
 
+computeTransferFunc :: (PrettyPrint l, LastNode l, PrettyPrint m) =>
+    DFAnalysis m l s -> Block m l -> s -> s
+computeTransferFunc (DFAnalysis update_func _ _) block inState = foldl (flip update_func) inState $ blockMiddles block
+
 stepAnalysis :: (Eq s, PrettyPrint m, PrettyPrint l, LastNode l, PrettyPrint s) => 
     DFAnalysis m l s -> BlockLookup m l -> M.Map BlockId s -> BlockId -> State (Set BlockId) (M.Map BlockId s)
 
-stepAnalysis (DFAnalysis trans join initState) bLookup res bid = do
+stepAnalysis dfa@(DFAnalysis updateF join initState) bLookup res bid = do
     let block = case lookupBlock bid bLookup of
            Nothing -> error "Cant find block"
            Just b -> b
@@ -50,9 +55,17 @@ stepAnalysis (DFAnalysis trans join initState) bLookup res bid = do
            Just x -> x
         g (Block bid _) = f bid
         predecessors = predsOfBlock bLookup bid
+        trans = computeTransferFunc dfa
         predsWithStates = map ((,) <$> id <*> g) predecessors
-        oldInState = f bid
-        bInState = foldl join initState $  map (uncurry trans) predsWithStates
+        predsWithOutStates = map (\(b@(Block leId _), s) -> (b, s, trans b s)) predsWithStates
+
+        bInState = let predStates = map (uncurry trans) predsWithStates in
+                       case predStates of
+                           [] -> initState
+                           xs -> foldl1 join xs
+
+        debugStr = "Computed for " ++ pPrint bid ++ ": " ++ pPrint bInState ++ " from Preds:\n" ++ pPrint predsWithOutStates
+        oldInState = trace debugStr $ f bid
     modify (Set.delete bid)
     when (bInState /= oldInState) $ modify (Set.union (Set.fromList $ succs block))
     return $ M.insert bid bInState res
@@ -64,7 +77,7 @@ doAnalysis analysis bLookup startStates blocks =
     case Set.null workSet of
         True -> res
         False -> doAnalysis analysis bLookup res $ 
-                 map fromJust $ filter isJust $ 
+                 catMaybes $ 
                  map ((flip lookupBlock) bLookup) $
                  (Set.toList workSet)
   where fm = stepAnalysis analysis bLookup
@@ -79,38 +92,27 @@ runAnalysis analysis lgraph@(LGraph entryId bLookup) =
     let blockStates = doAnalysis analysis bLookup M.empty (postorderDFS lgraph) in
         DFR lgraph blockStates
         
---- Test analysis
---
--- SHitty test analysis
-countUpTo :: (PrettyPrint m, PrettyPrint l, LastNode l) => Int -> DFAnalysis m l Int
-countUpTo n = DFAnalysis trans join 0
-    where trans (Block (BID str) (ZLast _)) s = min (s + 1) n
-          trans (Block bid (ZTail _ zt)) s = trans (Block bid zt) $ min (s+1) n
-          join s1 s2 = min n $ max s1 s2
+--- Analysis implementations
 
 type GenSet = M.Map Expression Int
 type KillSet = Set Variable
 newtype AvailExprState = AES { extractAES :: (GenSet, KillSet) } deriving (Eq, Ord, Show)
 
 instance PrettyPrint AvailExprState where
-    ppr (AES (gen, kill)) = trace ("gen:" ++ pPrint gen) $ text "Gen:" <+> (hsep $ map ppr (M.keys gen)) $$
+    ppr (AES (gen, kill)) = text "Gen:" <+> (hsep $ map ppr (M.keys gen)) $$
                             text "Kill:" <+> (hsep $ map ppr (Set.toList kill))
 
 -- Available expressions analysis
 
 availableExprAnalysis :: (PrettyPrint l, LastNode l) => DFAnalysis Statement l AvailExprState
-availableExprAnalysis = DFAnalysis availExprTrans availExprJoin availExprInit
+availableExprAnalysis = DFAnalysis availExprUpdateState availExprJoin availExprInit
 
-stepTrans :: Statement -> AvailExprState -> AvailExprState 
-stepTrans (Set v e) (AES (gen, kill)) = AES (gen', kill')
+availExprUpdateState :: Statement -> AvailExprState -> AvailExprState 
+availExprUpdateState (Set v e) (AES (gen, kill)) = AES (gen', kill')
     -- temporary for gen
     where gen' = M.union gen (M.fromList $ zip (subexpressions e) [0..])
           kill' = Set.insert v kill
-stepTrans _ s = s
-
-availExprTrans :: (PrettyPrint l, LastNode l) =>
-    Block Statement l -> AvailExprState -> AvailExprState
-availExprTrans block inState = foldl (flip stepTrans) inState $ blockMiddles block
+availExprUpdateState _ s = s
 
 availExprJoin :: AvailExprState -> AvailExprState -> AvailExprState
 availExprJoin (AES (gen, kill)) (AES (gen', kill')) = AES (gen'', kill'')
