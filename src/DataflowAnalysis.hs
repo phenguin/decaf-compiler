@@ -50,13 +50,11 @@ stepAnalysis dfa@(DFAnalysis updateF join initState) bLookup res bid = do
     let block = case lookupBlock bid bLookup of
            Nothing -> error "Cant find block"
            Just b -> b
-        f predBid = case M.lookup predBid res of
-           Nothing -> initState
-           Just x -> x
+        f predBid = M.lookup predBid res
         g (Block bid _) = f bid
         predecessors = predsOfBlock bLookup bid
         trans = computeTransferFunc dfa
-        predsWithStates = map ((,) <$> id <*> g) predecessors
+        predsWithStates = zip predecessors (catMaybes $ map g predecessors)
         predsWithOutStates = map (\(b@(Block leId _), s) -> (b, s, trans b s)) predsWithStates
 
         bInState = let predStates = map (uncurry trans) predsWithStates in
@@ -67,7 +65,7 @@ stepAnalysis dfa@(DFAnalysis updateF join initState) bLookup res bid = do
         debugStr = "Computed for " ++ pPrint bid ++ ": " ++ pPrint bInState ++ " from Preds:\n" ++ pPrint predsWithOutStates
         oldInState = trace debugStr $ f bid
     modify (Set.delete bid)
-    when (bInState /= oldInState) $ modify (Set.union (Set.fromList $ succs block))
+    when ((Just bInState) /= oldInState) $ modify (Set.union (Set.fromList $ succs block))
     return $ M.insert bid bInState res
 
 -- Terminates if fixed point for analysis found
