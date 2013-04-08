@@ -12,6 +12,7 @@ import Data.Maybe (catMaybes, isJust, fromJust)
 import qualified Data.Set as Set
 import Data.Set (Set)
 import Optimization 
+import MonadUniqueEnv
 import qualified Data.Set as Set
 import qualified Data.Map as M
 import Text.PrettyPrint.HughesPJ
@@ -91,8 +92,6 @@ runAnalysis analysis lgraph@(LGraph entryId bLookup) =
         
 --- Analysis implementations
 
-type GenSet = M.Map Expression Int
-type KillSet = Set Variable
 type AvailExprState = Set Expression
 
 -- Available expressions analysis
