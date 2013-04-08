@@ -62,8 +62,7 @@ stepAnalysis dfa@(DFAnalysis updateF join initState) bLookup res bid = do
                            [] -> initState
                            xs -> foldl1 join xs
 
-        debugStr = "Computed for " ++ pPrint bid ++ ": " ++ pPrint bInState ++ " from Preds:\n" ++ pPrint predsWithOutStates
-        oldInState = trace debugStr $ f bid
+        oldInState = f bid
     modify (Set.delete bid)
     when ((Just bInState) /= oldInState) $ modify (Set.union (Set.fromList $ succs block))
     return $ M.insert bid bInState res
@@ -103,9 +102,8 @@ availableExprAnalysis = DFAnalysis availExprUpdateState availExprJoin availExprI
 
 availExprUpdateState :: Statement -> AvailExprState -> AvailExprState 
 availExprUpdateState (Set v e) exprs = case v of
-    (Var "i") -> let debugStr = "availExprUpdateState for set i stmt:\n" ++ "v: " ++ pPrint v ++ "\nExprs: " ++ pPrint exprs ++ "\nafter: " ++ pPrint (removeKilled v exprs) in
-                     trace debugStr $ removeKilled v $ Set.union exprs (Set.fromList $ subexpressions e)
-    _ -> removeKilled v $ Set.union exprs (Set.fromList $ subexpressions e)
+    (Var "i") -> removeKilled v $ Set.union exprs (Set.fromList $ subexpressions e)
+    _         -> removeKilled v $ Set.union exprs (Set.fromList $ subexpressions e)
 availExprUpdateState _ s = s
 
 availExprJoin :: AvailExprState -> AvailExprState -> AvailExprState
