@@ -39,7 +39,7 @@ instance (PrettyPrint a) => PrettyPrint [a] where
 instance (PrettyPrint a) => PrettyPrint (Set a) where
     ppr set = let xs = Set.toList set in text "{" <+> ppr' xs <+> text "}"
        where ppr' [] = text ""
-             ppr' (x:xs) = ppr x <> comma $$
+             ppr' (x:xs) = ppr x <> comma <+>
                            ppr' xs
 
 instance (PrettyPrint a, PrettyPrint b) => PrettyPrint (M.Map a b) where

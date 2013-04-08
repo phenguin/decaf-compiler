@@ -96,11 +96,7 @@ runAnalysis analysis lgraph@(LGraph entryId bLookup) =
 
 type GenSet = M.Map Expression Int
 type KillSet = Set Variable
-newtype AvailExprState = AES { extractAES :: (GenSet, KillSet) } deriving (Eq, Ord, Show)
-
-instance PrettyPrint AvailExprState where
-    ppr (AES (gen, kill)) = text "Gen:" <+> (hsep $ map ppr (M.keys gen)) $$
-                            text "Kill:" <+> (hsep $ map ppr (Set.toList kill))
+type AvailExprState = Set Expression
 
 -- Available expressions analysis
 
@@ -108,22 +104,20 @@ availableExprAnalysis :: (PrettyPrint l, LastNode l) => DFAnalysis Statement l A
 availableExprAnalysis = DFAnalysis availExprUpdateState availExprJoin availExprInit
 
 availExprUpdateState :: Statement -> AvailExprState -> AvailExprState 
-availExprUpdateState (Set v e) (AES (gen, kill)) = AES (gen', kill')
-    -- temporary for gen
-    where gen' = M.union gen (M.fromList $ zip (subexpressions e) [0..])
-          kill' = Set.insert v kill
+availExprUpdateState (Set v e) exprs = case v of
+    (Var "i") -> let debugStr = "availExprUpdateState for set i stmt:\n" ++ "v: " ++ pPrint v ++ "\nExprs: " ++ pPrint exprs ++ "\nafter: " ++ pPrint (removeKilled v exprs) in
+                     trace debugStr $ removeKilled v $ Set.union exprs (Set.fromList $ subexpressions e)
+    _ -> removeKilled v $ Set.union exprs (Set.fromList $ subexpressions e)
 availExprUpdateState _ s = s
 
 availExprJoin :: AvailExprState -> AvailExprState -> AvailExprState
-availExprJoin (AES (gen, kill)) (AES (gen', kill')) = AES (gen'', kill'')
-    where gen'' = M.intersection gen gen'
-          kill'' = Set.union kill kill'
+availExprJoin exprs exprs' = Set.intersection exprs exprs'
 
 availExprInit :: AvailExprState
-availExprInit = AES (M.empty, Set.empty)
+availExprInit = Set.empty
 
-removeKilled :: Variable -> GenSet -> GenSet
-removeKilled var gen = M.filterWithKey (\e _ -> not (killsExpr var e)) gen
+removeKilled :: Variable -> Set Expression -> Set Expression
+removeKilled var exprs = Set.filter (\e -> not (killsExpr var e)) exprs
 
 subexpressions :: Expression -> [Expression]
 subexpressions e = case e of
@@ -146,6 +140,7 @@ subexpressions e = case e of
 
 killsExpr :: Variable -> Expression -> Bool
 killsExpr var@(Var s) e = case e of
+        Add e1 e2 -> killsExpr var e1 || killsExpr var e2
         Sub e1 e2 -> killsExpr var e1 || killsExpr var e2
         Mul e1 e2 -> killsExpr var e1 || killsExpr var e2
         Div e1 e2 -> killsExpr var e1 || killsExpr var e2
@@ -162,6 +157,7 @@ killsExpr var@(Var s) e = case e of
         _ -> False
 
 killsExpr var@(Varray s _) e = case e of
+        Add e1 e2 -> killsExpr var e1 || killsExpr var e2
         Sub e1 e2 -> killsExpr var e1 || killsExpr var e2
         Mul e1 e2 -> killsExpr var e1 || killsExpr var e2
         Div e1 e2 -> killsExpr var e1 || killsExpr var e2
