@@ -1,6 +1,7 @@
 module CFGConcrete where
 
 import qualified Data.Map as M
+import Debug.Trace (trace)
 import PrettyPrint
 import Data.Set (Set)
 import Data.Maybe (fromJust, isJust)
@@ -248,14 +249,13 @@ postOrderDFSfromExcept blocks b visited =
 -- Graph querying
 
 -- Get the predecessors of a block with certain blockid in the graph
-predsOfBlock :: BlockLookup m l -> BlockId -> [Block m l]
-predsOfBlock bLookup bid = 
-    map fromJust $
-    filter isJust $ 
-    map ((flip lookupBlock) bLookup) $
-    predIds
-  where predIds = M.keys $ fst $ M.partitionWithKey f bLookup
-        f _ (Block bid' _) = bid' == bid
+predsOfBlock :: (PrettyPrint l, PrettyPrint m, LastNode l) => BlockLookup m l -> BlockId -> [Block m l]
+predsOfBlock bLookup bid = filter (\b -> bid `elem` succs b) allBlocks
+    where allBlocks = M.elems bLookup
+
+blockMiddles :: Block m l -> [m]
+blockMiddles (Block _ (ZLast l)) = []
+blockMiddles (Block bid (ZTail m zt)) = m : blockMiddles (Block bid zt)
 
 --- Pretty printing of control flow graph structures.. 
 
