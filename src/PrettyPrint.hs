@@ -1,6 +1,8 @@
 module PrettyPrint where
 
 import Text.PrettyPrint.HughesPJ
+import Data.Set (Set)
+import qualified Data.Set as Set
 import qualified Data.Map as M
 
 class PrettyPrint a where
@@ -30,6 +32,12 @@ instance PrettyPrint Int where
 
 instance (PrettyPrint a) => PrettyPrint [a] where
     ppr xs = lbrack $$ ppr' xs $$ rbrack
+       where ppr' [] = text ""
+             ppr' (x:xs) = ppr x <> comma $$
+                           ppr' xs
+
+instance (PrettyPrint a) => PrettyPrint (Set a) where
+    ppr set = let xs = Set.toList set in text "{" <+> ppr' xs <+> text "}"
        where ppr' [] = text ""
              ppr' (x:xs) = ppr x <> comma $$
                            ppr' xs
