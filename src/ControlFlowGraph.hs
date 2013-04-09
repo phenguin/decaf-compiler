@@ -37,8 +37,8 @@ stmtToAGraph (While cond body) =
     where cbranch bid1 bid2 = mkLast $ WhileBranch cond bid1 bid2
 
 -- Ignore parameters for now.. perhaps this should be a statement..
-stmtToAGraph (DFun name params body) = 
-    mkMethod name $ stmtsToAGraph body
+stmtToAGraph st@(DFun name params body) = 
+    mkMethod name (mkMiddle st) $ stmtsToAGraph body
 
 stmtToAGraph x = mkMiddle x
 

@@ -14,6 +14,7 @@ import Transforms
 import Optimization (progIR, Program, Statement)
 import ControlFlowGraph (ControlFlowGraph, makeCFG, BranchingStatement)
 import DataflowAnalysis
+import CFGTransforms
 
 parse :: String -> Either String Parser.Program
 parse input = do
