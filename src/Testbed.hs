@@ -12,7 +12,7 @@ import CFGConcrete (LGraph, BlockId(..))
 import Semantics (SemanticTreeWithSymbols, addSymbolTables)
 import Transforms
 import Optimization (progIR, Program, Statement)
-import ControlFlowGraph (ControlFlowGraph, makeCFG, BranchingStatement)
+import ControlFlowGraph (ControlFlowGraph, makeCFG, BranchingStatement, getFunctionParamMap)
 import DataflowAnalysis
 import CFGTransforms
 

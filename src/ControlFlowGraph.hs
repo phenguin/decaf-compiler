@@ -1,6 +1,8 @@
 module ControlFlowGraph where
 
 import CFGConcrete
+import Data.List (sort, groupBy)
+import qualified Data.Map as M
 import Debug.Trace
 import Text.PrettyPrint.HughesPJ hiding (Str)
 import PrettyPrint
@@ -20,6 +22,15 @@ instance LastNode BranchingStatement where
     isBranchNode s = case s of
         Jump _ -> True
         _ -> False
+
+getFunctionParamMap :: LGraph Statement BranchingStatement -> M.Map String [Variable]
+getFunctionParamMap (LGraph _ bLookup) = 
+                              M.fromList $ map mapF $
+                              filter filterF $ 
+                              concatMap blockMiddles (M.elems bLookup)
+    where filterF (DFun _ _ _) = True
+          filterF _ = False
+          mapF (DFun s params _) = (s, params)
 
 makeCFG :: Program -> ControlFlowGraph
 makeCFG (Prg stmts) = stmtsToAGraph stmts
