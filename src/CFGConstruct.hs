@@ -58,8 +58,8 @@ mkWhile condBranch body =
 
 -- Makes the CFG for a method declaration
 mkMethod :: (PrettyPrint m, PrettyPrint l, LastNode l) =>
-    String -> AGraph m l -> AGraph m l
-mkMethod name methodBody = outOfLine $ mkLabel (BID name) <&> methodBody
+    String -> AGraph m l -> AGraph m l -> AGraph m l
+mkMethod name methodDecl methodBody = outOfLine $ mkLabel (BID name) <&> methodDecl <&> methodBody
 
 mkLast :: (PrettyPrint m, PrettyPrint l, LastNode l) => l -> AGraph m l
 mkLast l = AGraph f

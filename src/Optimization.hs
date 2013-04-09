@@ -521,3 +521,4 @@ instance PrettyPrint Statement where
     ppr (Callout name ps) = text name <+> prettyParams
         where prettyParams = foldl f lparen ps <+> rparen
               f acc p = acc <+> ppr p <> comma
+    ppr (DFun name params _) = text "Method Declaration:" <+> text name
