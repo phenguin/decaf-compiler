@@ -70,7 +70,7 @@ data Statement =  Set Variable Expression
 		| DVar Variable 
 		| Callout {calloutName::String, calloutParams::[Expression]}
 		| Function {functionName::String, params::[Expression]}
-		deriving (Show,Eq) 
+		deriving (Show,Eq,Ord) 
 
 data Variable = Var {symbol::String}
 		| Varray {symbol::String, index::Expression}
