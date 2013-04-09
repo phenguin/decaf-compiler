@@ -6,7 +6,6 @@ import Text.PrettyPrint.HughesPJ hiding (Str)
 import PrettyPrint
 import CFGConstruct
 import Optimization
-
 type ControlFlowGraph = AGraph Statement BranchingStatement
 
 data BranchingStatement = Jump BlockId | IfBranch Expression BlockId BlockId | WhileBranch Expression BlockId BlockId -- | Continue | Break ... Not yet done
@@ -45,17 +44,10 @@ stmtToAGraph x = mkMiddle x
 
 -- -- Skeleton code for santiago --- asm conversion
 -- ===================================================
--- type LowCFG :: LGraph ProtoASM [ProtoASM]
--- toLowIRCFG :: ControlFlowGraph -> LowCFG
--- toLowIRCFG cfg = mapLGraphNodes mapStmtToAsm mapBranchToAsm cfgLGraph
---     where cfgLGraph = lgraphFromAGraphBlocks (BID "main")
 
--- -- Converts regular statements to the pseudo-asm code
--- mapStmtToAsm :: Statement -> [ProtoASM]
--- mapStmtToAsm = undefined
-
+-- Converts regular statements to the pseudo-asm code
 -- -- Need newtype because the type needs to be made instance of LastNode
--- newtype BranchSeq = BranchSeq [ProtoASM] deriving (Eq, Ord)
+-- newtype BranchSeq = BranchSeq [ProtoASM] [BlockId] deriving (Eq, Ord)
 
 -- -- converts branching statements to a branch seq of asm ops and 
 -- -- possibly some additional preamble.  probably will want to return
