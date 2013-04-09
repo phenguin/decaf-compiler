@@ -39,9 +39,9 @@ mkMiddles ms = foldAGraphs $ map mkMiddle ms
 mkIfElse :: (PrettyPrint m, PrettyPrint l, LastNode l) => 
     (BlockId -> BlockId -> AGraph m l) -> AGraph m l -> AGraph m l -> AGraph m l
 mkIfElse condBranch tBlk fBlk = 
-    withNewBlockId "endif" $ \endLbl ->
-    withNewBlockId "if_true" $ \trueLbl ->
-    withNewBlockId "if_false" $ \falseLbl ->
+    withNewBlockId ".endif" $ \endLbl ->
+    withNewBlockId ".if_true" $ \trueLbl ->
+    withNewBlockId ".if_false" $ \falseLbl ->
         condBranch trueLbl falseLbl <&>
         mkLabel trueLbl <&> tBlk <&> mkBranch endLbl <&>
         mkLabel falseLbl <&> fBlk <&> mkLabel endLbl
@@ -49,9 +49,9 @@ mkIfElse condBranch tBlk fBlk =
 mkWhile :: (PrettyPrint m, PrettyPrint l, LastNode l) => 
     (BlockId -> BlockId -> AGraph m l) -> AGraph m l -> AGraph m l
 mkWhile condBranch body = 
-    withNewBlockId "loop_test" $ \testId ->
-    withNewBlockId "loop_body" $ \bodyId ->
-    withNewBlockId "loop_end" $ \endId ->
+    withNewBlockId ".loop_test" $ \testId ->
+    withNewBlockId ".loop_body" $ \bodyId ->
+    withNewBlockId ".loop_end" $ \endId ->
         mkBranch testId <&> mkLabel bodyId <&>
         body <&> mkLabel testId <&> condBranch bodyId endId <&>
         mkLabel endId

@@ -12,7 +12,7 @@ import CFGConcrete (LGraph, BlockId(..))
 import Semantics (SemanticTreeWithSymbols, addSymbolTables)
 import Transforms
 import Optimization (progIR, Program, Statement)
-import ControlFlowGraph (ControlFlowGraph, makeCFG, BranchingStatement, getFunctionParamMap)
+import ControlFlowGraph (ControlFlowGraph, makeCFG, BranchingStatement, getFunctionParamMap, lgraphSpanningFunctions)
 import DataflowAnalysis
 import CFGTransforms
 
@@ -38,7 +38,7 @@ midIRFromFile fp = do
 cfgFromFile :: FilePath -> Either String (LGraph Statement BranchingStatement)
 cfgFromFile fp = do
     midIR <- midIRFromFile fp
-    return $ lgraphFromAGraphBlocks (BID "main") (makeCFG midIR)
+    return $ lgraphSpanningFunctions (makeCFG midIR)
 
 pPrintE :: (PrettyPrint a) => Either String a -> IO ()
 pPrintE (Left s) = putStrLn s
