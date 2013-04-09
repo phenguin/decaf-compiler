@@ -14,7 +14,7 @@ module Main where
 import Prelude hiding (readFile)
 import qualified Prelude
 
-import ControlFlowGraph (makeCFG)
+import ControlFlowGraph (makeCFG,getFunctionParamMap)
 import CodeGeneration (getAssemblyStr, toAsmList)
 import Control.Exception (bracket)
 import Control.Monad (forM_, void, liftM)
@@ -25,8 +25,9 @@ import GHC.IO.Handle (hDuplicate)
 import System.Environment (getProgName)
 import qualified System.Exit
 import System.IO (IOMode(..), hClose, hPutStrLn, openFile, stdout, stderr)
+import System.IO.Unsafe
 import Text.Printf (printf)
-import Util (mungeErrorMessage)
+import Util (mungeErrorMessage,putIRTree)
 
 import qualified CLI
 import Configuration (Configuration(outputFileName), CompilerStage(..), OptimizationSpecification(..))
@@ -38,7 +39,11 @@ import qualified Scanner
 import Transforms (convert)
 import PrettyPrint
 import Semantics (addSymbolTables)
-import qualified Optimization (printMidIR,toMidIR,doAsmOpts, doIROpts)
+import Optimization 
+import LowIR
+import RegisterAlloc 
+import CFGConcrete
+import CFGConstruct
 
 ------------------------ Impure code: Fun with ErrorT -------------------------
 
@@ -137,14 +142,18 @@ assembleTree configuration input = do
   -- If errors occurred, bail out.
   mapM_ (mungeErrorMessage configuration . Left) errors
   parseTree <- mungeErrorMessage configuration $ Parser.parse tokens
-  let irTree = convert parseTree
+  let irTree = convert parseTree 
   let irTreeWithST = Optimization.doIROpts configuration $ addSymbolTables irTree 
   let midir = Optimization.toMidIR irTreeWithST
+  let cfg = makeCFG midir
+  let funmap = getFunctionParamMap $lgraphFromAGraph  cfg
+  let lowIRCFG = toLowIRCFG cfg
+  let asm = navigate funmap lowIRCFG
   if debug configuration
-	then Right $ [pprIO (makeCFG midir)]
+	then Right $ [pprIO asm]
 	else Right [return ()]
-
-  {--       assList = toAsmList irTreeWithST in 
+{-
+         assList = toAsmList irTreeWithST in 
          optedAssList = Optimization.doAsmOpts configuration assList
 assemble e = do
              actions <- e

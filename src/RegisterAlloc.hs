@@ -23,14 +23,20 @@ data GlobalTable = GlobalEntry {getName::String}
 data LocalTable = LocalEntry {getScope::String, getSymbol::String} 
 
 
-navigate cfg = unsafePerformIO $ do 
+navigate funmap cfg = unsafePerformIO $ do 
 		let cfg' = focus (lgEntry cfg ) cfg 
 		let navret = navigate' cfg ["main"] $ fgFocus $ cfg' 
 		let bid2scope = nub $ map (\ (b,s, _)-> (b,s)) navret
 		let scope2var = nub $ map (\ (_,s,v)-> (s,v)) navret
-		putStrLn $ show bid2scope
-		putStrLn $ show scope2var	
+		putStrLn $ show $ mappify (M.empty) bid2scope
+		putStrLn $ show $ mappify (M.empty) scope2var
+		putStrLn $ show funmap 
 		return cfg
+	where 	mappify:: (Ord a, Ord k) => (M.Map a [k]) -> [(a,k)]-> (M.Map a [k])
+		mappify mp ((b,s):xs) = mappify (M.alter (addorappend s) b mp) xs 
+		mappify mp [] = mp
+		addorappend s (Just x) = Just $ x ++ [s]
+		addorappend s Nothing = Just $ [s]
 
 
 navigate' c scope zcfg = collectVars c scope zcfg
