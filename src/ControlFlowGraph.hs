@@ -1,21 +1,37 @@
 module ControlFlowGraph where
 
 import CFGConcrete
-import Data.List (sort, groupBy)
+import Data.List (sort, groupBy, isPrefixOf)
 import qualified Data.Map as M
 import Debug.Trace
 import Text.PrettyPrint.HughesPJ hiding (Str)
 import PrettyPrint
 import CFGConstruct
 import Optimization
+import MonadUniqueEnv
+
 type ControlFlowGraph = AGraph Statement BranchingStatement
 
-data BranchingStatement = Jump BlockId | IfBranch Expression BlockId BlockId | WhileBranch Expression BlockId BlockId -- | Continue | Break ... Not yet done
+lgraphSpanningFunctions :: ControlFlowGraph -> LGraph Statement BranchingStatement
+lgraphSpanningFunctions agraph@(AGraph g) = removeUniqEnv $ do
+    bid <- newBlockId "Start"
+    Graph _ oldBlks <- g emptyGraph
+    let allFuncBids = map BID $ filter (not . ("." `isPrefixOf`)) $ map (getStr . bId) $ M.elems oldBlks
+        AGraph f = mkLabel bid <&> mkLast (InitialBranch allFuncBids) <&> agraph
+    Graph _ blocks <- f emptyGraph
+    return $ LGraph bid blocks
+
+data BranchingStatement = Jump BlockId 
+                        | IfBranch Expression BlockId BlockId 
+                        | WhileBranch Expression BlockId BlockId
+                        -- Initialbranch used to ensure all functions are included in the DFS
+                        | InitialBranch [BlockId]-- | Continue | Break ... Not yet done
 
 instance HavingSuccessors BranchingStatement where
     succs (Jump bid) = [bid]
     succs (IfBranch _ bid1 bid2) = [bid1, bid2]
     succs (WhileBranch _ bid1 bid2) = [bid1, bid2]
+    succs (InitialBranch bs) = bs
 
 instance LastNode BranchingStatement where
     mkBranchNode bid = Jump bid
@@ -84,3 +100,4 @@ instance PrettyPrint BranchingStatement where
     ppr (WhileBranch e bid1 bid2) = text "While" <+> parens (ppr e) <+>
                                  text "loop:" <+> ppr bid1 <+>
                                  text "end:" <+> ppr bid2
+    ppr (InitialBranch _) = text "Graph start"
