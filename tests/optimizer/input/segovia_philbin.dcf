@@ -14,22 +14,24 @@ int image[2000000];
 int cols, rows;
 int size;
 void read() {
+  int i;
   pgm_open_for_read("segovia.pgm");
   cols = pgm_get_cols();
   rows = pgm_get_rows();
   size = cols * rows;
   for(i = 0, size) {
-    image[i] = pgm_get_next_pixel()
+    image[i] = pgm_get_next_pixel();
   }
-  pgm_close()
+  pgm_close();
 }
 void write() {
+  int i;
   pgm_open_for_write("segovia_philbin.pgm", cols, rows);
   size = cols * rows;
   for(i = 0, size) {
     pgm_write_next_pixel(image[i]);
   }
-  pgm_close()
+  pgm_close();
 }
 void philbin() {
   int row, col;
@@ -70,9 +72,9 @@ void philbin() {
 }
 void main() {
   read();
-  start_caliper()
+  start_caliper();
   cols = cols/3;
   philbin();
-  end_caliper()
+  end_caliper();
   write();
 }

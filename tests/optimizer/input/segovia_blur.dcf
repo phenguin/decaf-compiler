@@ -34,7 +34,7 @@ void write () {
 void gaussian_blur () {
   int kernel_sum;
   int kernel[7];
-  int r,c;
+  int i,r,c;
   kernel[0] = 4433;
   kernel[1] = 54006;
   kernel[2] = 242036;
