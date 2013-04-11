@@ -50,10 +50,10 @@ data ProtoBranch =  Jump' [ProtoASM] BlockId
 	| While' [ProtoASM] [BlockId]
 	deriving (Show,Eq,Ord)
 
-newtype ProtoASMR12ist = ProtoASMR12ist [ProtoASM]
+newtype ProtoASMList = ProtoASMList [ProtoASM]
 
-instance PrettyPrint ProtoASMR12ist where
-    ppr (ProtoASMR12ist bs) = text "<End Block>" $$ text "Branch Targets:" <+> (hsep $ map ppr bs) $$ text ""
+instance PrettyPrint ProtoASMList where
+    ppr (ProtoASMList bs) = text "<End Block>" $$ text "Branch Targets:" <+> (hsep $ map ppr bs) $$ text ""
 
 
 instance HavingSuccessors ProtoBranch where
@@ -187,13 +187,13 @@ instance PrettyPrint ProtoASM where
 	ppr asm = case asm of 
                 (Sub' x y)       -> binop "SUB" x y
                 (Add' x y)       -> binop "ADD" x y
-                (Mul' x y)       -> binop "MUR12" x y
+                (Mul' x y)       -> binop "MUL" x y
                 (Div' x y)       -> binop "DIV" x y
                 (And' x y)       -> binop "AND" x y
                 (Or' x y)        -> binop "OR" x y
-                (Lt' x y)        -> binop "R12T" x y
+                (Lt' x y)        -> binop "LT" x y
                 (Gt' x y)        -> binop "GT" x y
-                (Le' x y)        -> binop "R12E" x y
+                (Le' x y)        -> binop "LE" x y
                 (Ge' x y)        -> binop "GE" x y
                 (Ne' x y)        -> binop "NE" x y
                 (Eq' x y)        -> binop "EQ" x y
@@ -231,7 +231,7 @@ instance PrettyPrint ProtoBranch where
                                  text "loop:" <+> ppr bid1 <+>
 				 text "end:" <+> ppr bid2 
 
-{--toR12owIR = lowIRProg
+{--toLowIR = lowIRProg
 
 
 lowIRPrg a statements = Prg' (lowIRGlobals DVars):(map lowIRFun DFuns)
