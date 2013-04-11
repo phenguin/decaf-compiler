@@ -32,13 +32,25 @@ navigate funmap cfg = unsafePerformIO $ do
 		putStrLn $ show $ mappify (M.empty) scope2var
 		putStrLn $ show funmap 
 		cfgWithVariableLabels <- return $ mapLGraphNodes (translateWithMap bid2scope) (\_ x -> ([],x)) cfg 
-		strings <- return $ findAllStrings cfgWithVariableLabels
+		strings <- return $ map (\(EvilString x) -> x)$findAllStrings cfgWithVariableLabels
+		putStrLn $ makeDataSection strings $ mappify (M.empty) $ scope2var
 		return $ mapLGraphNodes (replaceStrings) (\_ x -> ([],x)) cfgWithVariableLabels
 	where 	mappify:: (Ord a, Ord k) => (M.Map a [k]) -> [(a,k)]-> (M.Map a [k])
 		mappify mp ((b,s):xs) = mappify (M.alter (addorappend s) b mp) xs 
 		mappify mp [] = mp
 		addorappend s (Just x) = Just $ x ++ [s]
 		addorappend s Nothing = Just $ [s]
+
+
+makeDataSection strings scope2var = ".data\n" ++ variables ++ strings'
+		where
+			variables = concat $ concatMap (\(x,y) -> map (stringifyVars x ) y ) $ M.toList scope2var
+			stringifyVars x y = case y of 
+					(Symbol y') -> "." ++ x ++ "_" ++  y'++": .long 8\n"
+					(Array y' (Literal x')) -> "." ++ x ++ "_" ++ y' ++ concat (replicate x' ".long 8\n") 
+					_ ->"" 
+			strings' = concatMap (\x -> "." ++ (getHashStr x) ++ ": " ++ ".string " ++ (show x) ++ "\n" ) strings
+
 
 replaceStrings bid instruction = fixInstructionInputs fix instruction
 		where 
