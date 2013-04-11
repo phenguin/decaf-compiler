@@ -7,7 +7,7 @@ import Debug.Trace
 import Text.PrettyPrint.HughesPJ hiding (Str)
 import PrettyPrint
 import CFGConstruct
-import Optimization
+import MidIR
 import MonadUniqueEnv
 
 type ControlFlowGraph = AGraph Statement BranchingStatement

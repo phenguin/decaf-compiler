@@ -1,11 +1,11 @@
 module RegisterAlloc where 
 
-import Optimization
+import MidIR
+import Util
 import qualified Data.Map as M
 import ControlFlowGraph
 import CFGConstruct
 import CFGConcrete
-import CodeGeneration 
 import PrettyPrint
 import Text.PrettyPrint.HughesPJ hiding (Str)
 import Debug.Trace
@@ -33,7 +33,6 @@ navigate funmap cfg = unsafePerformIO $ do
 		putStrLn $ show funmap 
 		cfgWithVariableLabels <- return $ mapLGraphNodes (translateWithMap bid2scope) (\_ x -> ([],x)) cfg 
 		strings <- return $ findAllStrings cfgWithVariableLabels
-		make
 		return $ mapLGraphNodes (replaceStrings) (\_ x -> ([],x)) cfgWithVariableLabels
 	where 	mappify:: (Ord a, Ord k) => (M.Map a [k]) -> [(a,k)]-> (M.Map a [k])
 		mappify mp ((b,s):xs) = mappify (M.alter (addorappend s) b mp) xs 

@@ -11,7 +11,7 @@ import Control.Monad.State
 import Data.Maybe (catMaybes, isJust, fromJust)
 import qualified Data.Set as Set
 import Data.Set (Set)
-import Optimization 
+import MidIR 
 import MonadUniqueEnv
 import qualified Data.Set as Set
 import qualified Data.Map as M

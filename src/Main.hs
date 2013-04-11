@@ -15,7 +15,7 @@ import Prelude hiding (readFile)
 import qualified Prelude
 
 import ControlFlowGraph (makeCFG,getFunctionParamMap)
-import CodeGeneration (getAssemblyStr, toAsmList)
+import CodeGeneration 
 import Control.Exception (bracket)
 import Control.Monad (forM_, void, liftM)
 import Control.Monad.Error (ErrorT(..), runErrorT)
@@ -27,6 +27,7 @@ import qualified System.Exit
 import System.IO (IOMode(..), hClose, hPutStrLn, openFile, stdout, stderr)
 import System.IO.Unsafe
 import Text.Printf (printf)
+import MidIR
 import Util (mungeErrorMessage,putIRTree)
 
 import qualified CLI
@@ -143,8 +144,8 @@ assembleTree configuration input = do
   mapM_ (mungeErrorMessage configuration . Left) errors
   parseTree <- mungeErrorMessage configuration $ Parser.parse tokens
   let irTree = convert parseTree 
-  let irTreeWithST = Optimization.doIROpts configuration $ addSymbolTables irTree 
-  let midir = Optimization.toMidIR irTreeWithST
+  let irTreeWithST = addSymbolTables irTree 
+  let midir = MidIR.toMidIR irTreeWithST
   let cfg = makeCFG midir
   let funmap = getFunctionParamMap $lgraphFromAGraph  cfg
   let lowIRCFG = toLowIRCFG cfg
@@ -152,17 +153,4 @@ assembleTree configuration input = do
   if debug configuration
 	then Right $ [pprIO asm]
 	else Right [return ()]
-{-
-         assList = toAsmList irTreeWithST in 
-         optedAssList = Optimization.doAsmOpts configuration assList
-assemble e = do
-             actions <- e
-             return (actions ++ [theAction $ getAssemblyStr $ optedAssList])
-         where theAction = case outputFileName configuration of
-                         Nothing -> putStrLn
-                         Just fp -> writeFile fp
-      output = assemble $ Checks.doChecks Checks.checksList $ irTreeWithST in
-      case debug configuration of
-          False -> output
-          True -> prependOutput (pPrint irTree) output
-  --}      
+      

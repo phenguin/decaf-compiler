@@ -1,6 +1,6 @@
 module LowIR where 
 
-import Optimization
+import MidIR
 import qualified Data.Map 
 import ControlFlowGraph
 import CFGConstruct

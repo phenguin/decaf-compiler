@@ -4,22 +4,75 @@
 module CodeGeneration where
 
 import Transforms
-import MemoryIRTree
 import Control.Monad
-import MultiTree
 import Semantics
 import Data.List
 import Data.Char
-import Data.Hashable (hash, Hashable)
-
-
-getHashStr :: (Hashable a) => a -> String
-getHashStr x = case h < 0 of
-    True -> 'N' : show (abs h)
-    False -> 'P' : show h
-    where h = hash x
+import MultiTree
+import Util
+import RegisterAlloc
 
 data DataSource = M MemLoc | C Int deriving (Eq) --memory location, or constant (immediate value)
+
+data Register = RAX | RBX | RCX | RDX | RSP | RBP | RSI | RDI | R8 | R9 | R10 | R11 | R12 | R13 | R14 | R15 deriving (Eq, Enum)
+-- regs = map show $ [RBP, RSP] ++ [R12 .. R15]
+regs = map show [RBX .. R15]
+
+data MemLoc = Reg Register | EffectiveA Int MemLoc Register | BPOffset Int | Label String deriving (Eq)
+
+instance ValidMemLoc Register where
+    toMemLoc = Reg
+
+class Registerizable a where
+    reg :: Register -> a
+    isReg :: a -> Bool
+    getReg :: a -> Maybe Register
+
+instance Registerizable Register where
+    reg x = x
+    isReg = const True
+    getReg x = Just x 
+
+instance Registerizable MemLoc where
+    reg x = Reg x
+
+    isReg (Reg _) = True
+    isReg _ = False
+
+    getReg (Reg x) = Just x
+    getReg _ = Nothing
+
+instance Show MemLoc where
+	show (Reg r) = map toLower $ (show r)
+	show (BPOffset i) = (show i)++"(%rbp)"
+	show (Label str) = str
+	show (EffectiveA i (Reg r1) r2) = show i ++ "(" ++ show r1 ++ ", " ++ show r2 ++ ", 8)"
+    -- Temporary.. this is kind of shitty.. but we are going to move the label value into r11
+	show (EffectiveA i (Label _) r) = show i ++ "(" ++ show R11 ++ ", " ++ show r ++ ", 8)"
+
+instance Show Register where
+    show RAX = "%rax"
+    show RBX = "%rbx"
+    show RCX = "%rcx"
+    show RDX = "%rdx"
+    show RSP = "%rsp"
+    show RBP = "%rbp"
+    show RSI = "%rsi"
+    show RDI = "%rdi"
+    show R8 = "%r8"
+    show R9 = "%r9"
+    show R10 = "%r10"
+    show R11 = "%r11"
+    show R12 = "%r12"
+    show R13 = "%r13"
+    show R14 = "%r14"
+    show R15 = "%r15"
+
+class ValidMemLoc a where
+    toMemLoc :: a -> MemLoc
+
+instance ValidMemLoc MemLoc where
+    toMemLoc = id
 
 data AsmOp = Mov DataSource MemLoc
          | NegQ Register
@@ -110,57 +163,6 @@ instance Show AsmOp where
          show (Res n) = intercalate "\n" [".long 8"  | x <- [1..4*n] ] 
 	 show (Code str) = str
 
-handler:: IRNode -> (LowIRTree -> [AsmOp])
-handler node = case node of
-            MethodCallL _                ->asmMethodCall
-            AndL _                         ->asmAnd
-            OrL _                          ->asmOr
-            AddL                         ->asmAdd
-            SubL                         ->asmSub
-            MulL                         ->asmMul
-            ModL                         ->asmMod
-            DivL                         ->asmDiv
-            NotL                         ->asmNot
-            NegL                         ->asmNeg
-            AssignPlusL                  ->asmAssignPlus
-            AssignMinusL                 ->asmAssignMinus
-            AssignL                      ->asmAssign
-            NeqlL                        ->asmNeql
-            EqlL                         ->asmEql
-            LtL                          ->asmLt
-            LteL                         ->asmLte
-            GtL                          ->asmGt
-            GteL                         ->asmGte
-            LocL _ _                       ->asmLoc
-            DStrL _                      ->asmDStr
-            DCharL _                     ->asmDChar
-            DIntL _                      ->asmDInt
-            DBoolL _                     ->asmDBool
-            DBlockL                      ->asmDBlock
-            ReturnL                      ->asmReturn
-            BreakL _                       ->asmBreak
-            ContinueL _                    ->asmContinue
-            IfL _ _                          ->asmIf
-            ForL _ _ _                       ->asmFor
-            WhileL _ _                       ->asmWhile
-         --   FDL _ _                      ->asmFD
-         --   CDL _                        ->asmCD
-            PDL _                        ->asmPD
-            MDL _                        ->asmMD
-            ProgL                        ->asmProg
-            _                           -> const []
-
-asmTransform:: LowIRTree -> [AsmOp]
-asmTransform node@(MT stnode _) = [push R10] ++ (handler stnode) node ++ [pop R10]
-
--- Converts the final list of asmops into the correct output
-getAssemblyStr :: [AsmOp] -> String
-getAssemblyStr asmops = concat $ intersperse "\n" $ map show $ asmops
--- Converts to asm list.
-toAsmList::SemanticTreeWithSymbols -> [AsmOp] 
-toAsmList node = asmTransform $ convertToLowIRTree node
-
-
 ----- Assembly generation helper functions
 
 -- Takes a asmop constructor and makes it able to accept a broader range of inputs 
@@ -208,110 +210,9 @@ instance Registerizable DataSource where
     getReg _ = Nothing
 
 
-asmBinOp :: (Registerizable a, Registerizable b) => (a -> b -> AsmOp) -> LowIRTree -> [AsmOp]
-asmBinOp binop node@(MT stnode (t1:t2:ts)) = asmTransform t1 ++ [ld RAX R10] ++ asmTransform t2 ++ [binop (reg R10) (reg RAX)]
-
-asmBinOpFlipArgs :: (Registerizable a, Registerizable b) => (a -> b -> AsmOp) -> LowIRTree -> [AsmOp]
-asmBinOpFlipArgs binop node@(MT stnode (t1:t2:ts)) = asmTransform t2 ++ [ld RAX R10] ++ asmTransform t1 ++ [binop (reg R10) (reg RAX)]
-
 jumpif :: Bool -> String -> [AsmOp]
 jumpif True s = [cmp (1 :: Int) RAX, Je (Label s)]
 jumpif False s = [cmp (0 :: Int) RAX, Je (Label s)]
-
-asmMethodCall :: LowIRTree -> [AsmOp]
-asmMethodCall node@(MT (MethodCallL id) forest) = 
-    [Pushall]
-	++ params 
-	++ (if idString id == "printf" then [ld (0 :: Int) RAX] else []) 
-	++ [Call (Label (idString id))]
-	++ [(Pop (reg RBX)) | x<- [1..((length forest) - 6)]] 
-    ++ [Popall]
-		where 	params =  makeparam forest 0
-			makeparam ((MT (DStrL str) _):xs) i =  
-				flipAfter5 i [param i $ toDataSource (Label ("$." ++ (getHashStr str))) ] (makeparam xs (i+1))
-			makeparam ((MT (DCharL chrtr) _):xs) i = 
-				flipAfter5 i [param i $ toDataSource (C (ord chrtr)) ] (makeparam xs (i+1))
-			makeparam ((MT (DIntL intgr) _):xs) i = 
-				flipAfter5 i [param i $ toDataSource (C intgr) ] (makeparam xs (i+1))
-			makeparam ((MT (DBoolL b) _):xs) i = 
-				flipAfter5 i [param i $ toDataSource (C (if b then 1 else 0))] (makeparam xs (i+1))
---			makeparam ((MT (PDL (_,str) _):xs) i = 
---			 	flipAfter5 i [param i (Mov (Label str) (reg RAX))] (makeparam xs (i+1)
-			makeparam ys i = case ys of 
-                                  (x:xs) -> (asmTransform x) ++ [param i (reg RAX)] ++ makeparam xs (i+1)
-                                  [] -> []
-			flipAfter5 i a b 
-				|i > 5	=(b ++ a)
-				| otherwise  =(a ++ b)
-			param i dtsrc = case i of
-				0 -> (ld dtsrc RDI)
-				1 -> (ld dtsrc RSI)
-				2 -> (ld dtsrc RDX)
-				3 -> (ld dtsrc RCX)
-				4 -> (ld dtsrc R8)
-				5 -> (ld dtsrc R9)
-				otherwise -> (Push dtsrc)
-
-pass :: [LowIRTree] -> [AsmOp]
-pass = concat . (map asmTransform)
-
-asmAnd :: LowIRTree -> [AsmOp]
-asmAnd node@(MT (AndL n) (t1:t2:ts)) = asmTransform t1 
-                                    ++ jumpif False myLabel
-                                    ++ [ld RAX R10] 
-                                    ++ asmTransform t2 
-                                    ++ [AndQ (reg R10) (reg RAX)]
-                                    ++ [Lbl myLabel]
-                where myLabel = ".shortcircuit_" ++ show n
-asmAnd node@(MT _ forest) = pass forest
-
-asmOr :: LowIRTree -> [AsmOp]
-asmOr node@(MT (OrL n) (t1:t2:ts)) = asmTransform t1 
-                                    ++ jumpif True myLabel
-                                    ++ [ld RAX R10] 
-                                    ++ asmTransform t2 
-                                    ++ [OrQ (reg R10) (reg RAX)]
-                                    ++ [Lbl myLabel]
-                where myLabel = ".shortcircuit_" ++ show n
-asmOr node@(MT _ forest) = pass forest
-
-asmAdd:: LowIRTree -> [AsmOp]
-asmAdd = asmBinOp AddQ
-
-asmSub:: LowIRTree -> [AsmOp]
-asmSub = asmBinOpFlipArgs SubQ
-
-asmMul:: LowIRTree -> [AsmOp]
-asmMul = asmBinOp IMul
-
-asmMod:: LowIRTree -> [AsmOp]
-asmMod node@(MT stnode (t1:t2:ts)) = 
-    (asmTransform t2)
-    ++ [ld RAX R10]
-    ++ asmTransform t1
-    ++ [ld (0 :: Int) RDX]
-    ++ [IDiv (toDataSource R10)]
-    ++ [ld RDX RAX]
-
-asmDiv:: LowIRTree -> [AsmOp]
-asmDiv node@(MT stnode (t1:t2:ts)) = 
-    (asmTransform t2)
-    ++ [ld RAX R10]
-    ++ asmTransform t1
-    ++ [ld (0 :: Int) RDX]
-    ++ [IDiv (toDataSource R10)]
-
-asmNot:: LowIRTree -> [AsmOp]
-asmNot node@(MT stnode (x:xs)) = asmTransform x
-                                   ++ [Mov (C 1) (reg R10)]
-                                   ++ [SubQ (reg RAX) (reg R10)]
-                                   ++ [Mov (reg R10) (reg RAX)]
-
-asmNeg:: LowIRTree -> [AsmOp]
-asmNeg node@(MT stnode (x:xs)) = asmTransform x
-                                   ++ [NegQ (reg RAX)]
-
-asmAssignPlus:: LowIRTree -> [AsmOp]
 
 isGlobalAccess :: MemLoc -> Bool
 isGlobalAccess (EffectiveA _ (Label _) _) = True
@@ -324,214 +225,3 @@ checkArraySize n = [cmp (n :: Int) RAX]
                 ++ [cmp (0 :: Int) RAX]
                 ++ [Jl (Label ".err_bound")]
 
-asmAssignPlus node@(MT AssignPlusL ((MT (LocL size ml) (x:xs)):v:vs)) = 
-					(asmTransform v) 
-                    ++ [ld RAX R10]
-                    ++ asmTransform x
-                    ++ checkArraySize size
-                    ++ (if isGlobalAccess ml then [] else [NegQ RAX])
- 					++ [(AddQ (reg RAX) ml)]
-
-asmAssignPlus node@(MT AssignPlusL ((MT (LocL _ ml) _):v:vs)) = 
-					(asmTransform v) 
- 					++ [(AddQ (reg RAX) ml)]
-
-asmAssignMinus:: LowIRTree -> [AsmOp]
-
-asmAssignMinus node@(MT AssignMinusL ((MT (LocL size ml) (x:xs)):v:vs)) = 
- 					(asmTransform v) 
-                    ++ [ld RAX R10]
-                    ++ asmTransform x
-                    ++ checkArraySize size
-                    ++ (if isGlobalAccess ml then [] else [NegQ RAX])
- 					++ [(SubQ (reg RAX) ml )]
-
-asmAssignMinus node@(MT AssignMinusL ((MT (LocL _ ml) _ ):v:vs)) = 
- 					(asmTransform v) 
- 					++ [(SubQ (reg RAX) ml )]
-
-asmAssign:: LowIRTree -> [AsmOp]
-
-asmAssign node@(MT AssignL ((MT (LocL size ml) (x:xs)):v:vs)) = 
- 					(asmTransform v) 
-                    ++ [ld RAX R10]
-                    ++ asmTransform x
-                    ++ checkArraySize size
-                    ++ (if isGlobalAccess ml then [] else [NegQ RAX])
- 					++ [ld R10 ml]
-
-asmAssign node@(MT AssignL ((MT (LocL _ ml) _):v:xs)) = 
- 					(asmTransform v) 
- 					++ [(Mov (reg RAX) ml )]
-
-asmCompareOp :: (Register -> Register -> AsmOp) -> LowIRTree -> [AsmOp]
-asmCompareOp op node@(MT stnode (x:y:xs)) = 	
- 					(asmTransform x) 
- 					++ [(ld RAX R10)] 
- 					++ (asmTransform y) 
- 					++ [cmp RAX R10] 
- 					++ [(Mov (C 0) (reg RAX))] 
- 					++ [(Mov (C 1) (reg R10))] 
- 					++ [(op (reg R10) (reg RAX))]
-
-asmNeql:: LowIRTree -> [AsmOp]
-asmNeql = asmCompareOp CMovne
-
-asmEql:: LowIRTree -> [AsmOp]
-asmEql = asmCompareOp CMove
-
-asmLt:: LowIRTree -> [AsmOp]
-asmLt = asmCompareOp CMovl
-
-asmLte:: LowIRTree -> [AsmOp]
-asmLte = asmCompareOp CMovle
-
-asmGt:: LowIRTree -> [AsmOp] 
-asmGt = asmCompareOp CMovg
-
-asmGte:: LowIRTree -> [AsmOp]
-asmGte = asmCompareOp CMovge
-
--- Partially working.. implement arrays? need to change data types a bit?
--- What are we doing with global variables? -justin
-asmLoc:: LowIRTree -> [AsmOp]
-
-asmLoc node@(MT (LocL size ml) (x:xs)) = 
-             asmTransform x
-             ++ checkArraySize size
-             ++ (if isGlobalAccess ml then [] else [NegQ RAX])
-             ++ [ld ml RAX]
-
-asmLoc node@(MT (LocL _ m) _) = [ld m RAX]
-
-asmLoc node@(MT _ _) = []
-
-asmDStr:: LowIRTree -> [AsmOp]
-asmDStr node@(MT stnode forest) = pass forest
-
-asmDChar:: LowIRTree -> [AsmOp]
-asmDChar node@(MT (DCharL c) forest) = [ld (ord c) RAX]
-asmDChar node@(MT _ forest) = []
-
-asmDInt:: LowIRTree -> [AsmOp]
-asmDInt node@(MT (DIntL i) forest) = [ld i RAX]
-asmDInt node@(MT _ forest) = []
-
-asmDBool:: LowIRTree -> [AsmOp]
-asmDBool node@(MT (DBoolL b) forest) = [ld (C (if b then 1 else 0)) RAX]
-
-asmDBlock:: LowIRTree -> [AsmOp]
-asmDBlock node@(MT stnode forest) = pass forest
-
-asmReturn:: LowIRTree -> [AsmOp]
-asmReturn node@(MT ReturnL forest) = (concat $ map asmTransform forest) ++ [Leave, Ret]
-
-asmBreak:: LowIRTree -> [AsmOp]
-asmBreak node@(MT (BreakL str) _) = [Jmp (Label str)]
-
-asmContinue:: LowIRTree -> [AsmOp]
-asmContinue node@(MT (ContinueL str) _) = [Jmp (Label str)]
-
--- Working
-asmIf:: LowIRTree -> [AsmOp]
-
--- If-else block
-asmIf node@(MT (IfL elsel endl) (conde:thenb:elseb:xs)) = 
-						asmTransform conde
-                        ++ jumpif False elsel
-						++ asmTransform thenb 
-                        ++ [Jmp (Label endl)]
-						++ [Lbl elsel]
-						++ asmTransform elseb
-                        ++ [Lbl endl]
-
--- If block without else
-asmIf node@(MT (IfL _ endl) (conde:thenb:xs)) = 
-						asmTransform conde
-                        ++ jumpif False endl
-						++ asmTransform thenb 
-                        ++ [Lbl endl]
-
--- Not yet working I don't think -justin
-asmFor:: LowIRTree -> [AsmOp]
-asmFor node@(MT (ForL id startl endl) (starte:ende:body:xs)) =
-						asmTransform starte
-                        ++ [ld RAX id]
-						++ asmTransform ende
-						++ [Mov (reg RAX) (reg R13)]
-						++ [Mov (M id) (reg R12)]
-						++ [Lbl startl]
-						++ [Cmp (reg R12) (reg R13)]
-						++ [Jle (Label endl)]
-                        ++ [push R12]
-                        ++ [push R13]
-						++ asmTransform body 
-                        ++ [pop R13]
-                        ++ [pop R12]
-						++ [AddQ (C 1) (reg R12)]
-						++ [Mov (reg R12) (id)]
-						++ [Jmp (Label startl)]
-						++ [Lbl endl]
- 
-
-asmWhile:: LowIRTree -> [AsmOp]
-asmWhile node@(MT (WhileL startl endl) (conde:body:xs)) = 
-						[Lbl startl]
-						++ asmTransform conde
-						++ jumpif False endl
-						++ asmTransform body
-						++ [Jmp (Label startl)] 
-						++ [Lbl endl]
-
-countFieldDecs :: LowIRTree -> Int
-countFieldDecs node@(MT _ forest) = sum $ map convertFD $ concat $ map listify forest
-    where convertFD (FDL Single _) = 1
-          convertFD (FDL (Array n) _) = n
-          convertFD _ = 0
-
-
-asmMD:: LowIRTree -> [AsmOp]
-asmMD node@(MT (MDL (leType,id)) forest) = [Lbl (idString id), Enter ((countFieldDecs node) * 8)] 
-                                      ++ (concat (map asmTransform forest )) 
-                                      ++ [Leave]
-                                      ++ if leType /= VoidType then [Jmp (Label ".err_methodrunoff")] else []
-                                      ++ [Ret]
-
-asmPD:: LowIRTree -> [AsmOp]
-asmPD node@(MT _ forest) = pass forest
-
---- Store string constants in data section at the end of the program
-asmProg:: LowIRTree -> [AsmOp]
-asmProg node@(MT _ forest) = concat $ ( 
-			(map asmTransform forest) 
-			++ [[Lbl ".err_bound"]] 
-			++ [[Enter 0]]
-			++ [[Mov (M (Label $ "$."++(getHashStr "Bounds Error!\n"))) (reg RDI)]]
-			++ [[Mov (C 0) (reg RAX)]]
-			++ [[(Call (Label "printf"))]]
-			++ [[Mov (C (-1)) (reg RDI)]]
-			++ [[(Call (Label "exit"))]]
-			++ [[Lbl ".err_methodrunoff"]] 
-			++ [[Enter 0]]
-			++ [[Mov (M (Label $ "$."++(getHashStr "Runoff Error!\n"))) (reg RDI)]]
-			++ [[Mov (C 0) (reg RAX)]]
-			++ [[(Call (Label "printf"))]]
-			++ [[Mov (C (-2)) (reg RDI)]]
-			++ [[(Call (Label "exit"))]]
-			++ (makeLabels dstrs) 
-			++ ([Data]:(map makeDatum globals)))
-     where f (DStrL s) = [s]
-           f _ = []
-           getDStrs = concat . (map f)
-           dstrs = nub $ getDStrs (listify node)
-           g s = [Lbl $ '.' : getHashStr s, AsmString s]
-           makeLabels x = (map g x) ++ [g "Bounds Error!\n"] ++ [g "Runoff Error!\n"]
-	   h (MT (FDL t (_,id)) _) = [(t,id)]
-           h _ = []
-	   globals = concat $ map h forest
-	   makeDatum ((Array n),id) = [(Lbl $ ".global_" ++ idString id)]
-					++ [Res n]
-	   makeDatum (_,id) =  [(Lbl $ ".global_" ++ idString id)]
-					++ [Res 1]
-
-		

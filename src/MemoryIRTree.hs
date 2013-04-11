@@ -7,69 +7,11 @@ import Transforms
 import Data.Map as M hiding (map, foldl, filter, singleton)
 import Data.IORef
 import System.IO.Unsafe
+import RegisterAlloc
 
 type LowIRTree = MultiTree IRNode
 type VarBindings = M.Map String MemLoc
 
-data Register = RAX | RBX | RCX | RDX | RSP | RBP | RSI | RDI | R8 | R9 | R10 | R11 | R12 | R13 | R14 | R15 deriving (Eq, Enum)
--- regs = map show $ [RBP, RSP] ++ [R12 .. R15]
-regs = map show [RBX .. R15]
-
-data MemLoc = Reg Register | EffectiveA Int MemLoc Register | BPOffset Int | Label String deriving (Eq)
-
-instance ValidMemLoc Register where
-    toMemLoc = Reg
-
-class Registerizable a where
-    reg :: Register -> a
-    isReg :: a -> Bool
-    getReg :: a -> Maybe Register
-
-instance Registerizable Register where
-    reg x = x
-    isReg = const True
-    getReg x = Just x 
-
-instance Registerizable MemLoc where
-    reg x = Reg x
-
-    isReg (Reg _) = True
-    isReg _ = False
-
-    getReg (Reg x) = Just x
-    getReg _ = Nothing
-
-instance Show MemLoc where
-	show (Reg r) = map toLower $ (show r)
-	show (BPOffset i) = (show i)++"(%rbp)"
-	show (Label str) = str
-	show (EffectiveA i (Reg r1) r2) = show i ++ "(" ++ show r1 ++ ", " ++ show r2 ++ ", 8)"
-    -- Temporary.. this is kind of shitty.. but we are going to move the label value into r11
-	show (EffectiveA i (Label _) r) = show i ++ "(" ++ show R11 ++ ", " ++ show r ++ ", 8)"
-
-instance Show Register where
-    show RAX = "%rax"
-    show RBX = "%rbx"
-    show RCX = "%rcx"
-    show RDX = "%rdx"
-    show RSP = "%rsp"
-    show RBP = "%rbp"
-    show RSI = "%rsi"
-    show RDI = "%rdi"
-    show R8 = "%r8"
-    show R9 = "%r9"
-    show R10 = "%r10"
-    show R11 = "%r11"
-    show R12 = "%r12"
-    show R13 = "%r13"
-    show R14 = "%r14"
-    show R15 = "%r15"
-
-class ValidMemLoc a where
-    toMemLoc :: a -> MemLoc
-
-instance ValidMemLoc MemLoc where
-    toMemLoc = id
 
 data IRNode = ProgL
             | MethodCallL Id

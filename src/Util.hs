@@ -3,6 +3,7 @@ module Util where
 import System.IO.Unsafe (unsafePerformIO)
 
 import Transforms (SemanticTree, convert)
+import Data.Hashable (Hashable, hash)
 import MultiTree (pPrintTabbed)
 import PrettyPrint
 import qualified Parser
@@ -48,4 +49,10 @@ putIRTreeTabbed = putStrLn . prettyIRTree pPrintTabbed
 
 putIRTree :: FilePath -> IO ()
 putIRTree = putStrLn . prettyIRTree pPrint
+
+getHashStr :: (Hashable a) => a -> String
+getHashStr x = case h < 0 of
+    True -> 'N' : show (abs h)
+    False -> 'P' : show h
+    where h = hash x
 
