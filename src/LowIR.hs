@@ -35,9 +35,19 @@ data ProtoASM = Dec' Value
 	| Str' Value
 	| Cmp' Value Value
 	| Je' BlockId
-	| Jmp' BlockId
 	| Pop' Value
 	| Push' Value
+    | CMove' Value Value 
+    | CMovne' Value Value 
+    | CMovg' Value Value 
+    | CMovl' Value Value 
+    | CMovge' Value Value 
+    | CMovle' Value Value 
+    | Jmp' BlockId
+    | Jle' BlockId
+    | Jl' BlockId
+    | Jge' BlockId
+    | Jne' BlockId
 	deriving (Show,Eq,Ord)
 saveFrame = [RBX, RSP, RBP, R12,R13,R14,R15] 
 save::[ProtoASM]
@@ -45,7 +55,7 @@ save	= map Push' saveFrame
 restore::[ProtoASM]
 restore = map Pop' (reverse saveFrame)
 
-data ProtoBranch =  Jump' [ProtoASM] BlockId
+data ProtoBranch =  Jump' BlockId
 	| If' [ProtoASM] [BlockId]
 	| While' [ProtoASM] [BlockId]
 	deriving (Show,Eq,Ord)
@@ -58,14 +68,14 @@ instance PrettyPrint ProtoASMList where
 
 instance HavingSuccessors ProtoBranch where
 	succs x = case x of
-		(Jump' _ b1) 	-> [b1]
+		(Jump' b1) 	-> [b1]
 		(If' _ x) 	-> x
 		(While' _ x)    -> x
 
 instance LastNode ProtoBranch where
-	mkBranchNode bid = Jump' [Jmp' bid]  bid
+	mkBranchNode bid = Jump' bid
 	isBranchNode s = case s of
-		Jump' _ _ 	-> True
+		Jump' _ 	-> True
 		If' _ _ -> True
 		While' _ _ -> True
 		_ 	-> False
@@ -177,7 +187,7 @@ mapBranchToAsm :: BlockId-> ZLast BranchingStatement -> ([ProtoASM], ZLast Proto
 mapBranchToAsm bid (LastOther (IfBranch expr bid1 bid2))  
 	= ([], LastOther $ If' (expressed++[(Cmp' R12 (Literal 0)),(Je' bid2)]) [bid1, bid2])
 	where expressed = mapExprToAsm expr
-mapBranchToAsm bid (LastOther (Jump bid1))  = ([], LastOther $ Jump' [Jmp' bid1] bid1)
+mapBranchToAsm bid (LastOther (Jump bid1))  = ([], LastOther $ Jump' bid1)
 mapBranchToAsm bid (LastOther (WhileBranch expr bid1 bid2))  
 	= ([], LastOther $ While' (expressed++[(Cmp' R12 (Literal 0)),(Je' bid2)]) [bid1, bid2])
 	where expressed = mapExprToAsm expr
@@ -185,27 +195,27 @@ mapBranchToAsm bid (LastExit) = ([],LastExit)
 -- Pretty Printing
 instance PrettyPrint ProtoASM where
 	ppr asm = case asm of 
-                (Sub' x y)       -> binop "SUB" x y
-                (Add' x y)       -> binop "ADD" x y
-                (Mul' x y)       -> binop "MUL" x y
-                (Div' x y)       -> binop "DIV" x y
-                (And' x y)       -> binop "AND" x y
-                (Or' x y)        -> binop "OR" x y
-                (Lt' x y)        -> binop "LT" x y
-                (Gt' x y)        -> binop "GT" x y
-                (Le' x y)        -> binop "LE" x y
-                (Ge' x y)        -> binop "GE" x y
-                (Ne' x y)        -> binop "NE" x y
-                (Eq' x y)        -> binop "EQ" x y
-                (Not' x )        -> uniop "NOT" x
-                (Neg' x)         -> uniop "NEG" x
-                (Mov' x y)	 -> binop "MOV" x y
-                (Cmp' x y)	 -> binop "CMP" x y
-                (Je' x)	 	 -> uniop "JE" x 
-                (Push' x) 	 -> uniop "PUSH" x 
-                (Pop' x) 	 -> uniop "POP" x 
-                (Call' x) 	 -> text ("CALL "++x)
-                (Dec' x) 	 -> uniop "DEC" x 
+                (Sub' x y)       -> binop "sub" x y
+                (Add' x y)       -> binop "add" x y
+                (Mul' x y)       -> binop "mul" x y
+                (Div' x y)       -> binop "div" x y
+                (And' x y)       -> binop "and" x y
+                (Or' x y)        -> binop "or" x y
+                (Lt' x y)        -> binop "lt" x y
+                (Gt' x y)        -> binop "gt" x y
+                (Le' x y)        -> binop "le" x y
+                (Ge' x y)        -> binop "ge" x y
+                (Ne' x y)        -> binop "ne" x y
+                (Eq' x y)        -> binop "eq" x y
+                (Not' x )        -> uniop "not" x
+                (Neg' x)         -> uniop "neg" x
+                (Mov' x y)	 -> binop "mov" x y
+                (Cmp' x y)	 -> binop "cmp" x y
+                (Je' x)	 	 -> uniop "je" x 
+                (Push' x) 	 -> uniop "push" x 
+                (Pop' x) 	 -> uniop "pop" x 
+                (Call' x) 	 -> text ("call "++x)
+                (Dec' x) 	 -> uniop "dec" x 
 		_ 		 -> Debug.Trace.trace ("!ppr!!!" ++ (show asm)) (text "@@")
 	  where 
   	    binop name x y = text (name++" ") <+> (ppr x) <+> text"," <+> (ppr y) 
@@ -213,17 +223,31 @@ instance PrettyPrint ProtoASM where
 
 instance PrettyPrint Value where
 	ppr x = case x of 
-		(Symbol str) 		-> text str 
-		(Array str i) 		-> text (str ++ "[") <+> ppr i <+> text "]"
-		(Literal i)		-> text $ show i
-		(EvilString str) 	-> text $ show str
-		(R12) 			-> text "R12"
-		(R13)			-> text "R13"
-		_ 			-> text (show x)
+            (Symbol str) 		-> text str 
+            (Array str i) 		-> text (str ++ "[") <+> ppr i <+> text "]"
+            (Literal i)		-> text $ show i
+            (EvilString str) 	-> text $ show str
+            RAX -> text "%rax"
+            RBX -> text "%rbx"
+            RCX -> text "%rcx"
+            RDX -> text "%rdx"
+            RSP -> text "%rsp"
+            RBP -> text "%rbp"
+            RSI -> text "%rsi"
+            RDI -> text "%rdi"
+            R8 ->  text "%r8"
+            R9 ->  text "%r9"
+            R10 -> text "%r10"
+            R11 -> text "%r11"
+            R12 -> text "%r12"
+            R13 -> text "%r13"
+            R14 -> text "%r14"
+            R15 -> text "%r15"
+            _ 			-> text (show x)
 
 
 instance PrettyPrint ProtoBranch where
-    ppr (Jump' _ bid) = text "Jump" <+> ppr bid
+    ppr (Jump' bid) = text "Jump" <+> ppr bid
     ppr (If' e [bid1, bid2]) = text "If" <+> parens (hsep $ map ppr  e) <+>
                                  text "then:" <+> ppr bid1 <+>
                                  text "else:" <+> ppr bid2

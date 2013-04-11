@@ -65,6 +65,12 @@ translateWithMap bid2scope bid instr = fixInstructionInputs fix instr
 			fix x = x
 			scope =  (fromJust $ lookup bid bid2scope)
 
+translateLastWithMap bid2scope bid (LastOther (If' stmts bids)) = 
+    ([], LastOther $ If' (concatMap (translateWithMap bid2scope bid) stmts) bids)
+translateLastWithMap bid2scope bid (LastOther (While' stmts bids)) = 
+    ([], LastOther $ While' (concatMap (translateWithMap bid2scope bid) stmts) bids)
+translateLastWithMap bid2scope bid lastStmt = ([], lastStmt)
+
 
 fixInstructionInputs fix instr = [output]
 		where
@@ -151,7 +157,7 @@ values instr = case instr of
 zipThroughB :: LGraph t ProtoBranch -> ZBlock t ProtoBranch -> [(BlockId, t)]
 zipThroughB  c b = case zbTail b of 
 		(ZTail m _) -> ((getBlockId b),m):(zipThroughB c (nextEdge b))
-		(ZLast (LastOther (Jump' _ bs) ))->  zipThroughB c $ fromJust $ getBlock c bs 
+		(ZLast (LastOther (Jump' bs) ))->  zipThroughB c $ fromJust $ getBlock c bs 
 		(ZLast (LastOther (If' _ (b1:b2:_)) ))-> (zipThroughB c $fromJust $getBlock c b2 ) ++ (map (\x -> (b1,x)) $zipThroughB' $ fgFocus $ focus b1 c)
 		(ZLast (LastOther (While' _ (b1:b2:_)) ))-> (zipThroughB c $ fromJust$ getBlock c b2) ++ (map (\x -> (b1,x))$zipThroughB' $fgFocus $ focus b1 c)
 		_ -> []
