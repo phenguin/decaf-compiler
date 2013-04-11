@@ -23,6 +23,7 @@ data GlobalTable = GlobalEntry {getName::String}
 data LocalTable = LocalEntry {getScope::String, getSymbol::String} 
 
 
+navigate :: (Show a) => a -> LGraph ProtoASM ProtoBranch -> LGraph ProtoASM ProtoBranch
 navigate funmap cfg = unsafePerformIO $ do 
 		let cfg' = focus (lgEntry cfg ) cfg 
 		let navret = navigate' cfg ["main"] $ fgFocus $ cfg' 
@@ -39,14 +40,17 @@ navigate funmap cfg = unsafePerformIO $ do
 		addorappend s Nothing = Just $ [s]
 
 
+navigate' :: LGraph ProtoASM ProtoBranch -> [String] -> ZBlock ProtoASM ProtoBranch -> [(BlockId, String, Value)]
 navigate' c scope zcfg = collectVars c scope zcfg
 	
 --vars ++ map navigateFunction collectFunctionCalls
+getBlock :: LGraph m l -> BlockId -> Maybe (ZBlock m l)
 getBlock (LGraph eid blocks) blockid =  case lookupBlock blockid blocks of
 	 Nothing -> Nothing
 	 (Just blk) -> Just $ fgFocus $ ZGraph eid (unzipB blk) (removeBlock blockid blocks)
 
 
+collectVars :: LGraph ProtoASM ProtoBranch -> [String] -> ZBlock ProtoASM ProtoBranch -> [(BlockId, String, Value)]
 collectVars c scope zcfg = scopeVars ++ functionVars
 	where   	
 		scopeVars = map (\(bd,x)-> (bd,(head scope),x))$ filter isVar $concatMap values' $ middles
@@ -60,8 +64,10 @@ collectVars c scope zcfg = scopeVars ++ functionVars
 		isVar _ = False
 		middles = zipThroughB c zcfg 
 
+values' :: (t, ProtoASM) -> [(t, Value)]
 values' (bid, instr) = map (\x-> (bid, x)) (values instr)
 
+values :: ProtoASM -> [Value]
 values instr = case instr of
 		(Dec' v)	->	[v]
 		(Mov' v1 v2)	->	[v1,v2]
@@ -88,17 +94,21 @@ values instr = case instr of
 		(Push' v)	->	[v]
 		(Pop' v)	->	[v]
 
+zipThroughB :: LGraph t ProtoBranch -> ZBlock t ProtoBranch -> [(BlockId, t)]
 zipThroughB  c b = case zbTail b of 
 		(ZTail m _) -> ((getBlockId b),m):(zipThroughB c (nextEdge b))
 		(ZLast (LastOther (Jump' _ bs) ))->  zipThroughB c $ fromJust $ getBlock c bs 
 		(ZLast (LastOther (If' _ (b1:b2:_)) ))-> (zipThroughB c $fromJust $getBlock c b2 ) ++ (map (\x -> (b1,x)) $zipThroughB' $ fgFocus $ focus b1 c)
 		(ZLast (LastOther (While' _ (b1:b2:_)) ))-> (zipThroughB c $ fromJust$ getBlock c b2) ++ (map (\x -> (b1,x))$zipThroughB' $fgFocus $ focus b1 c)
 		_ -> []
+        --
 -- A version that doesn't jump to other blocks
+zipThroughB' :: ZBlock a l -> [a]
 zipThroughB' b = case zbTail b of 
 		(ZTail m _) -> m:(zipThroughB' (nextEdge b))
 		_ -> []
 
+lowIRtoAsm :: (Show l, PrettyPrint l, LastNode l) => LGraph ProtoASM l -> IO (LGraph ProtoASM l)
 lowIRtoAsm lowir = do
 	let zcfg = focus (lgEntry lowir) lowir
 	let strSt = M.empty
@@ -111,6 +121,7 @@ lowIRtoAsm lowir = do
 
 
 
+graftBlocks :: (PrettyPrint l, LastNode l) => LGraph ProtoASM l -> LGraph ProtoASM l
 graftBlocks cfg = mapLGraphNodes ( values ) (\ _ x -> ([],x)) cfg
 	where	values ids instr = [instr']
 				where instr' = case instr of
@@ -145,6 +156,7 @@ graftBlocks cfg = mapLGraphNodes ( values ) (\ _ x -> ([],x)) cfg
 	        isString _ 		  = False 
 
 
+findAllStrings :: LastNode l => ZGraph ProtoASM l -> [Value]
 findAllStrings zcfg = do 
 		let blocks = postorderDFS $ unfocus zcfg
 		concat $ harvestStrings blocks
@@ -156,13 +168,9 @@ findAllStrings zcfg = do
 	        isString _ 		  = False
 
 
-
-
-
-
-
 -- ///navigate state fm fl zcfg = do
 
+navBlock :: (Show l, Show m) => ZBlock m l -> IO ()
 navBlock zcfg = do
 		putStrLn $ show (lastEdge zcfg)
 {--

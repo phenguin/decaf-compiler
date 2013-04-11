@@ -203,7 +203,7 @@ instance PrettyPrint ProtoASM where
                 (Cmp' x y)	 -> binop "CMP" x y
                 (Je' x)	 	 -> uniop "JE" x 
                 (Push' x) 	 -> uniop "PUSH" x 
-                (Pop' x) 	 -> uniop "PO" x 
+                (Pop' x) 	 -> uniop "POP" x 
                 (Call' x) 	 -> text ("CALL "++x)
                 (Dec' x) 	 -> uniop "DEC" x 
 		_ 		 -> Debug.Trace.trace ("!ppr!!!" ++ (show asm)) (text "@@")
