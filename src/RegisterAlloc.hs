@@ -22,7 +22,6 @@ type StringState = M.Map String String
 data GlobalTable = GlobalEntry {getName::String} 
 data LocalTable = LocalEntry {getScope::String, getSymbol::String} 
 
-
 navigate :: (Show a) => a -> LGraph ProtoASM ProtoBranch -> LGraph ProtoASM ProtoBranch
 navigate funmap cfg = unsafePerformIO $ do 
 		let cfg' = focus (lgEntry cfg ) cfg 
@@ -32,12 +31,57 @@ navigate funmap cfg = unsafePerformIO $ do
 		putStrLn $ show $ mappify (M.empty) bid2scope
 		putStrLn $ show $ mappify (M.empty) scope2var
 		putStrLn $ show funmap 
-		return cfg
+		cfgWithVariableLabels <- return $ mapLGraphNodes (translateWithMap bid2scope) (\_ x -> ([],x)) cfg 
+		strings <- return $ findAllStrings cfgWithVariableLabels
+		make
+		return $ mapLGraphNodes (replaceStrings) (\_ x -> ([],x)) cfgWithVariableLabels
 	where 	mappify:: (Ord a, Ord k) => (M.Map a [k]) -> [(a,k)]-> (M.Map a [k])
 		mappify mp ((b,s):xs) = mappify (M.alter (addorappend s) b mp) xs 
 		mappify mp [] = mp
 		addorappend s (Just x) = Just $ x ++ [s]
 		addorappend s Nothing = Just $ [s]
+
+replaceStrings bid instruction = fixInstructionInputs fix instruction
+		where 
+			fix (EvilString x) =  (Symbol $ "$." ++ (getHashStr x))
+			fix x = x
+
+
+translateWithMap bid2scope bid instr = fixInstructionInputs fix instr
+		where
+			fix (Symbol x) = (Symbol $ "$." ++ scope ++ "_" ++ x)
+			fix (Array x y) = (Array ("$." ++ scope ++ "_" ++ x) (fix y))
+			fix x = x
+			scope =  (fromJust $ lookup bid bid2scope)
+
+
+fixInstructionInputs fix instr = [output]
+		where
+			output = case instr of 
+					(Dec' v)	->	(Dec' v) 	
+					(Mov' v1 v2)	->	(Mov' (fix v1) (fix v2))
+					(Neg' v)	->	(Neg' (fix v))
+					(And' v1 v2)	->	(And' (fix v1) (fix v2))
+					(Or'  v1 v2)	->	(Or'  (fix v1) (fix v2))
+					(Add' v1 v2)	->	(Add' (fix v1) (fix v2))
+					(Sub' v1 v2)	->	(Sub' (fix v1) (fix v2))
+					(Mul' v1 v2)	->	(Mul' (fix v1) (fix v2))
+					(Div' v1 v2)	->	(Div' (fix v1) (fix v2))
+					(Lt'   v1 v2)	->	(Lt'   (fix v1) (fix v2))
+					(Gt'   v1 v2)	->	(Gt'   (fix v1) (fix v2))
+					(Le'   v1 v2)	->	(Le'   (fix v1) (fix v2))
+					(Ge'   v1 v2)	->	(Ge'   (fix v1) (fix v2))
+					(Eq'   v1 v2)	->	(Eq'   (fix v1) (fix v2))
+					(Ne'   v1 v2)	->	(Ne'   (fix v1) (fix v2))
+					(Not'  v)	->	(Not'  (fix v))
+					(Ret'  v)	->	(Ret'  (fix v))
+					(Call' _)   	->	instr
+					(Str' v)	->	(Str' (fix v))
+					(Cmp' v1 v2)	->	(Cmp' (fix v1) (fix v2))
+					(Je' _)		->	instr
+					(Jmp' _)	->	instr
+					(Push' v)	->	(Push' (fix v))
+					(Pop' v)	->	(Pop' (fix v))
 
 
 navigate' :: LGraph ProtoASM ProtoBranch -> [String] -> ZBlock ProtoASM ProtoBranch -> [(BlockId, String, Value)]
@@ -48,7 +92,6 @@ getBlock :: LGraph m l -> BlockId -> Maybe (ZBlock m l)
 getBlock (LGraph eid blocks) blockid =  case lookupBlock blockid blocks of
 	 Nothing -> Nothing
 	 (Just blk) -> Just $ fgFocus $ ZGraph eid (unzipB blk) (removeBlock blockid blocks)
-
 
 collectVars :: LGraph ProtoASM ProtoBranch -> [String] -> ZBlock ProtoASM ProtoBranch -> [(BlockId, String, Value)]
 collectVars c scope zcfg = scopeVars ++ functionVars
@@ -107,7 +150,7 @@ zipThroughB' :: ZBlock a l -> [a]
 zipThroughB' b = case zbTail b of 
 		(ZTail m _) -> m:(zipThroughB' (nextEdge b))
 		_ -> []
-
+{-
 lowIRtoAsm :: (Show l, PrettyPrint l, LastNode l) => LGraph ProtoASM l -> IO (LGraph ProtoASM l)
 lowIRtoAsm lowir = do
 	let zcfg = focus (lgEntry lowir) lowir
@@ -118,7 +161,7 @@ lowIRtoAsm lowir = do
 	putStrLn $ show $ map getString cds
 	void $ navBlock $ fgFocus zcfg
 	return out
-
+-}
 
 
 graftBlocks :: (PrettyPrint l, LastNode l) => LGraph ProtoASM l -> LGraph ProtoASM l
@@ -156,9 +199,9 @@ graftBlocks cfg = mapLGraphNodes ( values ) (\ _ x -> ([],x)) cfg
 	        isString _ 		  = False 
 
 
-findAllStrings :: LastNode l => ZGraph ProtoASM l -> [Value]
-findAllStrings zcfg = do 
-		let blocks = postorderDFS $ unfocus zcfg
+findAllStrings :: LastNode l => LGraph ProtoASM l -> [Value]
+findAllStrings cfg = do 
+		let blocks = postorderDFS cfg
 		concat $ harvestStrings blocks
 	where 	
 		harvestStrings (b:blks) = (map (strings.values) (zipThroughB' $ unzipB b)) ++ (harvestStrings blks)
