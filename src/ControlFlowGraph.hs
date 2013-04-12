@@ -100,4 +100,4 @@ instance PrettyPrint BranchingStatement where
     ppr (WhileBranch e bid1 bid2) = text "While" <+> parens (ppr e) <+>
                                  text "loop:" <+> ppr bid1 <+>
                                  text "end:" <+> ppr bid2
-    ppr (InitialBranch _) = text "Graph start"
+    ppr (InitialBranch bids) = text "Declared Functions:" <+> hsep (map ppr bids)

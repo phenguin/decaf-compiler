@@ -26,7 +26,7 @@ navigate :: (Show a) => a -> LGraph ProtoASM ProtoBranch -> LGraph ProtoASM Prot
 navigate funmap cfg = unsafePerformIO $ do 
 		let cfg' = focus (lgEntry cfg ) cfg 
 		let navret = navigate' cfg ["main"] $ fgFocus $ cfg' 
-		let bid2scope = nub $ map (\ (b,s, _)-> (b,s)) navret
+		let bid2scope = nub $ [(BID "start_0", "global")] ++ map (\ (b,s, _)-> (b,s)) navret
 		let scope2var = nub $ map (\ (_,s,v)-> (s,v)) navret
 		putStrLn $ show $ mappify (M.empty) bid2scope
 		putStrLn $ show $ mappify (M.empty) scope2var
@@ -89,6 +89,7 @@ fixInstructionInputs fix instr = [output]
 					(Le'   v1 v2)	->	(Le'   (fix v1) (fix v2))
 					(Ge'   v1 v2)	->	(Ge'   (fix v1) (fix v2))
 					(Eq'   v1 v2)	->	(Eq'   (fix v1) (fix v2))
+					(DFun'   name vs)	->	DFun' name $ map fix vs
 					(Ne'   v1 v2)	->	(Ne'   (fix v1) (fix v2))
 					(Not'  v)	->	(Not'  (fix v))
 					(Ret'  v)	->	(Ret'  (fix v))
@@ -144,6 +145,7 @@ values instr = case instr of
 		(Ge'   v1 v2)	->	[v1,v2]
 		(Eq'   v1 v2)	->	[v1,v2]
 		(Ne'   v1 v2)	->	[v1,v2]
+		(DFun' _ vs)	->	vs
 		(Not'  v)	-> 	[v] 
 		(Ret'  v)	->	[v]
 		(Call' _)   	->	[]
