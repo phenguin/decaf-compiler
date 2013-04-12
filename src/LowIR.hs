@@ -191,7 +191,7 @@ mapBranchToAsm bid (LastOther (IfBranch expr bid1 bid2))
 
 mapBranchToAsm bid (LastOther (Jump bid1))  = (([],[]), LastOther $ Jump' bid1)
 mapBranchToAsm bid (LastOther (WhileBranch expr bid1 bid2))  
-	= (([],[]), LastOther $ While' (expressed++[(Cmp' R12 (Literal 0)),(Je' bid2)]) [bid1, bid2])
+	= (([],expressed++[(Cmp' R12 (Literal 0)),(Je' bid2)]), LastOther $ While' (expressed++[(Cmp' R12 (Literal 0)),(Je' bid2)]) [bid1, bid2])
 	where expressed = mapExprToAsm expr
 
 mapBranchToAsm bid (LastOther (InitialBranch bids)) = (([],[]), (LastOther (InitialBranch' bids)))
