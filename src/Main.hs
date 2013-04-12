@@ -146,11 +146,12 @@ assembleTree configuration input = do
   let irTree = convert parseTree 
   let irTreeWithST = addSymbolTables irTree 
   let midir = MidIR.toMidIR irTreeWithST
+  let globals = MidIR.scrapeGlobals midir
   let cfg = makeCFG midir
   let funmap = getFunctionParamMap $lgraphFromAGraph  cfg
   let lowIRCFG = toLowIRCFG cfg
-  let asm = navigate funmap lowIRCFG
+  let (asm,epilog) = navigate globals funmap lowIRCFG
   if debug configuration
-	then Right $ [pprIO asm]
+	then Right $ [pprIO asm, putStrLn epilog]
 	else Right [return ()]
       

@@ -38,17 +38,17 @@ data ProtoASM = Dec' Value
 	| Je' BlockId
 	| Pop' Value
 	| Push' Value
-    | CMove' Value Value 
-    | CMovne' Value Value 
-    | CMovg' Value Value 
-    | CMovl' Value Value 
-    | CMovge' Value Value 
-    | CMovle' Value Value 
-    | Jmp' BlockId
-    | Jle' BlockId
-    | Jl' BlockId
-    | Jge' BlockId
-    | Jne' BlockId
+        | CMove' Value Value 
+        | CMovne' Value Value 
+        | CMovg' Value Value 
+        | CMovl' Value Value 
+        | CMovge' Value Value 
+        | CMovle' Value Value 
+        | Jmp' BlockId
+        | Jle' BlockId
+        | Jl' BlockId
+        | Jge' BlockId
+        | Jne' BlockId
 	deriving (Show,Eq,Ord)
 
 saveFrame = [RBX, RSP, RBP, R12,R13,R14,R15] 
@@ -184,19 +184,19 @@ protoMethodCall (FuncCall name midParam) =
 -- -- converts branching statements to a branch seq of asm ops and
 -- -- possibly some additional preamble.  probably will want to return
 -- -- ([], BranchSeq <stuff>)
-mapBranchToAsm :: BlockId-> ZLast BranchingStatement -> ([ProtoASM], ZLast ProtoBranch)
+mapBranchToAsm :: BlockId-> ZLast BranchingStatement -> (([ProtoASM],[ProtoASM]), ZLast ProtoBranch)
 mapBranchToAsm bid (LastOther (IfBranch expr bid1 bid2))  
-	= ([], LastOther $ If' (expressed++[(Cmp' R12 (Literal 0)),(Je' bid2)]) [bid1, bid2])
+	= (([],[]), LastOther $ If' (expressed++[(Cmp' R12 (Literal 0)),(Je' bid2)]) [bid1, bid2])
 	where expressed = mapExprToAsm expr
 
-mapBranchToAsm bid (LastOther (Jump bid1))  = ([], LastOther $ Jump' bid1)
+mapBranchToAsm bid (LastOther (Jump bid1))  = (([],[]), LastOther $ Jump' bid1)
 mapBranchToAsm bid (LastOther (WhileBranch expr bid1 bid2))  
-	= ([], LastOther $ While' (expressed++[(Cmp' R12 (Literal 0)),(Je' bid2)]) [bid1, bid2])
+	= (([],[]), LastOther $ While' (expressed++[(Cmp' R12 (Literal 0)),(Je' bid2)]) [bid1, bid2])
 	where expressed = mapExprToAsm expr
 
-mapBranchToAsm bid (LastOther (InitialBranch bids)) = ([], (LastOther (InitialBranch' bids)))
+mapBranchToAsm bid (LastOther (InitialBranch bids)) = (([],[]), (LastOther (InitialBranch' bids)))
 
-mapBranchToAsm bid (LastExit) = ([],LastExit)
+mapBranchToAsm bid (LastExit) = (([],[]),LastExit)
 
 -- Pretty Printing
 instance PrettyPrint ProtoASM where
@@ -232,7 +232,7 @@ instance PrettyPrint Value where
 	ppr x = case x of 
             (Symbol str) 		-> text str 
             (Array str i) 		-> text (str ++ "[") <+> ppr i <+> text "]"
-            (Literal i)		-> text $ show i
+            (Literal i)		-> text $"$" ++ ( show i)
             (EvilString str) 	-> text $ show str
             RAX -> text "%rax"
             RBX -> text "%rbx"
@@ -256,7 +256,7 @@ instance PrettyPrint Value where
 instance PrettyPrint ProtoBranch where
     ppr (Jump' bid) = text "Jmp" <+> ppr bid
     ppr (If' stmts _) = vcat $ map ppr stmts
-    ppr (While' stmts _) = vcat $ map ppr stmts
+    ppr (While' stmts _) = text ""--vcat $ map ppr stmts
     ppr (InitialBranch' bids) = text "# Methods Defined:" <+> hsep (map ppr bids)
 
 {--toLowIR = lowIRProg

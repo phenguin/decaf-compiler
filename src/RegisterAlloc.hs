@@ -22,20 +22,23 @@ type StringState = M.Map String String
 data GlobalTable = GlobalEntry {getName::String} 
 data LocalTable = LocalEntry {getScope::String, getSymbol::String} 
 
-navigate :: (Show a) => a -> LGraph ProtoASM ProtoBranch -> LGraph ProtoASM ProtoBranch
-navigate funmap cfg = unsafePerformIO $ do 
+--navigate :: (Show a) => a -> LGraph ProtoASM ProtoBranch -> LGraph ProtoASM ProtoBranch
+navigate globals funmap cfg = unsafePerformIO $ do 
 		let cfg' = focus (lgEntry cfg ) cfg 
 		let navret = navigate' cfg ["main"] $ fgFocus $ cfg' 
 		let bid2scope = nub $ [(BID "start_0", "global")] ++ map (\ (b,s, _)-> (b,s)) navret
-		let scope2var = nub $ map (\ (_,s,v)-> (s,v)) navret
-		putStrLn $ show $ mappify (M.empty) bid2scope
-		putStrLn $ show $ mappify (M.empty) scope2var
-		putStrLn $ show funmap 
-		cfgWithVariableLabels <- return $ mapLGraphNodes (translateWithMap bid2scope) (\_ x -> ([],x)) cfg 
+		let 	convertVariableToVar (Var sym) = (Symbol sym)
+			convertVariableToVar (Varray sym (Const i)) = (Array sym (Literal i))
+		let scope2var = nub $ map (\ (_,s,v)-> (s,v)) (navret ++ map (\x -> ((BID "global"), "global", convertVariableToVar x )) globals)
+--		putStrLn $ show $ mappify (M.empty) bid2scope
+--		putStrLn $ show $ mappify (M.empty) scope2var
+--		putStrLn $ show funmap 
+		cfgWithVariableLabels <- return $ mapLGraphNodes (translateWithMap bid2scope) (\_ x -> (([],[]),x)) cfg 
 		strings <- return $ map (\(EvilString x) -> x)$findAllStrings cfgWithVariableLabels
-		putStrLn $ makeDataSection strings $ mappify (M.empty) $ scope2var
-		pprIO cfg
-		return $ mapLGraphNodes (replaceStrings) (\_ x -> ([],x)) cfgWithVariableLabels
+		epilog <- return $ makeDataSection strings $ mappify (M.empty) $ scope2var
+	--	pprIO cfg
+		finalcfg <- return $ mapLGraphNodes (replaceStrings) (\_ x -> (([],[]),x)) cfgWithVariableLabels
+		return (finalcfg,epilog)
 	where 	mappify:: (Ord a, Ord k) => (M.Map a [k]) -> [(a,k)]-> (M.Map a [k])
 		mappify mp ((b,s):xs) = mappify (M.alter (addorappend s) b mp) xs 
 		mappify mp [] = mp
@@ -48,7 +51,7 @@ makeDataSection strings scope2var = ".data\n" ++ variables ++ strings'
 			variables = concat $ concatMap (\(x,y) -> map (stringifyVars x ) y ) $ M.toList scope2var
 			stringifyVars x y = case y of 
 					(Symbol y') -> "." ++ x ++ "_" ++  y'++": .long 8\n"
-					(Array y' (Literal x')) -> "." ++ x ++ "_" ++ y' ++ concat (replicate x' ".long 8\n") 
+					(Array y' (Literal x')) -> "." ++ x ++ "_" ++ y' ++ concat (replicate x' "  .long 8\n") 
 					_ ->"" 
 			strings' = concatMap (\x -> "." ++ (getHashStr x) ++ ": " ++ ".string " ++ (show x) ++ "\n" ) strings
 
@@ -64,7 +67,7 @@ translateWithMap bid2scope bid instr = fixInstructionInputs fix instr
 			fix (Symbol x) = (Symbol $ "$." ++ scope ++ "_" ++ x)
 			fix (Array x y) = (Array ("$." ++ scope ++ "_" ++ x) (fix y))
 			fix x = x
-			scope =  (fromJust $ lookup bid bid2scope)
+			scope =  fromMaybe "" $ lookup bid bid2scope
 
 translateLastWithMap bid2scope bid (LastOther (If' stmts bids)) = 
     ([], LastOther $ If' (concatMap (translateWithMap bid2scope bid) stmts) bids)
@@ -163,6 +166,7 @@ zipThroughB  c b = case zbTail b of
 		(ZLast (LastOther (Jump' bs) ))->  zipThroughB c $ fromJust $ getBlock c bs 
 		(ZLast (LastOther (If' _ (b1:b2:_)) ))-> (zipThroughB c $fromJust $getBlock c b2 ) ++ (map (\x -> (b1,x)) $zipThroughB' $ fgFocus $ focus b1 c)
 		(ZLast (LastOther (While' _ (b1:b2:_)) ))-> (zipThroughB c $ fromJust$ getBlock c b2) ++ (map (\x -> (b1,x))$zipThroughB' $fgFocus $ focus b1 c)
+		(ZLast (LastOther (InitialBranch' bs )))-> concatMap (\x -> zipThroughB c $ fromJust$ getBlock c x) bs
 		_ -> []
         --
 -- A version that doesn't jump to other blocks
@@ -185,7 +189,7 @@ lowIRtoAsm lowir = do
 
 
 graftBlocks :: (PrettyPrint l, LastNode l) => LGraph ProtoASM l -> LGraph ProtoASM l
-graftBlocks cfg = mapLGraphNodes ( values ) (\ _ x -> ([],x)) cfg
+graftBlocks cfg = mapLGraphNodes ( values ) (\ _ x -> (([],[]),x)) cfg
 	where	values ids instr = [instr']
 				where instr' = case instr of
 					(Dec' v)	->	(Dec' v) 	

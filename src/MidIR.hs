@@ -15,7 +15,7 @@ import Debug.Trace
 
 toMidIR = progIR
 
-data Program = Prg [Statement] deriving (Show,Eq) 
+data Program = Prg {getCode::[Statement]} deriving (Show,Eq) 
 		
 data Statement =  Set Variable Expression
 		| If {ifCond::Expression , ifThen::[Statement] , ifElse::[Statement]}
@@ -57,6 +57,13 @@ data Expression = Add {x::Expression, y::Expression}
 		| Loc Variable
 		| FuncCall  {funcName::String, callParams::[Expression]}
 		deriving (Show,Eq, Ord) 
+
+scrapeGlobals prg = globalvars
+	where 	dvars = filter isDVar (getCode prg)
+		isDVar x@(DVar _) = True 
+		isDVar x = False
+		globalvars = map (\(DVar a) -> a) dvars
+
 
 progIR:: SemanticTreeWithSymbols -> Program
 progIR (MT (_,T.Prog,st) block) = Prg $ concat $ map statementIR block
