@@ -34,6 +34,7 @@ navigate funmap cfg = unsafePerformIO $ do
 		cfgWithVariableLabels <- return $ mapLGraphNodes (translateWithMap bid2scope) (\_ x -> ([],x)) cfg 
 		strings <- return $ map (\(EvilString x) -> x)$findAllStrings cfgWithVariableLabels
 		putStrLn $ makeDataSection strings $ mappify (M.empty) $ scope2var
+		pprIO cfg
 		return $ mapLGraphNodes (replaceStrings) (\_ x -> ([],x)) cfgWithVariableLabels
 	where 	mappify:: (Ord a, Ord k) => (M.Map a [k]) -> [(a,k)]-> (M.Map a [k])
 		mappify mp ((b,s):xs) = mappify (M.alter (addorappend s) b mp) xs 
