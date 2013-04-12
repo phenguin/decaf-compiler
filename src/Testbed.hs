@@ -11,10 +11,10 @@ import CFGConstruct (lgraphFromAGraphBlocks)
 import CFGConcrete (LGraph, BlockId(..))
 import Semantics (SemanticTreeWithSymbols, addSymbolTables)
 import Transforms
-import Optimization (progIR, Program, Statement)
+import Optimization
 import ControlFlowGraph (ControlFlowGraph, makeCFG, BranchingStatement, getFunctionParamMap, lgraphSpanningFunctions)
 import DataflowAnalysis
-import CFGTransforms
+import MidIR
 
 parse :: String -> Either String Parser.Program
 parse input = do

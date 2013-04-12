@@ -15,6 +15,7 @@ data Value = Symbol String | Array String Value | Literal Int | EvilString{getSt
 		deriving (Show,Eq,Ord)
 	
 data ProtoASM = Dec' Value
+	| DFun' String [Value]
 	| Mov' Value Value
 	| Neg' Value 
 	| And' Value Value
@@ -49,6 +50,7 @@ data ProtoASM = Dec' Value
     | Jge' BlockId
     | Jne' BlockId
 	deriving (Show,Eq,Ord)
+
 saveFrame = [RBX, RSP, RBP, R12,R13,R14,R15] 
 save::[ProtoASM]
 save	= map Push' saveFrame
@@ -58,6 +60,7 @@ restore = map Pop' (reverse saveFrame)
 data ProtoBranch =  Jump' BlockId
 	| If' [ProtoASM] [BlockId]
 	| While' [ProtoASM] [BlockId]
+	| InitialBranch' [BlockId]
 	deriving (Show,Eq,Ord)
 
 newtype ProtoASMList = ProtoASMList [ProtoASM]
@@ -71,13 +74,12 @@ instance HavingSuccessors ProtoBranch where
 		(Jump' b1) 	-> [b1]
 		(If' _ x) 	-> x
 		(While' _ x)    -> x
+		(InitialBranch' bids)    -> bids
 
 instance LastNode ProtoBranch where
 	mkBranchNode bid = Jump' bid
 	isBranchNode s = case s of
 		Jump' _ 	-> True
-		If' _ _ -> True
-		While' _ _ -> True
 		_ 	-> False
 
 
@@ -90,7 +92,7 @@ type LowCFG = LGraph ProtoASM ProtoBranch
 
 toLowIRCFG :: ControlFlowGraph -> LowCFG
 toLowIRCFG cfg = mapLGraphNodes (mapStmtToAsm) (mapBranchToAsm) cfgLGraph
-      where cfgLGraph = lgraphFromAGraphBlocks (BID "main") cfg
+      where cfgLGraph = lgraphSpanningFunctions cfg
 
 -- Converts regular statements to the pseudo-asm code
 mapStmtToAsm :: BlockId -> Statement -> [ProtoASM]
@@ -99,11 +101,10 @@ mapStmtToAsm bid x = case x of
 			[Mov' R14 R12]
         (DVar (Var str))-> [Dec' (Symbol str)]
         (DVar (Varray str (Const i)))-> [Dec' (Array str (Literal i))]
+        (DFun name ps body)-> [DFun' name $ map (Symbol . symbol) ps]
         (Callout str param)-> protoMethodCall (FuncCall str param)
 	(Function name param) -> protoMethodCall (FuncCall name param)
 	_ 	-> Debug.Trace.trace ("!!STMT!" ++ (show x)) []
-
-
 	
 mapVarToValue (Var str) = [Mov' R12 (Symbol str)]
 mapVarToValue (Varray str expr) =   (mapExprToAsm expr) ++ [Mov' R12 (Array str R12)]
@@ -187,11 +188,16 @@ mapBranchToAsm :: BlockId-> ZLast BranchingStatement -> ([ProtoASM], ZLast Proto
 mapBranchToAsm bid (LastOther (IfBranch expr bid1 bid2))  
 	= ([], LastOther $ If' (expressed++[(Cmp' R12 (Literal 0)),(Je' bid2)]) [bid1, bid2])
 	where expressed = mapExprToAsm expr
+
 mapBranchToAsm bid (LastOther (Jump bid1))  = ([], LastOther $ Jump' bid1)
 mapBranchToAsm bid (LastOther (WhileBranch expr bid1 bid2))  
 	= ([], LastOther $ While' (expressed++[(Cmp' R12 (Literal 0)),(Je' bid2)]) [bid1, bid2])
 	where expressed = mapExprToAsm expr
+
+mapBranchToAsm bid (LastOther (InitialBranch bids)) = ([], (LastOther (InitialBranch' bids)))
+
 mapBranchToAsm bid (LastExit) = ([],LastExit)
+
 -- Pretty Printing
 instance PrettyPrint ProtoASM where
 	ppr asm = case asm of 
@@ -207,6 +213,7 @@ instance PrettyPrint ProtoASM where
                 (Ge' x y)        -> binop "ge" x y
                 (Ne' x y)        -> binop "ne" x y
                 (Eq' x y)        -> binop "eq" x y
+                (DFun' name params)        -> text "# Function Declaration: " <> text name
                 (Not' x )        -> uniop "not" x
                 (Neg' x)         -> uniop "neg" x
                 (Mov' x y)	 -> binop "mov" x y
@@ -215,7 +222,7 @@ instance PrettyPrint ProtoASM where
                 (Push' x) 	 -> uniop "push" x 
                 (Pop' x) 	 -> uniop "pop" x 
                 (Call' x) 	 -> text ("call "++x)
-                (Dec' x) 	 -> uniop "dec" x 
+                (Dec' x) 	 -> text ""
 		_ 		 -> Debug.Trace.trace ("!ppr!!!" ++ (show asm)) (text "@@")
 	  where 
   	    binop name x y = text (name++" ") <+> (ppr x) <+> text"," <+> (ppr y) 
@@ -247,13 +254,10 @@ instance PrettyPrint Value where
 
 
 instance PrettyPrint ProtoBranch where
-    ppr (Jump' bid) = text "Jump" <+> ppr bid
-    ppr (If' e [bid1, bid2]) = text "If" <+> parens (hsep $ map ppr  e) <+>
-                                 text "then:" <+> ppr bid1 <+>
-                                 text "else:" <+> ppr bid2
-    ppr (While' e [bid1,bid2]) = text "While" <+> parens (hsep$ map ppr e) <+>
-                                 text "loop:" <+> ppr bid1 <+>
-				 text "end:" <+> ppr bid2 
+    ppr (Jump' bid) = text "Jmp" <+> ppr bid
+    ppr (If' stmts _) = vcat $ map ppr stmts
+    ppr (While' stmts _) = vcat $ map ppr stmts
+    ppr (InitialBranch' bids) = text "# Methods Defined:" <+> hsep (map ppr bids)
 
 {--toLowIR = lowIRProg
 
