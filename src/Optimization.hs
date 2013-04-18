@@ -1,6 +1,10 @@
 module Optimization where
 
 import DataflowAnalysis
+import Debug.Trace (trace)
+import Data.Data
+import Data.Typeable
+import Data.Generics
 import Configuration
 import Configuration.Types
 import MidIR
@@ -81,55 +85,15 @@ globalCSElTrans state (LastOther (WhileBranch expr bid bid')) = ([], l')
 
 globalCSElTrans state l = ([], l)
 
+-- Top-down attempt to substitute expressions with precomputed values.. using generic programming to simplify code alot.. see scrap your boilerplate
 subAvailExprs :: AvailExprState -> Expression -> Expression
-subAvailExprs exprs theExpr = case theExpr of
-        expr@(Add e e') -> if canSub expr then 
-                                doSub expr else
-                                Add (subAvailExprs exprs e) (subAvailExprs exprs e')
-        expr@(Sub e e') -> if canSub expr then 
-                                doSub expr else
-                                Sub (subAvailExprs exprs e) (subAvailExprs exprs e')
-        expr@(Mul e e') -> if canSub expr then 
-                                doSub expr else
-                                Mul (subAvailExprs exprs e) (subAvailExprs exprs e')
-        expr@(Div e e') -> if canSub expr then 
-                                doSub expr else
-                                Div (subAvailExprs exprs e) (subAvailExprs exprs e')
-        expr@(Mod e e') -> if canSub expr then 
-                                doSub expr else
-                                Mod (subAvailExprs exprs e) (subAvailExprs exprs e')
-        expr@(And e e') -> if canSub expr then 
-                                doSub expr else
-                                And (subAvailExprs exprs e) (subAvailExprs exprs e')
-        expr@(Or e e') -> if canSub expr then 
-                                doSub expr else
-                                Or (subAvailExprs exprs e) (subAvailExprs exprs e')
-        expr@(Eq e e') -> if canSub expr then 
-                                doSub expr else
-                                Eq (subAvailExprs exprs e) (subAvailExprs exprs e')
-        expr@(Lt e e') -> if canSub expr then 
-                                doSub expr else
-                                Lt (subAvailExprs exprs e) (subAvailExprs exprs e')
-        expr@(Gt e e') -> if canSub expr then 
-                                doSub expr else
-                                Gt (subAvailExprs exprs e) (subAvailExprs exprs e')
-        expr@(Le e e') -> if canSub expr then 
-                                doSub expr else
-                                Le (subAvailExprs exprs e) (subAvailExprs exprs e')
-        expr@(Ge e e') -> if canSub expr then 
-                                doSub expr else
-                                Ge (subAvailExprs exprs e) (subAvailExprs exprs e')
-        expr@(Ne e e') -> if canSub expr then 
-                                doSub expr else
-                                Ne (subAvailExprs exprs e) (subAvailExprs exprs e')
-        expr@(Not e) -> if canSub expr then
-                                doSub expr else
-                                Not (subAvailExprs exprs e)
-        expr@(Neg e) -> if canSub expr then
-                                doSub expr else
-                                Neg (subAvailExprs exprs e)
-        FuncCall name params -> FuncCall name $ map (subAvailExprs exprs) params
-        expr -> expr
+subAvailExprs exprs expr = everywhere' (mkT (tryExprSub exprs)) expr
+
+tryExprSub :: AvailExprState -> Expression -> Expression
+tryExprSub exprs expr 
+    | canSub expr = doSub expr
+    | otherwise = expr
    where canSub expr = Set.member expr exprs
          doSub expr = Loc $ mkExprTemp expr
+
 

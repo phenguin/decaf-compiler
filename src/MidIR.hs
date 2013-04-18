@@ -1,6 +1,9 @@
+{-# LANGUAGE DeriveDataTypeable #-}
 module MidIR where
 
 import Configuration
+import Data.Data
+import Data.Typeable
 import PrettyPrint
 import Text.PrettyPrint.HughesPJ hiding (Str)
 import Control.Monad.State
@@ -15,7 +18,7 @@ import Debug.Trace
 
 toMidIR = progIR
 
-data Program = Prg {getCode::[Statement]} deriving (Show,Eq) 
+data Program = Prg {getCode::[Statement]} deriving (Show,Eq,Data,Typeable) 
 		
 data Statement =  Set Variable Expression
 		| If {ifCond::Expression , ifThen::[Statement] , ifElse::[Statement]}
@@ -31,11 +34,11 @@ data Statement =  Set Variable Expression
 		| DVar Variable 
 		| Callout {calloutName::String, calloutParams::[Expression]}
 		| Function {functionName::String, params::[Expression]}
-		deriving (Show,Eq,Ord) 
+		deriving (Show,Eq,Ord, Data, Typeable) 
 
 data Variable = Var {symbol::String}
 		| Varray {symbol::String, index::Expression}
-		deriving (Show,Eq, Ord) 
+		deriving (Show,Eq, Ord, Data, Typeable) 
 
 data Expression = Add {x::Expression, y::Expression}
 		| Sub {x::Expression, y::Expression}
@@ -56,7 +59,7 @@ data Expression = Add {x::Expression, y::Expression}
 		| Str String
 		| Loc Variable
 		| FuncCall  {funcName::String, callParams::[Expression]}
-		deriving (Show,Eq, Ord) 
+		deriving (Show,Eq, Ord, Data, Typeable) 
 
 scrapeGlobals prg = globalvars
 	where 	dvars = filter isDVar (getCode prg)
