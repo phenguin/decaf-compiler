@@ -1,8 +1,0 @@
-// OK
-int foo ( ) {
-  return 1;
-}
-void main ( ) {
-  int i;
-  i = -foo ( );
-}

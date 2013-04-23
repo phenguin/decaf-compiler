@@ -1,4 +1,0 @@
-// 16. continue must be in a loop
-void main ( ) {
-  continue;
-}

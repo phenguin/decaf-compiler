@@ -1,4 +1,0 @@
-// Error
-void main ( ) {
-  main = 3;
-}

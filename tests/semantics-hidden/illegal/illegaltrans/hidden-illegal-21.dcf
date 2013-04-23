@@ -1,8 +1,0 @@
-// 14. The operands of <cond_ops> must have type bool.
-int foo ( ) {
-  return 1;
-}
-void main ( ) {
-  if ( true || foo ( ) ) {
-  }
-}

@@ -1,7 +1,0 @@
-// 15. <location> = <expr> must have same type
-void i ( ) {
-}
-void main ( ) {
-  int x;
-  x = i ( );
-}

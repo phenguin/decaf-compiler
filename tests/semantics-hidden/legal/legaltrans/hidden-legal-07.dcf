@@ -1,7 +1,0 @@
-// OK
-void foo ( ) {
-  foo ( );
-  // Recursive function call - legal!
-}
-void main ( ) {
-}
