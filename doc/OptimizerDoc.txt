@@ -1,0 +1,51 @@
+Team goat: Optimizer
+
+Overview:
+------------------------------
+
+Our basic strategy for the Optimizer project is to develop a safe base of easier optimizations so that we can then begin to tackle more risky optimizations with higher potential for performance returns. In this way we can hedge our risks and maximize the performance of our efforts.
+
+Chosen Optimizations
+-------------------------------
+
+We decided to implement the following optimizations  :
+
+Dataflow Optimizations: We already have a fairly general framework for writing dataflow optimizations, and plan to implement those listed below in the coming weeks:
+- Global CSE
+- Deadcode Elimination
+- Constant Propogation + Constant Folding
+- Loop Invariant Code Hoisting
+
+Register Allocation: In the end, the quickest way to reduce our runtime is by reducing our accesses to memory. Our first priority is to maximize our use of registers in order to streamline computation. We expect this to be challenging but very rewarding for the code we are currently generating.
+
+Instruction Selection: Next we plan on using peephole optimizations to take advantage of the x86 instruction set. We believe this is a good place to put our efforts because of its high return to labour ratio. With the right framework, this should be a one to one mapping.
+
+Data Parallelization: Finally, we will move our efforts to getting Data Parallelization to work. Since the sample code given to us seems highly parallelizable, we suspect any team that gets this optimization right is certain to place in the upper echelons of the derby.
+
+Hopeful Optimizations
+-------------------------------
+
+If we have extra time, we hope to be able to fit the following optimizations into our schedule:
+
+
+
+Timeline:
+-------------------------------
+
+We expect to spend two weeks in the end of our project for data parallelization. We also expect to complete the other optimizations in the following timeline
+
+week 1:
+	Register Allocation
+	Dataflow optimizations
+week 2:
+	Instruction Selection
+	Dataflow optimizations
+week 3:
+	Data Parallelization
+week 4:
+	Data Parallelization
+
+Delegation of Tasks:
+------------------------------------
+
+In the first two weeks we plan to each tackle one optimization each. We will delegate the optimization based one how much each team member wants to do it as well as their aptitude to accomplish it. Finally we will work together on parallelization for the last two weeks.
