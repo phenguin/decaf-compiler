@@ -24,9 +24,10 @@ data LocalTable = LocalEntry {getScope::String, getSymbol::String}
 
 --navigate :: (Show a) => a -> LGraph ProtoASM ProtoBranch -> LGraph ProtoASM ProtoBranch
 navigate globals funmap cfg = unsafePerformIO $ do 
-		let cfg' = focus (lgEntry cfg ) cfg 
-		let navret = navigate' cfg ["main"] $ fgFocus $ cfg' 
+		let cfg' = focus (BID "main" ) cfg 
+		let navret = navigate' cfg ["main"] $ fgFocus  cfg' 
 		let bid2scope = nub $ [(BID "start_0", "global")] ++ map (\ (b,s, _)-> (b,s)) navret
+--		putStrLn $ show navret
 		let 	convertVariableToVar (Var sym) = (Symbol sym)
 			convertVariableToVar (Varray sym (Const i)) = (Array sym (Literal i))
 		let scope2var = nub $ map (\ (_,s,v)-> (s,v)) (navret ++ map (\x -> ((BID "global"), "global", convertVariableToVar x )) globals)
@@ -37,35 +38,54 @@ navigate globals funmap cfg = unsafePerformIO $ do
 		strings <- return $ map (\(EvilString x) -> x)$findAllStrings cfgWithVariableLabels
 		epilog <- return $ makeDataSection strings $ mappify (M.empty) $ scope2var
 	--	pprIO cfg
-		finalcfg <- return $ mapLGraphNodes (replaceStrings) (\_ x -> (([],[]),x)) cfgWithVariableLabels
-		return (finalcfg,epilog)
+		wrongarrcfg <- return $ mapLGraphNodes (replaceStrings) (\_ x -> (([],[]),x)) cfgWithVariableLabels
+		finalcfg <- return $ mapLGraphNodes (fixArrays) (\_ x -> (([],[]),x)) wrongarrcfg
+		return (prolog,finalcfg,epilog)
 	where 	mappify:: (Ord a, Ord k) => (M.Map a [k]) -> [(a,k)]-> (M.Map a [k])
 		mappify mp ((b,s):xs) = mappify (M.alter (addorappend s) b mp) xs 
 		mappify mp [] = mp
 		addorappend s (Just x) = Just $ x ++ [s]
 		addorappend s Nothing = Just $ [s]
+		prolog = ".global main\n"
 
 
 makeDataSection strings scope2var = ".data\n" ++ variables ++ strings'
 		where
 			variables = concat $ concatMap (\(x,y) -> map (stringifyVars x ) y ) $ M.toList scope2var
 			stringifyVars x y = case y of 
-					(Symbol y') -> "." ++ x ++ "_" ++  y'++": .long 8\n"
-					(Array y' (Literal x')) -> "." ++ x ++ "_" ++ y' ++ concat (replicate x' "  .long 8\n") 
+					(Symbol y') -> ".comm " ++ x ++ "_" ++  y'++", 8\n"
+					(Array y' (Literal x')) -> ".comm " ++ x ++ "_" ++ y' ++ ", " ++(show $ x' *8 ) ++"\n"  
 					_ ->"" 
 			strings' = concatMap (\x -> "." ++ (getHashStr x) ++ ": " ++ ".string " ++ (show x) ++ "\n" ) strings
 
 
 replaceStrings bid instruction = fixInstructionInputs fix instruction
 		where 
-			fix (EvilString x) =  (Symbol $ "$." ++ (getHashStr x))
+			fix (EvilString x) =  (EvilSymbol $ "." ++ (getHashStr x))
 			fix x = x
+
+fixArrays _ i@(Dec' _) = [i]
+fixArrays bid instruction = case hasArray of
+				False -> [instruction]
+				True  -> handleArray instruction
+	where 
+		 hasArray = arrs /= []
+		 arrs = filter isArray $ values instruction 
+		 isArray (Array _ _) = True
+		 isArray _ = False
+		 handleArray instr = (loadArr $head arrs) ++ fixInstructionInputs replaceWithReg15 instr
+		 replaceWithReg15 (Array _ i) = Dereference  R15 i 
+		 replaceWithReg15 x = x
+		 loadArr (Array str x) = [(Mov' (EvilSymbol str) R15)] 
+		
+
+
 
 
 translateWithMap bid2scope bid instr = fixInstructionInputs fix instr
 		where
-			fix (Symbol x) = (Symbol $ "$." ++ scope ++ "_" ++ x)
-			fix (Array x y) = (Array ("$." ++ scope ++ "_" ++ x) (fix y))
+			fix (Symbol x) = (Symbol $ scope ++ "_" ++ x)
+			fix (Array x y) = (Array ( scope ++ "_" ++ x) (fix y))
 			fix x = x
 			scope =  fromMaybe "" $ lookup bid bid2scope
 
@@ -106,6 +126,7 @@ fixInstructionInputs fix instr = [output]
 					(Pop' v)	->	(Pop' (fix v))
 
 
+
 navigate' :: LGraph ProtoASM ProtoBranch -> [String] -> ZBlock ProtoASM ProtoBranch -> [(BlockId, String, Value)]
 navigate' c scope zcfg = collectVars c scope zcfg
 	
@@ -119,8 +140,8 @@ collectVars :: LGraph ProtoASM ProtoBranch -> [String] -> ZBlock ProtoASM ProtoB
 collectVars c scope zcfg = scopeVars ++ functionVars
 	where   	
 		scopeVars = map (\(bd,x)-> (bd,(head scope),x))$ filter isVar $concatMap values' $ middles
-		functionCalls = concatMap (\(_,(Call' str)) -> if (not $ elem str scope) then [str] else [])$ filter isCall middles
-		functionVars = concatMap (\ name -> collectVars (c) (name:scope) (fromJust$ getBlock c (BID name))) $ filter ( \name -> isJust $ getBlock c (BID name)) functionCalls 
+		functionCalls = nub $ concatMap (\(_,(Call' str)) -> if (not $ elem str scope) then [str] else [])$ filter isCall middles
+		functionVars = concatMap (\ name -> collectVars (c) [name] (fromJust$ getBlock c (BID name))) $ filter ( \name -> isJust $ getBlock c (BID name)) functionCalls 
 		isCall (_,(Call' str)) = True
 		isCall _ = False
 		isVar (_,a@(Symbol _)) = True

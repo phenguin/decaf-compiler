@@ -1,5 +1,6 @@
 module LowIR where 
 
+
 import MidIR
 import qualified Data.Map 
 import ControlFlowGraph
@@ -9,7 +10,7 @@ import PrettyPrint
 import Text.PrettyPrint.HughesPJ hiding (Str)
 import Debug.Trace
 
-data Value = Symbol String | Array String Value | Literal Int | EvilString{getString::String} | Label String
+data Value = Symbol String | Array String Value | Literal Int | EvilSymbol String | EvilString{getString::String} | Label String | Dereference  Value Value | Verbatim String
 		| RAX | RBX | RCX | RDX | RSP | RBP | RSI | RDI | R8 | R9 | R10 | R11 
 		| R12 | R13 | R14 | R15 
 		deriving (Show,Eq,Ord)
@@ -97,17 +98,20 @@ toLowIRCFG cfg = mapLGraphNodes (mapStmtToAsm) (mapBranchToAsm) cfgLGraph
 -- Converts regular statements to the pseudo-asm code
 mapStmtToAsm :: BlockId -> Statement -> [ProtoASM]
 mapStmtToAsm bid x = case x of
-        (Set var expr) -> (mapExprToAsm expr) ++ [Mov' R12 R14] ++ (mapVarToValue var) ++
-			[Mov' R14 R12]
+        (Set var expr) -> (mapExprToAsm expr) ++ [Mov' R12 R14] ++ (mapVarToValue var) 
         (DVar (Var str))-> [Dec' (Symbol str)]
         (DVar (Varray str (Const i)))-> [Dec' (Array str (Literal i))]
-        (DFun name ps body)-> [DFun' name $ map (Symbol . symbol) ps]
+        (DFun name ps body)-> [DFun' name $ map (Symbol . symbol) ps] ++
+				(map (\(x,y) ->(Mov' y x))(zip (map vartoval (take 5 ps)) (reverse [R9, R8, RCX, RDX, RSI, RDI]))) ++ (map (\x -> Pop' x) $ map vartoval (drop 5 ps))
+
         (Callout str param)-> protoMethodCall (FuncCall str param)
 	(Function name param) -> protoMethodCall (FuncCall name param)
+	(Return expr) -> (mapExprToAsm expr)++ [Mov' R12 RAX]
 	_ 	-> Debug.Trace.trace ("!!STMT!" ++ (show x)) []
+   where vartoval (Var str) = (Symbol str)
 	
-mapVarToValue (Var str) = [Mov' R12 (Symbol str)]
-mapVarToValue (Varray str expr) =   (mapExprToAsm expr) ++ [Mov' R12 (Array str R12)]
+mapVarToValue (Var str) = [Mov' R14 (Symbol str)]
+mapVarToValue (Varray str expr) =   (mapExprToAsm expr) ++ [Mov' R14 (Array str R12)]
 mapVarToValue x = Debug.Trace.trace ("!!VAR!" ++ (show x)) [Mov' (Symbol "OHFUCK") (Symbol "ERROR")]
 
 mapExprToAsm::Expression -> [ProtoASM]
@@ -129,9 +133,9 @@ mapExprToAsm x = case x of
                 (Const i)       -> [Mov' (Literal i) R12]
                 (Loc (Var x))   -> [Mov' (Symbol x) R12]
                 (Loc (Varray x i))-> let pi = process i in 
-					pi ++ [(Mov' R13 R12),(Mov' (Array x R13) R12)]
+					pi ++ [(Mov' R12 R13),(Mov' (Array x R13) R12)]
                 (Str str)       -> [Mov' (EvilString str) R12]
-		(FuncCall n p )	-> protoMethodCall x 
+		(FuncCall n p )	-> protoMethodCall x ++ [Mov' RAX R12]
 		_ 	-> Debug.Trace.trace ( "!EXPR!!" ++ (show x)) []
                 where
                         binop t x y = let px = process x
@@ -150,8 +154,9 @@ protoMethodCall (FuncCall name midParam) =
     	save
         ++ params
         ++ (if name == "printf" then [Mov' (Literal 0) RAX] else [])
+	++ reverse ( take (minimum [6,(length midParam)]) ( reverse [(Pop' R9),(Pop' R8),(Pop' RCX),(Pop' RDX),(Pop' RSI),(Pop' RDI)]))
         ++ [Call' name]
-        ++ [(Pop' RBX) | x<- [1..((length params) - 6)]]
+        ++ [(Pop' RBX) | x<- [1..((length midParam) - 6)]]
     	++ restore
                 where   params =  makeparam midParam 0
                         makeparam ((Str str):xs) i =
@@ -165,12 +170,12 @@ protoMethodCall (FuncCall name midParam) =
                                 | i > 5      = (b ++ a)
                                 | otherwise  = (a ++ b)
                         param i dtsrc = case i of
-                                0 -> (Mov' dtsrc RDI)
-                                1 -> (Mov' dtsrc RSI)
-                                2 -> (Mov' dtsrc RDX)
-                                3 -> (Mov' dtsrc RCX)
-                                4 -> (Mov' dtsrc R8)
-                                5 -> (Mov' dtsrc R9)
+                                0 -> (Push' dtsrc)-- RDI)
+                                1 -> (Push' dtsrc)-- RSI)
+                                2 -> (Push' dtsrc)-- RDX)
+                                3 -> (Push' dtsrc)-- RCX)
+                                4 -> (Push' dtsrc)-- R8)
+                                5 -> (Push' dtsrc)-- R9)
                                 otherwise -> (Push' dtsrc)
 
 
@@ -186,12 +191,12 @@ protoMethodCall (FuncCall name midParam) =
 -- -- ([], BranchSeq <stuff>)
 mapBranchToAsm :: BlockId-> ZLast BranchingStatement -> (([ProtoASM],[ProtoASM]), ZLast ProtoBranch)
 mapBranchToAsm bid (LastOther (IfBranch expr bid1 bid2))  
-	= (([],[]), LastOther $ If' (expressed++[(Cmp' R12 (Literal 0)),(Je' bid2)]) [bid1, bid2])
+	= (([],[]), LastOther $ If' (expressed++[(Cmp' (Literal 0) R12),(Je' bid2)]) [bid1, bid2])
 	where expressed = mapExprToAsm expr
 
 mapBranchToAsm bid (LastOther (Jump bid1))  = (([],[]), LastOther $ Jump' bid1)
 mapBranchToAsm bid (LastOther (WhileBranch expr bid1 bid2))  
-	= (([],expressed++[(Cmp' R12 (Literal 0)),(Je' bid2)]), LastOther $ While' (expressed++[(Cmp' R12 (Literal 0)),(Je' bid2)]) [bid1, bid2])
+	= (([],expressed++[(Cmp' (Literal 0) R12),(Je' bid2)]), LastOther $ While' (expressed++[(Cmp' (Literal 0) R12 ),(Je' bid2)]) [bid1, bid2])
 	where expressed = mapExprToAsm expr
 
 mapBranchToAsm bid (LastOther (InitialBranch bids)) = (([],[]), (LastOther (InitialBranch' bids)))
@@ -203,16 +208,16 @@ instance PrettyPrint ProtoASM where
 	ppr asm = case asm of 
                 (Sub' x y)       -> binop "sub" x y
                 (Add' x y)       -> binop "add" x y
-                (Mul' x y)       -> binop "mul" x y
+                (Mul' x y)       -> binop "imul" x y
                 (Div' x y)       -> binop "div" x y
                 (And' x y)       -> binop "and" x y
                 (Or' x y)        -> binop "or" x y
-                (Lt' x y)        -> binop "lt" x y
-                (Gt' x y)        -> binop "gt" x y
-                (Le' x y)        -> binop "le" x y
-                (Ge' x y)        -> binop "ge" x y
-                (Ne' x y)        -> binop "ne" x y
-                (Eq' x y)        -> binop "eq" x y
+                (Lt' x y)        -> comparison "cmovl" x y
+                (Gt' x y)        -> comparison "cmovg" x y
+                (Le' x y)        -> comparison "cmovle" x y
+                (Ge' x y)        -> comparison "cmovge" x y
+                (Ne' x y)        -> comparison "cmovme" x y
+                (Eq' x y)        -> comparison "cmove" x y
                 (DFun' name params)        -> text "# Function Declaration: " <> text name
                 (Not' x )        -> uniop "not" x
                 (Neg' x)         -> uniop "neg" x
@@ -226,14 +231,21 @@ instance PrettyPrint ProtoASM where
 		_ 		 -> Debug.Trace.trace ("!ppr!!!" ++ (show asm)) (text "@@")
 	  where 
   	    binop name x y = text (name++" ") <+> (ppr x) <+> text"," <+> (ppr y) 
+  	    comparison name x y = text ("cmp"++" ") <+> (ppr y) <+> text"," <+> (ppr x) 
+				$$ text ("mov" ++ " $0 , %r12")
+				$$ text ("mov" ++ " $1 , %r13")
+				$$ text (name ++ " %r13 , %r12")
 	    uniop name x  = text (name++" " )<+> (ppr x)  
 
 instance PrettyPrint Value where
 	ppr x = case x of 
-            (Symbol str) 		-> text str 
-            (Array str i) 		-> text (str ++ "[") <+> ppr i <+> text "]"
-            (Literal i)		-> text $"$" ++ ( show i)
-            (EvilString str) 	-> text $ show str
+            (Symbol str) 		-> text $  str   
+            (EvilSymbol str) 		-> text $  "$" ++ str   
+            (Array str i) 		-> text  (str++"[")<+> (ppr i )<+> text "]"
+            (Literal i)			-> text $"$" ++ ( show i)
+            (EvilString str) 		-> text $ show str
+            (Verbatim str) 		-> text $str
+            (Dereference x y) 		-> (text "0(") <+>(ppr x) <+> (text ",") <+>(ppr y) <+>  text (",8)")
             RAX -> text "%rax"
             RBX -> text "%rbx"
             RCX -> text "%rcx"

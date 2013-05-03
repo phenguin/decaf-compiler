@@ -150,8 +150,8 @@ assembleTree configuration input = do
   let cfg = makeCFG midir
   let funmap = getFunctionParamMap $lgraphFromAGraph  cfg
   let lowIRCFG = toLowIRCFG cfg
-  let (asm,epilog) = navigate globals funmap lowIRCFG
+  let (prolog,asm,epilog) = navigate globals funmap lowIRCFG
   if debug configuration
-	then Right $ [pprIO asm, putStrLn epilog]
+	then Right $ [putStrLn prolog,pprIO asm, putStrLn epilog]
 	else Right [return ()]
       

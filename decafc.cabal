@@ -29,6 +29,7 @@ executable decafc
                      , containers
                      , unordered-containers
                      , pretty
+                     , syb
   build-tools:         alex >=3.0.2
                      , happy
 
