@@ -1,6 +1,8 @@
 module LowIR where 
 
 
+
+
 import MidIR
 import qualified Data.Map 
 import ControlFlowGraph
@@ -96,7 +98,7 @@ toLowIRCFG cfg = mapLGraphNodes (mapStmtToAsm) (mapBranchToAsm) cfgLGraph
       where cfgLGraph = lgraphSpanningFunctions cfg
 
 -- Converts regular statements to the pseudo-asm code
-mapStmtToAsm :: BlockId -> Statement -> [ProtoASM]
+mapStmtToAsm ::BlockId -> Statement -> [ProtoASM]
 mapStmtToAsm bid x = case x of
         (Set var expr) -> (mapExprToAsm expr) ++ [Mov' R12 R14] ++ (mapVarToValue var) 
         (DVar (Var str))-> [Dec' (Symbol str)]
@@ -106,10 +108,19 @@ mapStmtToAsm bid x = case x of
 
         (Callout str param)-> protoMethodCall (FuncCall str param)
 	(Function name param) -> protoMethodCall (FuncCall name param)
+	(Break) -> []-- santiago is a fucking idiot handleBreak branch 
+	(Continue) -> [] -- santiago is a fucking idiot handleContinue branch  
 	(Return expr) -> (mapExprToAsm expr)++ [Mov' R12 RAX]
 	_ 	-> Debug.Trace.trace ("!!STMT!" ++ (show x)) []
    where vartoval (Var str) = (Symbol str)
-	
+-- failure here indicates a lastexit is thrown meaning that a break and continue
+-- are not in kosher locations. Should have not passed semantic check!
+--	 handleBreak:: ZLast BranchingStatement -> [ProtoASM]
+--	 handleBreak (LastOther (WhileBranch _ b1 b2)) = [(Jmp' b1)]
+--	 handleBreak (LastOther (Jump b1)) = [(Jmp' b1)]
+--	 handleBreak x = Debug.Trace.trace ("ODD!" ++ (show x)) []
+--	 handleContinue (LastOther (WhileBranch _ b1 b2)) = [(Jmp' b2)]
+--	 handleContinue (LastOther (Jump b1)) = [(Jmp' b1)]
 mapVarToValue (Var str) = [Mov' R14 (Symbol str)]
 mapVarToValue (Varray str expr) =   (mapExprToAsm expr) ++ [Mov' R14 (Array str R12)]
 mapVarToValue x = Debug.Trace.trace ("!!VAR!" ++ (show x)) [Mov' (Symbol "OHFUCK") (Symbol "ERROR")]
@@ -191,12 +202,14 @@ protoMethodCall (FuncCall name midParam) =
 -- -- ([], BranchSeq <stuff>)
 mapBranchToAsm :: BlockId-> ZLast BranchingStatement -> (([ProtoASM],[ProtoASM]), ZLast ProtoBranch)
 mapBranchToAsm bid (LastOther (IfBranch expr bid1 bid2))  
-	= (([],[]), LastOther $ If' (expressed++[(Cmp' (Literal 0) R12),(Je' bid2)]) [bid1, bid2])
+	= (([],(expressed++[(Cmp' (Literal 0) R12),(Je' bid2)])), LastOther $ If' [] [bid1, bid2])
+--	= (([],[]), LastOther $ If' (expressed++[(Cmp' (Literal 0) R12),(Je' bid2)]) [bid1, bid2])
 	where expressed = mapExprToAsm expr
 
-mapBranchToAsm bid (LastOther (Jump bid1))  = (([],[]), LastOther $ Jump' bid1)
+mapBranchToAsm bid (LastOther (Jump bid1))  = (([],[Jmp' bid1]), LastOther $ Jump' bid1)
 mapBranchToAsm bid (LastOther (WhileBranch expr bid1 bid2))  
-	= (([],expressed++[(Cmp' (Literal 0) R12),(Je' bid2)]), LastOther $ While' (expressed++[(Cmp' (Literal 0) R12 ),(Je' bid2)]) [bid1, bid2])
+	= (([],expressed++[(Cmp' (Literal 0) R12),(Je' bid2)]), LastOther $ While' [] [bid1, bid2])
+--	= (([],expressed++[(Cmp' (Literal 0) R12),(Je' bid2)]), LastOther $ While' (expressed++[(Cmp' (Literal 0) R12 ),(Je' bid2)]) [bid1, bid2])
 	where expressed = mapExprToAsm expr
 
 mapBranchToAsm bid (LastOther (InitialBranch bids)) = (([],[]), (LastOther (InitialBranch' bids)))
@@ -228,6 +241,7 @@ instance PrettyPrint ProtoASM where
                 (Pop' x) 	 -> uniop "pop" x 
                 (Call' x) 	 -> text ("call "++x)
                 (Dec' x) 	 -> text ""
+                (Jmp' x) 	 -> text ("jmp " ++ getStr x)
 		_ 		 -> Debug.Trace.trace ("!ppr!!!" ++ (show asm)) (text "@@")
 	  where 
   	    binop name x y = text (name++" ") <+> (ppr x) <+> text"," <+> (ppr y) 
@@ -266,7 +280,7 @@ instance PrettyPrint Value where
 
 
 instance PrettyPrint ProtoBranch where
-    ppr (Jump' bid) = text "Jmp" <+> ppr bid
+    ppr (Jump' bid) = text "" --text "mp" <+> ppr bid
     ppr (If' stmts _) = vcat $ map ppr stmts
     ppr (While' stmts _) = text ""--vcat $ map ppr stmts
     ppr (InitialBranch' bids) = text "# Methods Defined:" <+> hsep (map ppr bids)

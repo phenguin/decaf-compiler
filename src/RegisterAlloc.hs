@@ -4,29 +4,35 @@ import MidIR
 import Util
 import qualified Data.Map as M
 import ControlFlowGraph
-import CFGConstruct
 import CFGConcrete
+import CFGConstruct
+import System.IO.Unsafe
 import PrettyPrint
 import Text.PrettyPrint.HughesPJ hiding (Str)
 import Debug.Trace
 import Control.Monad.State
 import LowIR
 import Data.IORef
-import System.IO.Unsafe
 import Data.Maybe
 import Data.List
+import Santiago
+
 
 type StringState = M.Map String String
 --insert = M.insert
-
+--fj x = fromJust $ case x of
+--		Nothing -> Debug.Trace.traceShow x Nothing
+--		x -> x
 data GlobalTable = GlobalEntry {getName::String} 
 data LocalTable = LocalEntry {getScope::String, getSymbol::String} 
 
 --navigate :: (Show a) => a -> LGraph ProtoASM ProtoBranch -> LGraph ProtoASM ProtoBranch
 navigate globals funmap cfg = unsafePerformIO $ do 
 		let cfg' = focus (BID "main" ) cfg 
-		let navret = navigate' cfg ["main"] $ fgFocus  cfg' 
+		let (_,navret)= kruise cfg (stVarsCollect) []
+		--let navret = navigate' cfg ["main"] $ fgFocus  cfg' 
 		let bid2scope = nub $ [(BID "start_0", "global")] ++ map (\ (b,s, _)-> (b,s)) navret
+		
 --		putStrLn $ show navret
 		let 	convertVariableToVar (Var sym) = (Symbol sym)
 			convertVariableToVar (Varray sym (Const i)) = (Array sym (Literal i))
@@ -34,12 +40,17 @@ navigate globals funmap cfg = unsafePerformIO $ do
 --		putStrLn $ show $ mappify (M.empty) bid2scope
 --		putStrLn $ show $ mappify (M.empty) scope2var
 --		putStrLn $ show funmap 
-		cfgWithVariableLabels <- return $ mapLGraphNodes (translateWithMap bid2scope) (\_ x -> (([],[]),x)) cfg 
-		strings <- return $ map (\(EvilString x) -> x)$findAllStrings cfgWithVariableLabels
-		epilog <- return $ makeDataSection strings $ mappify (M.empty) $ scope2var
+--		cfgWithVariableLabels <- return $ fmapGraph (translateWithMap bid2scope) (translateBranchWithMap bid2scope) cfg 
+		cfgWithVariableLabels <- return $ fst $ trickle cfg (scoper) M.empty
+		putStrLn $ show cfgWithVariableLabels
+		let (_,vars') = kruise cfgWithVariableLabels extractVars []
+		let vars = nub vars'
+		let vardata = concatMap datifyVars vars 
+		strings <- return $ nub $ map (\(EvilString x) -> x)$findAllStrings cfgWithVariableLabels
+		epilog <- return $ (makeDataSection strings) ++ vardata
 	--	pprIO cfg
 		wrongarrcfg <- return $ mapLGraphNodes (replaceStrings) (\_ x -> (([],[]),x)) cfgWithVariableLabels
-		finalcfg <- return $ mapLGraphNodes (fixArrays) (\_ x -> (([],[]),x)) wrongarrcfg
+		finalcfg <- return $ mapLGraphNodes (fixArrays) (fixZLastArrays) wrongarrcfg
 		return (prolog,finalcfg,epilog)
 	where 	mappify:: (Ord a, Ord k) => (M.Map a [k]) -> [(a,k)]-> (M.Map a [k])
 		mappify mp ((b,s):xs) = mappify (M.alter (addorappend s) b mp) xs 
@@ -48,14 +59,65 @@ navigate globals funmap cfg = unsafePerformIO $ do
 		addorappend s Nothing = Just $ [s]
 		prolog = ".global main\n"
 
+isvar x@(Symbol _) = True
+isvar x@(Array _ _) = True
+isvar x = False
 
-makeDataSection strings scope2var = ".data\n" ++ variables ++ strings'
+
+extractVars bid scope p = do
+	vals<-get 
+	put $ vals ++ (filter isvar $ concatMap values p)
+	return p
+
+datifyVars y = case y of 
+	(Symbol y') -> ".comm " ++ y'++", 8\n"
+	(Array y' (Literal x')) -> ".comm "  ++ y' ++ ", " ++(show $ x' *8 ) ++"\n"  
+	_ ->"" 
+		
+
+--scoper:: (MonadState (M.Map Value String) m) => BlockId -> [String] -> [ProtoASM] -> m [ProtoASM]
+scoper bid scope instrs = do
+	premap <- get
+	varmap <- return $ (updatemap premap) 
+	put varmap 
+	return $ concatMap ((fixInstructionInputs (mapswap varmap))) instrs
+		
+	where
+		mapswap:: M.Map Value String -> Value -> Value
+		mapswap vmp v@(Symbol str) = Symbol $ prescope prefix ++ "_" ++ str
+			where prefix = fj $ M.lookup v vmp
+		mapswap vmp v@(Array str va) = Array (prescope prefix ++ "_" ++ str) va
+			where prefix = fj $ M.lookup v vmp
+		mapswap vmp v = v
+		decls = concatMap isDecl instrs
+		isDecl (Dec' v) =  [v]
+		isDecl _ =  []
+		updatemap:: M.Map Value [Char] -> M.Map Value [Char]
+		updatemap mp = updatemap' decls mp
+		updatemap':: [Value] -> M.Map Value [Char] -> M.Map Value [Char]
+		updatemap' (x:xs) mp = M.insert x (head scope) (updatemap' xs mp)
+		updatemap' [] mp = mp 
+		prescope pre = intercalate "_" $reverse$dropWhile (/=pre) scope 
+
+
+
+
+stVarsCollect bid scope p = do
+	vars <- get
+	newvars <- return $ newvars
+	put $ vars ++ (map (\x->(bid,(head scope),x)) newvars) 
+	return p
+     where
+	 allvals = concatMap values p 
+	 newvars = filter isVar allvals
+	 isVar x@(Symbol _) = True
+	 isVar x@(Array _ _) = True
+	 isVar x = False
+
+
+
+makeDataSection strings = ".data\n" ++ strings'
 		where
-			variables = concat $ concatMap (\(x,y) -> map (stringifyVars x ) y ) $ M.toList scope2var
-			stringifyVars x y = case y of 
-					(Symbol y') -> ".comm " ++ x ++ "_" ++  y'++", 8\n"
-					(Array y' (Literal x')) -> ".comm " ++ x ++ "_" ++ y' ++ ", " ++(show $ x' *8 ) ++"\n"  
-					_ ->"" 
 			strings' = concatMap (\x -> "." ++ (getHashStr x) ++ ": " ++ ".string " ++ (show x) ++ "\n" ) strings
 
 
@@ -78,8 +140,11 @@ fixArrays bid instruction = case hasArray of
 		 replaceWithReg15 x = x
 		 loadArr (Array str x) = [(Mov' (EvilSymbol str) R15)] 
 		
-
-
+fixZLastArrays bid (LastOther (While' expr bs )) =  (([],[]),LastOther (While' newexpr bs))
+	where newexpr = concatMap (fixArrays bid) expr
+fixZLastArrays bid (LastOther (If' expr bs )) =  (([],[]), LastOther (If' newexpr bs)) 
+	where newexpr = concatMap (fixArrays bid) expr
+fixZLastArrays _ x = (([],[]),x)
 
 
 translateWithMap bid2scope bid instr = fixInstructionInputs fix instr
@@ -88,6 +153,13 @@ translateWithMap bid2scope bid instr = fixInstructionInputs fix instr
 			fix (Array x y) = (Array ( scope ++ "_" ++ x) (fix y))
 			fix x = x
 			scope =  fromMaybe "" $ lookup bid bid2scope
+
+translateBranchWithMap bid2Scope bid (LastOther (While' expr bs )) =  (([],[]),LastOther (While' newexpr bs))
+	where newexpr = concatMap (translateWithMap bid2Scope bid) expr
+translateBranchWithMap bid2scope bid (LastOther (If' expr bs )) =  (([],[]), LastOther (If' newexpr bs)) 
+	where newexpr = concatMap (translateWithMap bid2scope bid) expr
+translateBranchWithMap _ _ x = (([],[]),x)
+
 
 translateLastWithMap bid2scope bid (LastOther (If' stmts bids)) = 
     ([], LastOther $ If' (concatMap (translateWithMap bid2scope bid) stmts) bids)
@@ -129,7 +201,14 @@ fixInstructionInputs fix instr = [output]
 
 navigate' :: LGraph ProtoASM ProtoBranch -> [String] -> ZBlock ProtoASM ProtoBranch -> [(BlockId, String, Value)]
 navigate' c scope zcfg = collectVars c scope zcfg
-	
+
+
+--scoping vars zcfg = case z 
+
+--body= zbTail
+
+
+
 --vars ++ map navigateFunction collectFunctionCalls
 getBlock :: LGraph m l -> BlockId -> Maybe (ZBlock m l)
 getBlock (LGraph eid blocks) blockid =  case lookupBlock blockid blocks of
@@ -141,7 +220,7 @@ collectVars c scope zcfg = scopeVars ++ functionVars
 	where   	
 		scopeVars = map (\(bd,x)-> (bd,(head scope),x))$ filter isVar $concatMap values' $ middles
 		functionCalls = nub $ concatMap (\(_,(Call' str)) -> if (not $ elem str scope) then [str] else [])$ filter isCall middles
-		functionVars = concatMap (\ name -> collectVars (c) [name] (fromJust$ getBlock c (BID name))) $ filter ( \name -> isJust $ getBlock c (BID name)) functionCalls 
+		functionVars = concatMap (\ name -> collectVars (c) [name] (fj $ getBlock c (BID name))) $ filter ( \name -> isJust $ getBlock c (BID name)) functionCalls 
 		isCall (_,(Call' str)) = True
 		isCall _ = False
 		isVar (_,a@(Symbol _)) = True
@@ -181,18 +260,33 @@ values instr = case instr of
 		(Push' v)	->	[v]
 		(Pop' v)	->	[v]
 
-zipThroughB :: LGraph t ProtoBranch -> ZBlock t ProtoBranch -> [(BlockId, t)]
-zipThroughB  c b = case zbTail b of 
-		(ZTail m _) -> ((getBlockId b),m):(zipThroughB c (nextEdge b))
-		(ZLast (LastOther (Jump' bs) ))->  zipThroughB c $ fromJust $ getBlock c bs 
-		(ZLast (LastOther (If' _ (b1:b2:_)) ))-> (zipThroughB c $fromJust $getBlock c b2 ) ++ (map (\x -> (b1,x)) $zipThroughB' $ fgFocus $ focus b1 c)
-		(ZLast (LastOther (While' _ (b1:b2:_)) ))-> (zipThroughB c $ fromJust$ getBlock c b2) ++ (map (\x -> (b1,x))$zipThroughB' $fgFocus $ focus b1 c)
-		(ZLast (LastOther (InitialBranch' bs )))-> concatMap (\x -> zipThroughB c $ fromJust$ getBlock c x) bs
+zipThroughB :: LGraph ProtoASM ProtoBranch -> ZBlock ProtoASM ProtoBranch -> [(BlockId, ProtoASM)]
+zipThroughB  c b = zipThroughBState [] c b 
+
+zipThroughBState scope c b = case zbTail b of 
+		(ZTail m _) -> ((getBlockId b),m):(zipThroughBState (b:scope) c (nextEdge b))
+		(ZLast (LastOther (Jump' bs) ))->  if not (elem b scope)
+				then zipThroughBState (b:scope) c $ fj $ getBlock c bs 
+				else []
+		(ZLast (LastOther (If' expr (b1:b2:_)) ))-> if not (elem b scope) 
+				then (map (\z -> ((getBlockId b), z)) expr) ++ (zipThroughBState (b:scope) c $fj $getBlock c b2 ) ++ (zipThroughBState (b:scope) c $ fj $ getBlock c b1 ) -- fgFocus $ focus b1 c)
+				else []
+		(ZLast (LastOther (While' expr (b1:b2:_)) ))-> if not (elem b scope)
+				then (map (\z -> ((getBlockId b), z)) expr) ++ (zipThroughBState (b:scope) c $ fj$ getBlock c b2) ++ (zipThroughBState (b:scope) c $ fj $ getBlock c b1 ) --fgFocus $ focus b1 c)
+				else []
+		(ZLast (LastOther (InitialBranch' bs )))-> if not (elem b scope) 
+				then concatMap (\x -> zipThroughBState (b:scope) c $ fj $ getBlock c x) bs
+				else []
 		_ -> []
+--		(ZLast (LastOther (Jump' bs) ))->  zipThroughB c $ fromJust $ getBlock c bs 
+--		(ZLast (LastOther (If' expr (b1:b2:_)) ))-> (map (\z -> (b1, z)) expr) ++ (zipThroughB c $fromJust $getBlock c b2 ) ++ (map (\x -> (b1,x)) $zipThroughB' c $ fgFocus $ focus b1 c)
+--		(ZLast (LastOther (While' expr (b1:b2:_)) ))-> (map (\z -> (b1, z)) expr) ++ (zipThroughB c $ fromJust$ getBlock c b2) ++ (map (\x -> (b1,x))$zipThroughB' c $fgFocus $ focus b1 c)
+--		(ZLast (LastOther (InitialBranch' bs )))-> concatMap (\x -> zipThroughB c $ fromJust$ getBlock c x) bs
+--		_ -> []
         --
 -- A version that doesn't jump to other blocks
-zipThroughB' :: ZBlock a l -> [a]
-zipThroughB' b = case zbTail b of 
+--zipThroughB' :: ZBlock a l -> [a]
+zipThroughB'  b = case zbTail b of 
 		(ZTail m _) -> m:(zipThroughB' (nextEdge b))
 		_ -> []
 {-
