@@ -36,6 +36,12 @@ fj x = fromJust $ case x of
 	Nothing -> Debug.Trace.traceShow x Nothing
 	x ->x
 
+ddd x = Debug.Trace.traceShow x x
+
+insertListMap ((x,y):xs) mp = M.insert x y (insertListMap xs mp)
+insertListMap [] mp = mp
+
+
 cruise g@(LGraph entryId blocks) l = LGraph entryId $ cruise' [] blocks  (fj $ M.lookup (lgEntry g) blocks) l 
 
 cruise':: [BlockId] -> BlockLookup ProtoASM ProtoBranch-> Block ProtoASM ProtoBranch -> (BlockId ->[ProtoASM] -> [ProtoASM]) -> BlockLookup ProtoASM ProtoBranch
@@ -48,25 +54,42 @@ cruise' visited g blk l =M.insert bid newblock g'
 			g':: BlockLookup ProtoASM ProtoBranch
 			g' = case last of  
 				(LastOther (While' _ (b1:b2:_))) -> let
+					stop' = endLabel b1
 					blk1 = getblk b1 g 
 					blk2 = getblk b2 g
+					bid2 = bId blk2
+					bid1 = bId blk1
 					leftg = if unvisited b1 
-						then cruise' (bid:visited) g blk1 l 
+						then cruise' ((BID stop'):bid2:bid1:visited) g blk1 l 
 						else g
-					in if unvisited b2
-						then cruise' (bid:visited) leftg blk2 l
+					rightg = if unvisited b2
+						then cruise' ((BID stop'):bid2:bid1:visited) leftg blk2 l
 						else leftg
+					in if unvisited (BID stop')
+						then cruise' ((BID stop'):bid2:bid1:bid:visited) rightg (getblk (BID stop') g) l
+						else rightg
+	
 				(LastOther (If' _ (b1:b2:_))) -> let 
+					stop' = endLabel b1
 					blk1 = getblk b1 g 
 					blk2 = getblk b2 g 
+					bid1 = bId blk1
+					bid2 = bId blk2
 					leftg = if unvisited b1 
-						then cruise' (bid:visited) g blk1 l 
+						then cruise' ((BID stop'):bid2:bid1:bid:visited) g blk1 l 
 						else g
-					in if unvisited b2
-						then cruise' (bid:visited) leftg blk2 l
+					rightg = if unvisited b2
+						then cruise' ((BID stop'):bid2:bid1:bid:visited) leftg blk2 l
 						else leftg
-				(LastOther (Jump' b)) -> cruise' (bid:visited) g (getblk b g) l 
-				(LastOther (InitialBranch' bs)) -> let cruz stt elm = cruise' (bid:visited) stt (getblk elm stt) l 
+					in if unvisited (BID stop')
+						then cruise' ((BID stop'):bid2:bid1:bid:visited) rightg (getblk (BID stop') g) l
+						else rightg
+	
+
+				(LastOther (Jump' b)) -> if unvisited b 
+						then cruise' (bid:visited) g (getblk b g) l 
+						else g
+				(LastOther (InitialBranch' bs)) -> let cruz stt elm = cruise' ((bId $getblk elm stt):bid:visited) stt (getblk elm stt) l 
 					in skewer g cruz bs
 				_ -> g
 			functions = concatMap getDfun content
@@ -95,25 +118,43 @@ kruise' prestate visited scope g blk l = (M.insert bid newblock g' ,stateout)
 					--g':: BlockLookup ProtoASM ProtoBranch
 			(g',stateout) = case last of  
 				(LastOther (While' _ (b1:b2:_))) -> let
+					stop' = endLabel b1
 					blk1 = getblk b1 g 
 					blk2 = getblk b2 g
+					bid2 = bId blk2
+					bid1 = bId blk1
 					(leftg ,state') = if unvisited b1 
-						then kruise' newstate (bid:visited) scope g blk1 l 
+						then kruise' newstate ((BID stop'):bid2:bid1:bid:visited) scope g blk1 l 
 						else (g,newstate)
-					in if unvisited b2
-						then kruise' state' (bid:visited) scope leftg blk2 l
+					(rightg, state'') = if unvisited b2
+						then kruise' state' ((BID stop'):bid2:bid1:bid:visited) scope leftg blk2 l
 						else (leftg,state')
+					in if unvisited (BID stop')
+						then kruise' state' ((BID stop'):bid2:bid1:bid:visited) scope rightg (getblk (BID stop') g) l
+						else (rightg,state'')
+	
+
 				(LastOther (If' _ (b1:b2:_))) -> let 
+					stop' = endLabel b1
 					blk1 = getblk b1 g 
 					blk2 = getblk b2 g 
+					bid2 = bId blk2
+					bid1 = bId blk1
 					(leftg,state') = if unvisited b1 
-						then kruise' newstate (bid:visited) scope g blk1 l 
+						then kruise' newstate ((BID stop'):bid2:bid1:bid:visited) scope g blk1 l 
 						else (g,newstate)
-					in if unvisited b2
-						then kruise' state' (bid:visited) scope leftg blk2 l
+					(rightg,state'') = if unvisited b2
+						then kruise' state' ((BID stop'):bid2:bid1:bid:visited) scope leftg blk2 l
 						else (leftg, state')
-				(LastOther (Jump' b)) -> kruise' newstate (bid:visited) scope g (getblk b g) l 
-				(LastOther (InitialBranch' bs)) -> let cruz stt elm = kruise' (snd stt) (bid:visited) ((getStr elm):scope)(fst stt) (getblk elm (fst stt)) l 
+					in if unvisited (BID stop')
+						then kruise' state' ((BID stop'):bid2:bid1:bid:visited) scope rightg (getblk (BID stop') g) l
+						else (rightg,state'')
+	
+
+				(LastOther (Jump' b)) -> if unvisited b
+						then  kruise' newstate (bid:visited) scope g (getblk b g) l
+						else (g,newstate)
+				(LastOther (InitialBranch' bs)) -> let cruz stt elm = kruise' (snd stt) ((bId $getblk elm $fst stt):bid:visited) ((getStr elm):scope)(fst stt) (getblk elm (fst stt)) l 
 					in skewer (g,newstate) cruz bs
 				_ -> (g,newstate)
 			unvisited id = not $ elem id visited
@@ -142,7 +183,7 @@ trickle' stop prestate visited scope g blk l = if (BID stop) == bid
 				else (M.insert bid (newblock)  g' ,stateout)
 		where 
 			newblock = Block bid $ newZtail content last
-			(content,newstate) = runState (l bid scope $ gatherContent $ bTail blk) prestate
+			(content,newstate) =  runState (l bid scope $ gatherContent $ bTail blk) prestate
 			bid = bId blk
 			last = getZLast blk
 					--g':: BlockLookup ProtoASM ProtoBranch
@@ -151,34 +192,38 @@ trickle' stop prestate visited scope g blk l = if (BID stop) == bid
 					stop' = endLabel b1
 					blk1 = getblk b1 g 
 					blk2 = getblk b2 g
+					bid2 = bId blk2
+					bid1 = bId blk1
 					sc' = bid2scope b1
 					(leftg ,state') = if unvisited b1 
-						then trickle' stop' newstate (bid:visited) (sc':scope) g blk1 l 
+						then trickle' stop' newstate ((BID stop'):bid2:bid1:bid:visited) (sc':scope) g blk1 l 
 						else (g,newstate)
 					(rightg,state'') = if unvisited b2
-						then trickle' stop' newstate (bid:visited) (sc':scope) leftg blk2 l
+						then trickle' stop' newstate ((BID stop'):bid2:bid1:bid:visited) (sc':scope) leftg blk2 l
 						else (leftg,newstate)
 					in if unvisited (BID stop')
-						then trickle' stop newstate (bid:visited) scope rightg (getblk (BID stop') g) l
-						else (leftg,newstate)
+						then trickle' stop newstate ((BID stop'):bid2:bid1:bid:visited) scope rightg (getblk (BID stop') g) l
+						else (rightg,newstate)
 				(LastOther (If' _ (b1:b2:_))) -> let 
 					sc' = bid2scope b1
 					stop' = endLabel b1
 					blk1 = getblk b1 g 
 					blk2 = getblk b2 g 
+					bid2 = bId blk2
+					bid1 = bId blk1
 					(leftg,state') = if unvisited b1 
-						then trickle' stop' newstate (bid:visited) (sc':scope) g blk1 l 
+						then trickle' stop' newstate ((BID stop'):bid2:bid1:bid:visited) (sc':scope) g blk1 l 
 						else (g,newstate)
 					(rightg,state'') = if unvisited b2
-						then trickle' stop' newstate (bid:visited) (sc':scope) leftg blk2 l
+						then trickle' stop' newstate ((BID stop'):bid2:bid1:bid:visited) (sc':scope) leftg blk2 l
 						else (leftg, newstate)
 					in if unvisited (BID stop')
-						then trickle' stop newstate (bid:visited) scope rightg (getblk (BID stop') g) l
-						else (leftg,newstate)
+						then trickle' stop newstate ((BID stop'):bid2:bid1:bid:visited) scope rightg (getblk (BID stop') g) l
+						else (rightg,newstate)
 				(LastOther (Jump' b)) -> if b /= (BID stop) 
-					then trickle' stop newstate (bid:visited) scope g (getblk b g) l 
+					then trickle' stop newstate (b:bid:visited) scope g (getblk b g) l 
 					else (g,newstate)
-				(LastOther (InitialBranch' bs)) -> let cruz stt elm = trickle' stop (snd stt) (bid:visited) ((getStr elm):scope) (fst stt) (getblk elm (fst stt)) l 
+				(LastOther (InitialBranch' bs)) -> let cruz stt elm = trickle' stop (snd stt) ((bId $getblk elm $fst stt):bid:visited) ((getStr elm):scope) (fst stt) (getblk elm (fst stt)) l 
 					in skewer (g,newstate) cruz $ bs
 				_ -> (g,newstate)
 			unvisited id = not $ elem id visited
@@ -199,6 +244,14 @@ bid2scope bid = endlabel name
 		| isPrefixOf ".loop_test_" str = "loop" ++  drop 10 str
 		| isPrefixOf ".loop_end_" str = "loop" ++  drop 9 str
 	
+testLabel bid = testlabel name  
+      where
+	name = getStr bid
+	testlabel str  
+		| isPrefixOf ".loop_body_" str = ".loop_test_" ++  drop 11 str
+		| isPrefixOf ".loop_test_" str = ".loop_test_" ++  drop 11 str
+		| isPrefixOf ".loop_end_" str = ".loop_test_" ++  drop 10 str
+
 
 endLabel bid = endlabel name  
       where
@@ -210,5 +263,134 @@ endLabel bid = endlabel name
 		| isPrefixOf ".loop_test_" str = ".loop_end_" ++  drop 11 str
 		| isPrefixOf ".loop_end_" str = ".loop_end_" ++  drop 10 str
 
+trickleLast g@(LGraph entryId blocks) l i  = (LGraph entryId outmap , state)
+	where 
+	  (outmap,state) = trickleL' "" i [] ["global"] blocks  (fj $ start) l
+          start = case M.lookup (lgEntry g) blocks of
+		Nothing -> Debug.Trace.trace "FIRE!" Nothing
+		x	-> x
+
+
+
+--- passes last to lambda
+trickleL' stop prestate visited scope g blk l = if (BID stop) == bid 
+				then (g,prestate)
+				else (M.insert bid (newblock)  g' ,stateout)
+		where 
+			newblock = Block bid $ newZtail content last
+			(content,newstate) =  runState (l (cl') bid scope $ gatherContent $ bTail blk) prestate
+			bid = bId blk
+			last = getZLast blk
+			cl' = case last of
+				(LastOther x )-> x
+				_ -> Nil		 --bahh lazyness
+					--g':: BlockLookup ProtoASM ProtoBranch
+			(g', stateout) = case last of  
+				(LastOther k@(While' _ (b1:b2:_))) -> let
+					stop' = endLabel b1
+					blk1 = getblk b1 g 
+					blk2 = getblk b2 g
+					sc' = bid2scope b1
+					(leftg ,state') = if unvisited b1 
+						then trickleL' stop' newstate (bid:visited) (sc':scope) g blk1 l 
+						else (g,newstate)
+					(rightg,state'') = if unvisited b2
+						then trickleL' stop' newstate (bid:visited) (sc':scope) leftg blk2 l
+						else (leftg,newstate)
+					in if unvisited (BID stop')
+						then trickleL' stop newstate (bid:visited) scope rightg (getblk (BID stop') g) l
+						else (rightg,newstate)
+				(LastOther k@(If' _ (b1:b2:_))) -> let 
+					sc' = bid2scope b1
+					stop' = endLabel b1
+					blk1 = getblk b1 g 
+					blk2 = getblk b2 g 
+					(leftg,state') = if unvisited b1 
+						then trickleL' stop' newstate (bid:visited) (sc':scope) g blk1 l 
+						else (g,newstate)
+					(rightg,state'') = if unvisited b2
+						then trickleL' stop' newstate (bid:visited) (sc':scope) leftg blk2 l
+						else (leftg, newstate)
+					in if unvisited (BID stop')
+						then trickleL' stop newstate (bid:visited) scope rightg (getblk (BID stop') g) l
+						else (rightg,newstate)
+				(LastOther k@(Jump' b)) -> if b /= (BID stop) 
+					then trickleL' stop newstate (bid:visited) scope g (getblk b g) l 
+					else (g,newstate)
+				(LastOther k@(InitialBranch' bs)) -> let cruz stt elm = trickleL'  stop (snd stt) ((bId $getblk elm $fst stt):bid:visited) ((getStr elm):scope) (fst stt) (getblk elm (fst stt)) l 
+					in skewer (g,newstate) cruz $ bs
+				_ -> (g,newstate)
+			unvisited id = not $ elem id visited
+			getblk b g = fromJust $ M.lookup b g 
+			skewer st f (x:lst) = skewer st' f	 lst
+					where st' = if unvisited x 
+						then f st x
+						else st
+			skewer st f [] = st
+
+
+--- esiurk = reverse kruise ! Traverse State backwards! get it :-) ?
+
+esiurk g@(LGraph entryId blocks) l i  = (LGraph entryId outmap , state)
+	where 
+	  (outmap,state) = esiurk' i [] ["global"] blocks  (fj $ M.lookup (lgEntry g) blocks) l
+
+
+--kruise':: [BlockId] -> BlockLookup ProtoASM ProtoBranch-> Block ProtoASM ProtoBranch -> (BlockId ->[ProtoASM] -> [ProtoASM]) -> BlockLookup ProtoASM ProtoBranch
+esiurk' prestate visited scope g blk l = (M.insert bid newblock g' ,newstate)
+		where 
+			newblock = Block bid $ newZtail content last
+			(content,newstate) =  runState (l bid scope $ gatherContent $ bTail blk) stateout
+			bid = bId blk
+			last = getZLast blk
+					--g':: BlockLookup ProtoASM ProtoBranch
+			(g',stateout) = case last of  
+				(LastOther (While' _ (b1:b2:_))) -> let
+					stop' = endLabel b1
+					blk1 = getblk b2 g 
+					blk2 = getblk b1 g
+					bid2 = bId blk2
+					bid1 = bId blk1
+					(leftg ,state') = if unvisited b1 
+						then esiurk' prestate ((BID stop'):bid2:bid1:bid:visited) scope g blk1 l 
+						else (g,prestate)
+					(rightg, state'') = if unvisited b2
+						then esiurk' state' ((BID stop'):bid2:bid1:bid:visited) scope leftg blk2 l
+						else (leftg,state')
+					in if unvisited (BID stop')
+						then esiurk' state' ((BID stop'):bid2:bid1:bid:visited) scope rightg (getblk (BID stop') g) l
+						else (rightg,state'')
+	
+
+				(LastOther (If' _ (b1:b2:_))) -> let 
+					stop' = endLabel b1
+					blk1 = getblk b2 g 
+					blk2 = getblk b1 g 
+					bid2 = bId blk2
+					bid1 = bId blk1
+					(leftg,state') = if unvisited b1 
+						then esiurk' prestate ((BID stop'):bid2:bid1:bid:visited) scope g blk1 l 
+						else (g,prestate)
+					(rightg,state'') = if unvisited b2
+						then esiurk' state' ((BID stop'):bid2:bid1:bid:visited) scope leftg blk2 l
+						else (leftg, state')
+					in if unvisited (BID stop')
+						then esiurk' state' ((BID stop'):bid2:bid1:bid:visited) scope rightg (getblk (BID stop') g) l
+						else (rightg,state'')
+	
+
+				(LastOther (Jump' b)) -> if unvisited b
+						then  esiurk' prestate (bid:visited) scope g (getblk b g) l
+						else (g,prestate)
+				(LastOther (InitialBranch' bs)) -> let cruz stt elm = esiurk' (snd stt) ((bId $getblk elm $fst stt):bid:visited) ((getStr elm):scope)(fst stt) (getblk elm (fst stt)) l 
+					in skewer (g,prestate) cruz bs
+				_ -> (g,prestate)
+			unvisited id = not $ elem id visited
+			getblk b g = fromJust $ M.lookup b g 
+			skewer st f (x:lst) = skewer st' f	 lst
+					where st' = if unvisited x 
+						then f st x
+						else st
+			skewer st f [] = st
 
 
