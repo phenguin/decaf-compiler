@@ -285,7 +285,7 @@ pprZTail (ZTail m t) = ppr m $$ ppr t
 pprZTail (ZLast l) = ppr l
 
 pprLast :: (PrettyPrint l, LastNode l) => ZLast l -> Doc
-pprLast LastExit = text "ret"
+pprLast LastExit = text "leave\nret"
 pprLast (LastOther l) = ppr l
 
 pprBlock :: (PrettyPrint m, PrettyPrint l, LastNode l) => Block m l -> Doc
