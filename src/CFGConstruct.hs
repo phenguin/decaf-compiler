@@ -56,6 +56,17 @@ mkWhile condBranch body =
         body <&> mkLabel testId <&> condBranch bodyId endId <&>
         mkLabel endId
 
+mkFor :: (PrettyPrint m, PrettyPrint l, LastNode l) => 
+    (BlockId -> BlockId -> AGraph m l) -> AGraph m l -> AGraph m l
+mkFor condBranch body = 
+    withNewBlockId ".for_test" $ \testId ->
+    withNewBlockId ".for_body" $ \bodyId ->
+    withNewBlockId ".for_end" $ \endId ->
+        mkBranch testId <&> mkLabel bodyId <&>
+        body <&> mkLabel testId <&> condBranch bodyId endId <&>
+        mkLabel endId
+
+
 -- Makes the CFG for a method declaration
 mkMethod :: (PrettyPrint m, PrettyPrint l, LastNode l) =>
     String -> AGraph m l -> AGraph m l -> AGraph m l
@@ -137,6 +148,22 @@ mapLGraphNodes :: (PrettyPrint l1, LastNode l1, PrettyPrint l2, LastNode l2, Pre
 
 mapLGraphNodes mf lf (LGraph entryId blocks) = LGraph entryId blocks'
     where blocks' = mapBlocks (mapBlock mf lf) blocks
+
+----------------------AUGMENTED WITH ZLAST TO DO BREAKS
+
+
+
+mapWithZLastBlock:: (PrettyPrint l1, LastNode l1, PrettyPrint l2, LastNode l2, PrettyPrint m1, PrettyPrint m2) =>
+    (ZLast l1 -> BlockId -> m1 -> [m2]) -> (BlockId -> ZLast l1 -> (([m2],[m2]), ZLast l2)) -> Block m1 l1 -> Block m2 l2
+mapWithZLastBlock mf lf (Block bid ztail) = Block bid (mapZTail (mf (getZLast ztail) bid) (lf bid) ztail)
+
+mapWithZLastLGraphNodes :: (PrettyPrint l1, LastNode l1, PrettyPrint l2, LastNode l2, PrettyPrint m1, PrettyPrint m2) => 
+    (ZLast l1 -> BlockId -> m1 -> [m2]) -> (BlockId -> ZLast l1 -> (([m2],[m2]), ZLast l2)) -> LGraph m1 l1 -> LGraph m2 l2
+
+mapWithZLastLGraphNodes mf lf (LGraph entryId blocks) = LGraph entryId blocks'
+    where blocks' = mapBlocks (mapWithZLastBlock mf lf) blocks
+
+
 
 -- Pretty Printing
 

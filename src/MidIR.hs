@@ -23,6 +23,8 @@ data Program = Prg {getCode::[Statement]} deriving (Show,Eq,Data,Typeable)
 data Statement =  Set Variable Expression
 		| If {ifCond::Expression , ifThen::[Statement] , ifElse::[Statement]}
 		| While { condition::Expression , block::[Statement]}
+		| ForLoop  {inductionVar::Variable, endVal::Expression, block::[Statement]}
+		| Scar String -- when for loops are castrated out of the tree for parallelization
 		| Return Expression
 		| Break 
 		| Continue
@@ -124,10 +126,10 @@ statementIR (MT (_,T.While,st) (cond:body:_)) = [While cond' body']
 	  cond' = expressionIR cond
 	  body' = statementIR body		
 
-statementIR (MT (_,(T.For iD),st) (start:end:body:_)) = [Set i' (expressionIR start)] ++ [While cond' body']
+statementIR (MT (_,(T.For iD),st) (start:end:body:_)) =[ForLoop i' end' body']
 	where
-	  cond' = (Lt (Loc i') (expressionIR end))
-	  body' = (statementIR body) ++ [Set i' (Add (Loc i') (Const 1))]
+	  end' = (expressionIR end)
+	  body' = (statementIR body)
 	  i'    = Var (T.idString iD) 
 
 statementIR (MT (_,T.DBlock,st) body) = concat (map (statementIR) body)

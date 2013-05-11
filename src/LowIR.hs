@@ -3,6 +3,7 @@ module LowIR where
 
 
 
+
 import MidIR
 import qualified Data.Map 
 import ControlFlowGraph
@@ -97,9 +98,8 @@ instance LastNode ProtoBranch where
 
 type LowCFG = LGraph ProtoASM ProtoBranch
 
-toLowIRCFG :: ControlFlowGraph -> LowCFG
-toLowIRCFG cfg = mapLGraphNodes (mapStmtToAsm) (mapBranchToAsm) cfgLGraph
-      where cfgLGraph = lgraphSpanningFunctions cfg
+--toLowIRCFG :: ControlFlowGraph -> LowCFG
+toLowIRCFG cfg = mapLGraphNodes (mapStmtToAsm) (mapBranchToAsm) cfg
 
 -- Converts regular statements to the pseudo-asm code
 mapStmtToAsm ::BlockId -> Statement -> [ProtoASM]
@@ -299,11 +299,11 @@ instance PrettyPrint Value where
 	ppr x = case x of 
             (Symbol str) 		-> text $  str   
             (EvilSymbol str) 		-> text $  "$" ++ str   
-            (Array str i) 		-> text  (str++"[")<+> (ppr i )<+> text "]"
+            (Array str i) 		-> (text $ str++"(,") <+> (ppr i) <+>  text (",8)")
             (Literal i)			-> text $"$" ++ ( show i)
             (EvilString str) 		-> text $ show str
             (Verbatim str) 		-> text $str
-            (Dereference x y) 		-> (text "0(")<+> (ppr x) <+> (text ",") <+>(ppr y) <+>  text (",8)")
+            (Dereference x y) 		-> (ppr x) <+> (text "(,") <+>(ppr y) <+>  text (",8)")
 	    (Stack i)			-> text $ (show i) ++ "(%rbp)"  
             RAX -> text "%rax"
             RBX -> text "%rbx"

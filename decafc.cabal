@@ -30,6 +30,7 @@ executable decafc
                      , unordered-containers
                      , pretty
                      , syb
+                     , hmatrix-glpk 
   build-tools:         alex >=3.0.2
                      , happy
 
