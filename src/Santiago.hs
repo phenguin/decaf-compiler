@@ -243,6 +243,9 @@ bid2scope bid = endlabel name
 		| isPrefixOf ".loop_body_" str = "loop" ++  drop 10 str
 		| isPrefixOf ".loop_test_" str = "loop" ++  drop 10 str
 		| isPrefixOf ".loop_end_" str = "loop" ++  drop 9 str
+		| isPrefixOf ".for_end_" str = "for" ++  drop 8 str
+		| isPrefixOf ".for_body_" str = "for" ++  drop 9 str
+		| isPrefixOf ".for_test_" str = "for" ++  drop 9 str
 	
 testLabel bid = testlabel name  
       where
@@ -262,6 +265,9 @@ endLabel bid = endlabel name
 		| isPrefixOf ".loop_body_" str = ".loop_end_" ++  drop 11 str
 		| isPrefixOf ".loop_test_" str = ".loop_end_" ++  drop 11 str
 		| isPrefixOf ".loop_end_" str = ".loop_end_" ++  drop 10 str
+		| isPrefixOf ".for_end_" str = ".for_end_" ++  drop 9 str
+		| isPrefixOf ".for_body_" str = ".for_end_" ++  drop 10 str
+		| isPrefixOf ".for_test_" str = ".for_end_" ++  drop 10 str
 
 trickleLast g@(LGraph entryId blocks) l i  = (LGraph entryId outmap , state)
 	where 
