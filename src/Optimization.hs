@@ -41,7 +41,7 @@ data Optimization m l s = Opt {
 runOpt :: (Eq s, PrettyPrint s, PrettyPrint l, PrettyPrint m, LastNode l) => 
     Optimization m l s -> LGraph m l -> LGraph m l
 
-runOpt (Opt dfa@(DFAnalysis update_state _ _) mTrans lTrans) lg@(LGraph entryId bLookup) = LGraph entryId bLookup'
+runOpt (Opt dfa@(DFAnalysis update_state _ _ dir) mTrans lTrans) lg@(LGraph entryId bLookup) = LGraph entryId bLookup'
     where DFR _ sLookup = runAnalysis dfa lg
           bLookup' = M.map mapping_f bLookup
 
@@ -50,7 +50,8 @@ runOpt (Opt dfa@(DFAnalysis update_state _ _) mTrans lTrans) lg@(LGraph entryId 
                                       Just s -> Block bid $ ztailFromMiddles (mids ++ mids') zlast
             where maybeInS = M.lookup bid sLookup
                   -- Dont use fromJust here.. temporary for now
-                  (mids, outS) = runState (foldM foldF [] (blockMiddles blk)) (fromJust maybeInS)
+                  blkMids = if dir == Forward then blockMiddles blk else reverse (blockMiddles blk)
+                  (mids, outS) = runState (foldM foldF [] blkMids) (fromJust maybeInS)
                   (mids', zlast) = lTrans outS $ getZLast blk
                   foldF acc m = do
                       s <- get
