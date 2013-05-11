@@ -16,6 +16,7 @@ import MonadUniqueEnv
 import qualified Data.Set as Set
 import qualified Data.Map as M
 import Text.PrettyPrint.HughesPJ
+import Data.Generics
 
 data DataflowResults m l s = DFR (LGraph m l) (M.Map BlockId s) deriving (Eq)
 
@@ -198,3 +199,35 @@ killsExpr var@(Varray s _) e = case e of
         Loc (Varray s' _) -> s == s'
         _ -> False
 
+-- Liveness analysis
+
+type LiveVarState = Set Variable
+
+liveVariableAnalysis :: (PrettyPrint l, LastNode l) => 
+    DFAnalysis Statement l LiveVarState
+liveVariableAnalysis = DFAnalysis liveVarUpdateState liveVarJoin liveVarInit Backward
+
+-- Needs to incorporate last nodes as well.. TODO
+liveVarUpdateState :: Statement -> LiveVarState -> LiveVarState
+liveVarUpdateState stmt prevState = Set.union used prevMinusDef
+    where used = usedVars stmt
+          prevMinusDef = Set.difference prevState (definedVars stmt)
+
+liveVarJoin :: LiveVarState -> LiveVarState -> LiveVarState
+liveVarJoin = Set.union
+
+liveVarInit :: LiveVarState
+liveVarInit = Set.empty
+
+-- Again using Data.Generics to simplify this code
+usedVars :: Statement -> Set Variable
+usedVars (Set _ expr) = everything Set.union (Set.empty `mkQ` getVariables) expr
+usedVars stmt = everything Set.union (Set.empty `mkQ` getVariables) stmt
+
+definedVars :: Statement -> Set Variable
+definedVars (Set var _) = Set.singleton var
+definedVars _ = Set.empty
+
+-- Base case..
+getVariables :: Variable -> Set Variable
+getVariables var = Set.singleton var
