@@ -23,7 +23,7 @@ firefuel = "HI"
 
 
 treeParallelize midTree = unsafePerformIO $ do
-		return $ evalState (stripper $ ddd midTree) []
+		return $ evalState (stripper midTree) []
 
 parallelize midcfg = do
 		midcfg --state
@@ -42,14 +42,13 @@ earTag bid scope p = do
 stripper (Prg code) = do
 	code' <-  mapM fornicake code
 	return $ Prg code'
-{--		
-indians l stmt 	
-        | DFun name params bod		<- stmt = concatMap indians bod'
-        | If expression thens elses 	<- stmt = concatMap indians thens ++ concapMap indians elses
+
+indians stmt 	
+        | DFun name params bod		<- stmt = concatMap indians bod
+        | If expression thens elses 	<- stmt = concatMap indians thens ++ concatMap indians elses
         | While cond bod		<- stmt = concatMap indians bod
-        | ForLoop i end bod		<- stmt = [i] ++ concatMap bod 
+        | ForLoop i end bod		<- stmt = [i] ++ concatMap indians bod 
 	| otherwise 				= [] 
---}
 
 fornicake stmt 	
         | DFun name params bod		<- stmt = do
@@ -69,37 +68,115 @@ fornicake stmt
 	| otherwise 				= do 
 				return stmt
 
+drip sl el stmt
+        | DFun name params bod		<- stmt = do
+				bod' <- mapM (drip sl el) bod
+				sl $DFun name params bod'
+        | If expression thens elses 	<- stmt = do
+				thens' <- mapM (drip sl el) thens
+				elses' <- mapM (drip sl el) elses
+				expr'  <- el expression
+				sl $ If expr' thens' elses'
+        | While cond bod		<- stmt = do
+				bod' <- mapM (drip sl el) bod
+				sl $While cond bod'
+        | ForLoop i end bod		<- stmt = do	
+				bod' <- mapM (drip sl el) bod
+				sl $ForLoop i end bod'
+        | otherwise 				= do 
+				sl stmt
+
+
 fortress for@(ForLoop i end bod) = do 
 	bod' <- mapM fornicake bod
 	vars<-get
---	is <- return $ indians for
-	
-	return $ Debug.Trace.traceShow i $ ForLoop i end bod'
-{-
+	is <- return $ execState (drip induct (return) for) []
+	ars <- return $ execState (drip (extractArrs) (return) for) []
+	risky <-return $ nub $ filter (isInductive is) ars
+	if parallelizable is risky
+		then return $ ParaFor i end $ Debug.Trace.traceShow risky bod'
+		else return $ ForLoop i end $ Debug.Trace.traceShow risky bod'
 
 induct for@(ForLoop i end bod) = do
 	vars<-get 
-	is Inductive vars
-	put $ transductions
-        
+	put $ vars ++ [i]
+	return for
+induct x = do
+	return x
 
-
+-- make sure not to parallelize loops with returns
 -- adjust for indirectly inductive vars!
+data Access = Write {var::Variable} | Read {var::Variable} deriving (Show,Eq)
+extractArrs stmt 
+	| Set var expr <- stmt = do 
+		vars <- get
+		put $ vars ++ [Write var] ++  extractExprArrs expr 
+		return stmt
+	| Return expr <- stmt = do
+ 		vars <- get
+		put $ vars ++  extractExprArrs expr 
+		return stmt
+	| Callout _ exprs <- stmt = do
+		vars <- get
+		put $ vars ++ concatMap extractExprArrs exprs	
+		return stmt
+	| Function _ exprs <- stmt = do
+		vars <- get
+		put $ vars ++ concatMap extractExprArrs exprs	
+		return stmt
+	| If expr _ _ <- stmt = do 
+		vars <- get
+		put $ vars ++  extractExprArrs expr	
+		return stmt
+		
+	| While expr _ <- stmt = do 
+		vars <- get
+		put $ vars ++ extractExprArrs expr	
+		return stmt
+	
+	| ForLoop  _ expr _ <- stmt = do 
+		vars <- get
+		put $ vars ++ extractExprArrs expr	
+		return stmt
+	
+	| otherwise = do
+		return stmt
+
+extractExprArrs  expr
+	| (Const _) <- expr	= []
+	| (Str 	    _) <- expr	= []
+	| (Loc  v@(Varray _ _)) <- expr  = [Read v]
+	| (Loc v)      <- expr  = []
+	| otherwise		= (extractExprArrs $ x expr)++(extractExprArrs $ y expr)
+
+exprVars:: Expression -> [Variable]
+exprVars  expr
+	| (Const _) <- expr	= []
+	| (Str 	    _) <- expr	= []
+	| (Loc  v@(Var _)) <- expr  = [v]
+	| (Loc v)      <- expr  = []
+	| otherwise		= (exprVars $ x expr)++(exprVars $ y expr)
 
 
-isInductive is expr
-	| (Constant _) <- expr	= False
-	| (Str 	    _) <- expr	= False
-	| (Loc v)      <- expr  = elem v is
-	| isInductive i (x expr)= True
-	| isInductive i (y expr)= True
+
+isInductive:: [Variable] -> Access -> Bool 
+isInductive is ax
+	| (Varray _ x)       <- Parallel.var ax  = any  (\x -> elem x is) $ exprVars x
 	| otherwise		= False
 
 
 
+parallelizable i b = False
 
 
 
+
+
+
+
+
+
+{-
 
 hemorhage g@(LGraph entryId blocks) l i  = (LGraph entryId outmap , state)
         where
@@ -109,21 +186,16 @@ packageContent (ZLast (LastOther x)) = (x,[])
 packageContent (ZLast _) = (None,[])
 packageContent (ZTail instruction nextZTail) = (last, (instruction:xs))
 	where (last,xs) = packageContent nextZTail
-
 --bleed':: [BlockId] -> BlockLookup ProtoASM ProtoBranch-> Block ProtoASM ProtoBranch -> (BlockId ->[ProtoASM] -> [ProtoASM]) -> BlockLookup ProtoASM ProtoBranch
-hemorhage' prestate visited scope g blk l = (M.insert bid newblock g' ,stateout)
+hemorhage' stop prestate visited scope g blk l = if (BID stop) == bid
+			then (g,prestate)
+			else (M.insert bid newblock g' ,stateout)
                 where
                         newblock = Block bid $ newZtail content newlast' 
-					where newlast' = case newlast of
-							None -> LastExit
-							x    -> LastOther x
-                        ((content,newlast),newstate) =  let pkg=packageContent $ bTail blk
+                        (content,newlast) =  let pkg= ratherContent $ bTail blk
 				in  runState (l bid scope pkg ) prestate
                         bid = bId blk
                         last = getZLast blk
-			lastinstr = case last of
-				LastOther x -> x
-				otherwise   -> None  
                                         --g':: BlockLookup ProtoASM ProtoBranch
                         (g',stateout) = case last of
                                 (LastOther (WhileBranch _ b1 b2)) -> let
@@ -132,15 +204,16 @@ hemorhage' prestate visited scope g blk l = (M.insert bid newblock g' ,stateout)
                                         blk2 = getblk b2 g
                                         bid2 = bId blk2
                                         bid1 = bId blk1
+					sc' bid2scope b1
                                         (leftg ,state') = if unvisited b1
-                                                then hemorhage' newstate ((BID stop'):bid2:bid1:bid:visited) scope g blk1 l
-                                                else (g,newstate)
+                                                then hemorhage' stop' newstate ((BID stop'):bid2:bid1:bid:visited) (sc':scope) g blk1 l
+                                                else (g,newstate) 
                                         (rightg, state'') = if unvisited b2
-                                                then hemorhage' state' ((BID stop'):bid2:bid1:bid:visited) scope leftg blk2 l
-                                                else (leftg,state')
+                                                then hemorhage' stop' newstate ((BID stop'):bid2:bid1:bid:visited) scope leftg blk2 l
+                                                else (leftg,newstate)
                                         in if unvisited (BID stop')
-                                                then hemorhage' state' ((BID stop'):bid2:bid1:bid:visited) scope rightg (getblk (BID stop') g) l
-                                                else (rightg,state'')
+                                                then hemorhage' stop' newstate (((BID stop'):bid2:bid1:bid:visited) scope rightg (getblk (BID stop') g) l
+                                                else (rightg,newstate)
 
 
                                 (LastOther (ForBranch _ _ b1 b2)) -> let
@@ -150,14 +223,14 @@ hemorhage' prestate visited scope g blk l = (M.insert bid newblock g' ,stateout)
                                         bid2 = bId blk2
                                         bid1 = bId blk1
                                         (leftg ,state') = if unvisited b1
-                                                then hemorhage' newstate ((BID stop'):bid2:bid1:bid:visited) scope g blk1 l
+                                                then hemorhage' stop' newstate ((BID stop'):bid2:bid1:bid:visited) scope g blk1 l
                                                 else (g,newstate)
                                         (rightg, state'') = if unvisited b2
-                                                then hemorhage' state' ((BID stop'):bid2:bid1:bid:visited) scope leftg blk2 l
-                                                else (leftg,state')
+                                                then hemorhage' stop' newstate ((BID stop'):bid2:bid1:bid:visited) scope leftg blk2 l
+                                                else (leftg,newstate)
                                         in if unvisited (BID stop')
-                                                then hemorhage' state' ((BID stop'):bid2:bid1:bid:visited) scope rightg (getblk (BID stop') g) l
-                                                else (rightg,state'')
+                                                then hemorhage' stop' newstate ((BID stop'):bid2:bid1:bid:visited) scope rightg (getblk (BID stop') g) l
+                                                else (rightg,newstate)
 
 
                                 (LastOther (IfBranch _ b1 b2)) -> let
@@ -167,20 +240,20 @@ hemorhage' prestate visited scope g blk l = (M.insert bid newblock g' ,stateout)
                                         bid2 = bId blk2
                                         bid1 = bId blk1
                                         (leftg,state') = if unvisited b1
-                                                then hemorhage' newstate ((BID stop'):bid2:bid1:bid:visited) scope g blk1 l
+                                                then hemorhage' stop' newstate ((BID stop'):bid2:bid1:bid:visited) scope g blk1 l
 		                                 else (g,newstate)
                                         (rightg,state'') = if unvisited b2
-                                                then hemorhage' state' ((BID stop'):bid2:bid1:bid:visited) scope leftg blk2 l
+                                                then hemorhage' stop' newstate ((BID stop'):bid2:bid1:bid:visited) scope leftg blk2 l
                                                 else (leftg, state')
                                         in if unvisited (BID stop')
-                                                then hemorhage' state' ((BID stop'):bid2:bid1:bid:visited) scope rightg (getblk (BID stop') g) l
-                                                else (rightg,state'')
+                                                then hemorhage' stop' newstate ((BID stop'):bid2:bid1:bid:visited) scope rightg (getblk (BID stop') g) l
+                                                else (rightg,newstate)
 
 
                                 (LastOther (Jump b)) -> if unvisited b
-                                                then  hemorhage' newstate (bid:visited) scope g (getblk b g) l
+                                                then  hemorhage' stop newstate (bid:visited) scope g (getblk b g) l
                                                 else (g,newstate)
-                                (LastOther (InitialBranch bs)) -> let cruz stt elm = hemorhage' (snd stt) ((bId $getblk elm $fst stt):bid:visited) ((getStr elm):scope)(fst stt) (getblk elm (fst stt)) l
+                                (LastOther (InitialBranch bs)) -> let cruz stt elm = hemorhage' stop (snd stt) ((bId $getblk elm $fst stt):bid:visited) ((getStr elm):scope)(fst stt) (getblk elm (fst stt)) l
                                         in skewer (g,newstate) cruz bs
                                 _ -> (g,newstate)
                         unvisited id = not $ elem id visited
@@ -190,7 +263,6 @@ hemorhage' prestate visited scope g blk l = (M.insert bid newblock g' ,stateout)
                                                 then f st x
                                                 else st
                         skewer st f [] = st
-
 
 bleed g@(LGraph entryId blocks) l i  = (LGraph entryId outmap , state)
         where
@@ -269,7 +341,6 @@ bleed' prestate visited scope g blk l = (M.insert bid newblock g' ,stateout)
                                                 else st
                         skewer st f [] = st
 
-
 solveLinearInteger x y z 
 	| z == 0 = 0
 	| y == 0 = 0
@@ -284,7 +355,7 @@ createPattern fi si
 	| il > 2 = []
 	|  otherwise =
 	where 	
-	--	any $ map (\(x,y) -> x/=y)
+		any $ map (\(x,y) -> x/=y)
 		il = length ilookup
 		ilookup = filter (\(x,y,z) -> elem 0 [y,z]) zip3 [1..] fi si
 		numvars = (min (length fi) (length si)) -1 
