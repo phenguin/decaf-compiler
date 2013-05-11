@@ -7,6 +7,7 @@ import Control.Monad
 import qualified Parser
 
 import PrettyPrint
+import Codegen
 import CFGConstruct (lgraphFromAGraphBlocks)
 import CFGConcrete (LGraph, BlockId(..))
 import Semantics (SemanticTreeWithSymbols, addSymbolTables)
@@ -15,6 +16,7 @@ import Optimization
 import ControlFlowGraph (ControlFlowGraph, makeCFG, BranchingStatement, getFunctionParamMap, lgraphSpanningFunctions)
 import DataflowAnalysis
 import MidIR
+import LowIR
 
 parse :: String -> Either String Parser.Program
 parse input = do
@@ -43,4 +45,14 @@ cfgFromFile fp = do
 pPrintE :: (PrettyPrint a) => Either String a -> IO ()
 pPrintE (Left s) = putStrLn s
 pPrintE (Right x) = putStrLn $ pPrint x
+
+testfilepath = "test.dcf"
+
+testCfgMid = fromRight $ cfgFromFile testfilepath
+
+testCfgLow = (\(_,x,_) -> x) $ navigate globals funcParamMap $ toLowIRCFG $ cfg 
+    where midIR = fromRight $ midIRFromFile testfilepath
+          cfg = fromRight $ cfgFromFile testfilepath
+          globals = scrapeGlobals midIR
+          funcParamMap = getFunctionParamMap cfg
 

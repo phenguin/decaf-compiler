@@ -253,6 +253,12 @@ predsOfBlock :: (PrettyPrint l, PrettyPrint m, LastNode l) => BlockLookup m l ->
 predsOfBlock bLookup bid = filter (\b -> bid `elem` succs b) allBlocks
     where allBlocks = M.elems bLookup
 
+-- Get the successors of a block with a certain blockid in the graph
+succsOfBlock :: (PrettyPrint l, PrettyPrint m, LastNode l) => BlockLookup m l -> BlockId -> [Block m l]
+succsOfBlock bLookup bid = case lookupBlock bid bLookup of
+    Nothing -> error "Couldnt find block"
+    Just b -> map (bLookup M.!) $ succs b
+
 blockMiddles :: Block m l -> [m]
 blockMiddles (Block _ (ZLast l)) = []
 blockMiddles (Block bid (ZTail m zt)) = m : blockMiddles (Block bid zt)
