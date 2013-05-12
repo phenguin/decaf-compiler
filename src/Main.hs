@@ -14,6 +14,7 @@ module Main where
 import Prelude hiding (readFile)
 import qualified Prelude
 
+import Codegen
 import ControlFlowGraph (makeCFG,getFunctionParamMap)
 import CodeGeneration 
 import Control.Exception (bracket)
@@ -147,8 +148,8 @@ assembleTree configuration input = do
   let irTreeWithST = addSymbolTables irTree 
   let midir = MidIR.toMidIR irTreeWithST
   let globals = MidIR.scrapeGlobals midir
-  let cfg = makeCFG midir
-  let funmap = getFunctionParamMap $lgraphFromAGraph  cfg
+  let cfg = lgraphFromAGraph $ makeCFG midir
+  let funmap = getFunctionParamMap $ cfg
   let lowIRCFG = toLowIRCFG cfg
   let (prolog,asm,epilog) = navigate globals funmap lowIRCFG
   if debug configuration
