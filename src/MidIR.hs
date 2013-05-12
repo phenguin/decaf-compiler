@@ -24,6 +24,7 @@ data Statement =  Set Variable Expression
 		| If {ifCond::Expression , ifThen::[Statement] , ifElse::[Statement]}
 		| While { condition::Expression , block::[Statement]}
 		| ForLoop  {inductionVar::Variable, endVal::Expression, block::[Statement]}
+		| ParaFor  {inductionVar::Variable, endVal::Expression, block::[Statement]}
 		| Scar String -- when for loops are castrated out of the tree for parallelization
 		| Return Expression
 		| Break 
@@ -59,7 +60,7 @@ data Expression = Add {x::Expression, y::Expression}
 		| Neg  {x::Expression}
 		| Const Int
 		| Str String
-		| Loc Variable
+		| Loc {var::Variable}
 		| FuncCall  {funcName::String, callParams::[Expression]}
 		deriving (Show,Eq, Ord, Data, Typeable) 
 
