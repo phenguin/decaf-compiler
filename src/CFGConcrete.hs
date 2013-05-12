@@ -1,6 +1,9 @@
+{-# LANGUAGE DeriveDataTypeable #-}
 module CFGConcrete where
 
 import qualified Data.Map as M
+import Data.Data
+import Data.Typeable
 import Debug.Trace (trace)
 import PrettyPrint
 import Data.Set (Set)
@@ -11,7 +14,7 @@ import Text.PrettyPrint.HughesPJ
 -- Implement control flow graph based off of GHCs own implementation
 -- and the paper "An Applicative Control Flow Graph based on Huet's Zipper"
 
-newtype BlockId = BID { getStr :: String } deriving (Show, Eq, Ord)
+newtype BlockId = BID { getStr :: String } deriving (Show, Eq, Ord, Data, Typeable)
 
 type BlockSet = Set BlockId
 emptyBlockSet = Set.empty
@@ -36,16 +39,16 @@ newtype SuccBlocks = SuccBlocks { getSuccBlocks :: [BlockId] } deriving (Show, E
 instance PrettyPrint SuccBlocks where
     ppr (SuccBlocks bs) = text "<End Block>" $$ text "Branch Targets:" <+> (hsep $ map ppr bs) $$ text ""
 
-data ZLast l = LastExit | LastOther l deriving (Show, Eq)
+data ZLast l = LastExit | LastOther l deriving (Show, Eq, Data, Typeable)
 
 data ZHead m = ZFirst BlockId
-             | ZHead (ZHead m) m deriving (Show, Eq)
+             | ZHead (ZHead m) m deriving (Show, Eq, Data, Typeable)
 
 data ZTail m l = ZLast (ZLast l)
-             | ZTail m (ZTail m l) deriving (Show, Eq)
+             | ZTail m (ZTail m l) deriving (Show, Eq, Data, Typeable)
 
 data Block m l = Block { bId :: BlockId,
-                         bTail :: ZTail m l } deriving (Show)
+                         bTail :: ZTail m l } deriving (Show, Data, Typeable)
 
 instance Eq (Block m l) where
     (Block bid1 _) == (Block bid2 _) = bid1 == bid2
@@ -54,17 +57,17 @@ instance Ord (Block m l) where
     (Block bid1 _) `compare` (Block bid2 _) = bid1 `compare` bid2
 
 data ZBlock m l = ZBlock { zbHead :: ZHead m, 
-                         zbTail :: ZTail m l } deriving (Show, Eq)
+                         zbTail :: ZTail m l } deriving (Show, Eq, Data, Typeable)
 
 data Graph m l = Graph { gEntry :: ZTail m l,
-                   gBlocks :: BlockLookup m l } deriving (Show, Eq)
+                   gBlocks :: BlockLookup m l } deriving (Show, Eq, Data, Typeable)
 
 data LGraph m l = LGraph { lgEntry :: BlockId,
-                            lgBlocks :: BlockLookup m l } deriving (Show, Eq)
+                            lgBlocks :: BlockLookup m l } deriving (Show, Eq, Data, Typeable)
 
 data ZGraph m l = ZGraph { fgEntry :: BlockId,
                             fgFocus :: ZBlock m l, 
-                            fgBlocks :: BlockLookup m l } deriving (Show, Eq)
+                            fgBlocks :: BlockLookup m l } deriving (Show, Eq, Data, Typeable)
 
 class HavingZLast a where
     getZLast :: (a l) -> ZLast l

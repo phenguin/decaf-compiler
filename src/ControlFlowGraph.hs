@@ -1,6 +1,9 @@
+{-# LANGUAGE DeriveDataTypeable #-}
 module ControlFlowGraph where
 
 import CFGConcrete
+import Data.Set (Set)
+import qualified Data.Set as Set
 import Data.List (sort, groupBy, isPrefixOf)
 import qualified Data.Map as M
 import Debug.Trace
@@ -9,6 +12,7 @@ import PrettyPrint
 import CFGConstruct
 import MidIR
 import MonadUniqueEnv
+import Data.Generics
 
 type ControlFlowGraph = AGraph Statement BranchingStatement
 
@@ -27,8 +31,9 @@ data BranchingStatement = Jump BlockId
                         | ForBranch Variable Expression BlockId BlockId
                         -- Initialbranch used to ensure all functions are included in the DFS
                         | InitialBranch [BlockId]-- | Continue | Break ... Not yet done
-			| None
-			deriving (Show)
+                        | None
+			deriving (Show, Eq, Data, Typeable)
+
 instance HavingSuccessors BranchingStatement where
     succs (Jump bid) = [bid]
     succs (IfBranch _ bid1 bid2) = [bid1, bid2]
@@ -41,6 +46,14 @@ instance LastNode BranchingStatement where
     isBranchNode s = case s of
         Jump _ -> True
         _ -> False
+
+allNonArrayVariables :: (LastNode l, Data l) => LGraph Statement l -> Set String
+allNonArrayVariables = everything Set.union (Set.empty `mkQ` selectVariable)
+
+selectVariable :: Variable -> Set String
+selectVariable var = case isArray var of
+    True -> Set.empty
+    False -> Set.singleton $ symbol var
 
 getFunctionParamMap :: LGraph Statement BranchingStatement -> M.Map String [Variable]
 getFunctionParamMap (LGraph _ bLookup) = 

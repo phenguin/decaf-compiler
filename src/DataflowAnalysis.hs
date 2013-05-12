@@ -1,6 +1,7 @@
 module DataflowAnalysis where
 
 import CFGConcrete
+import Transforms (FDType (..))
 import Debug.Trace (trace)
 import Data.List (foldl1)
 import Control.Applicative
@@ -201,6 +202,8 @@ killsExpr var@(Varray s _) e = case e of
 
 -- Liveness analysis
 
+
+-- Needs a better name
 type LiveVarState = Set Variable
 
 liveVariableAnalysis :: (PrettyPrint l, LastNode l) => 
@@ -222,10 +225,13 @@ liveVarInit = Set.empty
 -- Again using Data.Generics to simplify this code
 usedVars :: Statement -> Set Variable
 usedVars (Set _ expr) = everything Set.union (Set.empty `mkQ` getVariables) expr
+usedVars (DFun _ _ _) = Set.empty
+usedVars (DVar _) = Set.empty
 usedVars stmt = everything Set.union (Set.empty `mkQ` getVariables) stmt
 
 definedVars :: Statement -> Set Variable
 definedVars (Set var _) = Set.singleton var
+definedVars (DFun _ params _) = Set.fromList params
 definedVars _ = Set.empty
 
 -- Base case..

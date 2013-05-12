@@ -40,7 +40,11 @@ data Statement =  Set Variable Expression
 
 data Variable = Var {symbol::String}
 		| Varray {symbol::String, index::Expression}
-		deriving (Show,Eq, Ord, Data, Typeable) 
+		deriving (Show, Eq, Ord, Data, Typeable) 
+
+isArray :: Variable -> Bool
+isArray (Varray _ _) = True
+isArray _ = False
 
 data Expression = Add {x::Expression, y::Expression}
 		| Sub {x::Expression, y::Expression}
