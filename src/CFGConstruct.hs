@@ -117,8 +117,7 @@ labelAGraph bid (AGraph f) = do
 
 
 -- Convenience
-ztailFromMiddles :: (PrettyPrint m, PrettyPrint l, LastNode l) =>
-    [m] -> ZLast l -> ZTail m l
+ztailFromMiddles :: [m] -> ZLast l -> ZTail m l
 ztailFromMiddles [] zl = ZLast zl
 ztailFromMiddles (m:ms) zl = ZTail m (ztailFromMiddles ms zl)
 

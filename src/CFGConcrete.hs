@@ -220,12 +220,12 @@ entry lgraph@(LGraph entryId _) = focus entryId lgraph
 
 -- List blocks in order close to program flow -
 -- Implementation taken from GHC
-postorderDFS :: (LastNode l) => LGraph m l -> [Block m l]
+postorderDFS :: (HavingSuccessors l) => LGraph m l -> [Block m l]
 postorderDFS g@(LGraph _ blockenv) =
     let ZGraph bid eblock _ = entry g in
      zipB eblock : postOrderDFSfromExcept blockenv eblock (singleBlockSet bid)
 
-postOrderDFSfromExcept :: (HavingSuccessors b, LastNode l)
+postOrderDFSfromExcept :: (HavingSuccessors b, HavingSuccessors l)
                           => BlockLookup m l -> b -> BlockSet -> [Block m l]
 
 postOrderDFSfromExcept blocks b visited =
@@ -252,12 +252,12 @@ postOrderDFSfromExcept blocks b visited =
 -- Graph querying
 
 -- Get the predecessors of a block with certain blockid in the graph
-predsOfBlock :: (PrettyPrint l, PrettyPrint m, LastNode l) => BlockLookup m l -> BlockId -> [Block m l]
+predsOfBlock :: (LastNode l) => BlockLookup m l -> BlockId -> [Block m l]
 predsOfBlock bLookup bid = filter (\b -> bid `elem` succs b) allBlocks
     where allBlocks = M.elems bLookup
 
 -- Get the successors of a block with a certain blockid in the graph
-succsOfBlock :: (PrettyPrint l, PrettyPrint m, LastNode l) => BlockLookup m l -> BlockId -> [Block m l]
+succsOfBlock :: (LastNode l) => BlockLookup m l -> BlockId -> [Block m l]
 succsOfBlock bLookup bid = case lookupBlock bid bLookup of
     Nothing -> error "Couldnt find block"
     Just b -> map (bLookup M.!) $ succs b
@@ -268,36 +268,36 @@ blockMiddles (Block bid (ZTail m zt)) = m : blockMiddles (Block bid zt)
 
 --- Pretty printing of control flow graph structures.. 
 
-instance (PrettyPrint m, PrettyPrint l, LastNode l) => PrettyPrint (ZTail m l) where
+instance (PrettyPrint m, PrettyPrint l, HavingSuccessors l) => PrettyPrint (ZTail m l) where
     ppr = pprZTail
 
-instance (PrettyPrint l, LastNode l) => PrettyPrint (ZLast l) where
+instance (PrettyPrint l, HavingSuccessors l) => PrettyPrint (ZLast l) where
     ppr = pprLast
 
-instance (PrettyPrint m, PrettyPrint l, LastNode l) => PrettyPrint (Graph m l) where
+instance (PrettyPrint m, PrettyPrint l, HavingSuccessors l) => PrettyPrint (Graph m l) where
     ppr = pprGraph
 
-instance (PrettyPrint m, PrettyPrint l, LastNode l) => PrettyPrint (LGraph m l) where
+instance (PrettyPrint m, PrettyPrint l, HavingSuccessors l) => PrettyPrint (LGraph m l) where
     ppr = pprLGraph
 
-instance (PrettyPrint m, PrettyPrint l, LastNode l) => PrettyPrint (Block m l) where
+instance (PrettyPrint m, PrettyPrint l, HavingSuccessors l) => PrettyPrint (Block m l) where
     ppr = pprBlock
 
-instance (PrettyPrint m, PrettyPrint l, LastNode l) => PrettyPrint (ZBlock m l) where
+instance (PrettyPrint m, PrettyPrint l, HavingSuccessors l) => PrettyPrint (ZBlock m l) where
     ppr = pprBlock . zipB
 
 instance PrettyPrint BlockId where
     ppr = text . getStr
 
-pprZTail :: (PrettyPrint m, PrettyPrint l, LastNode l) => ZTail m l -> Doc
+pprZTail :: (PrettyPrint m, PrettyPrint l, HavingSuccessors l) => ZTail m l -> Doc
 pprZTail (ZTail m t) = ppr m $$ ppr t
 pprZTail (ZLast l) = ppr l
 
-pprLast :: (PrettyPrint l, LastNode l) => ZLast l -> Doc
+pprLast :: (PrettyPrint l, HavingSuccessors l) => ZLast l -> Doc
 pprLast LastExit = text "leave\nret"
 pprLast (LastOther l) = ppr l
 
-pprBlock :: (PrettyPrint m, PrettyPrint l, LastNode l) => Block m l -> Doc
+pprBlock :: (PrettyPrint m, PrettyPrint l, HavingSuccessors l) => Block m l -> Doc
 pprBlock (Block bid tl) = ppr bid <> colon
                                   $$ (nest 3 (ppr tl))
 

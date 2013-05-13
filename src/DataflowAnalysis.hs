@@ -19,14 +19,50 @@ import MidIR
 import MonadUniqueEnv
 import qualified Data.Set as Set
 import qualified Data.Map as M
+import Data.Map ((!))
 import Text.PrettyPrint.HughesPJ
 import Data.Generics
 import ControlFlowGraph
 
 data DataflowResults m l s = DFR (LGraph m l) (M.Map BlockId s) deriving (Eq)
+newtype AugmentedNode a s = AN { extractTuple :: (a,s) } deriving (Show, Eq, Ord)
+
+instance (HavingSuccessors l) => HavingSuccessors (AugmentedNode l s) where
+    succs (AN (l, _)) = succs l
+
+instance (PrettyPrint a, PrettyPrint s) => PrettyPrint (AugmentedNode a s) where
+    ppr (AN (x,s)) = ppr x <+> text "::    " <+> ppr s
 
 instance (Eq s, Show s) => Show (DataflowResults m l s) where
     show (DFR _ mp) = show mp
+
+augmentWithDFR :: (Eq s, LastNode l) => 
+    DFAnalysis m l s -> LGraph m l -> LGraph (AugmentedNode m s) (AugmentedNode l s)
+
+augmentWithDFR dfa@(DFAnalysis updateM updateL _ initState direction) lgraph@(LGraph lgentry blocks) = 
+    LGraph lgentry $ mapBlocks (augmentBlock direction) blocks
+  where augmentBlock Forward blk@(Block bid zt) = Block bid ztail'
+           where (mids', lastState) = runState (mapM augment $ blockMiddles blk) bInState
+                 bInState = blkToStates ! bid 
+                 ztail' = ztailFromMiddles mids' zlast'
+                 zlast' = case getZLast blk of
+                     LastExit -> LastExit
+                     LastOther l -> LastOther $ AN (l, lastState)
+
+        augmentBlock Backward blk@(Block bid zt) = Block bid ztail'
+           where (mids', _) = runState (mapM augment $ (reverse . blockMiddles) blk) bInState'
+                 bInState = blkToStates ! bid 
+                 (zlast', bInState') = case getZLast blk of
+                     LastExit -> (LastExit, bInState)
+                     LastOther l -> (LastOther $ AN (l, bInState), updateL l bInState)
+                 ztail' = ztailFromMiddles (reverse mids') zlast'
+                 
+        (DFR _ blkToStates) = runAnalysis dfa lgraph
+        augment m = do
+            s <- get
+            modify (updateM m)
+            return $ AN (m, s)
+
 
 instance (PrettyPrint s, PrettyPrint m, PrettyPrint l, LastNode l) => PrettyPrint (DataflowResults m l s) where
     ppr (DFR lgraph resMap) = foldl f (text "") dfsBlocks
@@ -50,7 +86,7 @@ data DFAnalysis m l s = DFAnalysis {
     direction :: DFDirection
     }
 
-computeTransferFunc :: (PrettyPrint l, LastNode l, PrettyPrint m) =>
+computeTransferFunc :: (LastNode l) =>
     DFAnalysis m l s -> Block m l -> s -> s
 
 computeTransferFunc (DFAnalysis updateM updateL _ _ Forward) block inState = case getZLast block of
@@ -63,7 +99,7 @@ computeTransferFunc (DFAnalysis updateM updateL _ _ Backward) block inState = fo
             LastExit -> inState
             LastOther l -> updateL l inState
 
-stepAnalysis :: (Eq s, PrettyPrint m, PrettyPrint l, LastNode l, PrettyPrint s) => 
+stepAnalysis :: (Eq s, LastNode l) => 
     DFAnalysis m l s -> BlockLookup m l -> M.Map BlockId s -> BlockId -> State (Set BlockId) (M.Map BlockId s)
 
 stepAnalysis dfa@(DFAnalysis updateM updateL join initState Forward) bLookup res bid = do
@@ -109,7 +145,7 @@ stepAnalysis dfa@(DFAnalysis updateM updateL join initState Backward) bLookup re
     return $ M.insert bid bInState res
 
 -- Terminates if fixed point for analysis found
-doAnalysis :: (PrettyPrint s, Eq s, PrettyPrint l, PrettyPrint m, LastNode l) => 
+doAnalysis :: (Eq s, LastNode l) => 
     DFAnalysis m l s -> BlockLookup m l -> M.Map BlockId s -> [Block m l] -> M.Map BlockId s
 doAnalysis analysis bLookup startStates blocks =
     case Set.null workSet of
@@ -123,7 +159,7 @@ doAnalysis analysis bLookup startStates blocks =
         partialResult = foldM fm startStates $ map getBID blocks
         getBID (Block bid _) = bid
 
-runAnalysis :: (Eq s, PrettyPrint s, PrettyPrint l, PrettyPrint m, LastNode l) => 
+runAnalysis :: (Eq s, LastNode l) => 
     DFAnalysis m l s -> LGraph m l -> DataflowResults m l s
 
 runAnalysis analysis lgraph@(LGraph entryId bLookup) = 
