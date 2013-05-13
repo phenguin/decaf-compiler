@@ -10,7 +10,7 @@ import Data.List
 import Data.Char
 import MultiTree
 import Util
-import RegisterAlloc
+import Codegen
 
 data DataSource = M MemLoc | C Int deriving (Eq) --memory location, or constant (immediate value)
 
@@ -135,7 +135,7 @@ instance Show AsmOp where
          show (Push x) = "push "++(show x)
          show (Pop x) = "pop "++(show x)
          show (Call x) = "call "++(show x)
-         show Ret = "ret"
+         show Ret = "leave \n ret"
          show (Jmp x) = "jmp "++(show x)
          show (Je x) = "je "++(show x)
          show (Jle x) = "jle "++(show x)

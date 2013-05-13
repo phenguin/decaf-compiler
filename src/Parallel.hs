@@ -17,6 +17,7 @@ import Data.List
 import Santiago
 import Numeric.LinearProgramming
 
+
 firefuel = "HI"
 
 --parallelize::LGraph BranchingStatement Statement -> LGraph BranchingStatement Statement
@@ -90,23 +91,28 @@ drip sl el stmt
 fortress for@(ForLoop i end bod) = do 
 	bod' <- mapM fornicake bod
 	vars<-get
-	is <- return $ execState (drip induct (return) for) []
+	let     is:: [(Variable,Expression)]
+		is = execState (drip induct (return) for) []
 	ars <- return $ execState (drip (extractArrs) (return) for) []
-	risky <-return $ nub $ filter (isInductive is) ars
-	if parallelizable is risky
-		then return $ ParaFor i end $ Debug.Trace.traceShow risky bod'
-		else return $ ForLoop i end $ Debug.Trace.traceShow risky bod'
+	risky <-return $ nub $ filter (isInductive $ map fst is) ars
+	if parallelizable (map fst is) (map snd is) risky
+		then return $ Parafor i end bod'
+		else return $ ForLoop i end bod'
 
 induct for@(ForLoop i end bod) = do
 	vars<-get 
-	put $ vars ++ [i]
+	put $ vars ++ [(i,end)]
 	return for
 induct x = do
 	return x
 
+--affine (i:j:xs) (
+
+
 -- make sure not to parallelize loops with returns
 -- adjust for indirectly inductive vars!
 data Access = Write {var::Variable} | Read {var::Variable} deriving (Show,Eq)
+
 extractArrs stmt 
 	| Set var expr <- stmt = do 
 		vars <- get
@@ -165,11 +171,102 @@ isInductive is ax
 	| otherwise		= False
 
 
+--parallelizable:: [Variable] -> [Access] -> Bool
+parallelizable is ends axs = unsafePerformIO $ do
+--putStrLn $ show (comb ws rs)
+	return $ and $ map (bjork is) $ comb ws rs
+	where
+	 comb:: [([[Int]],[Int])] -> [([[Int]],[Int])] -> [(([[Int]],[Int]),([[Int]],[Int]))]
+	 comb (x:xs) ys = (map (\yy -> (x,yy)) ys) ++ comb xs ys
+	 comb [] ys = []
+	 ws= nub $map (template is) $concatMap isWrite axs
+	 rs= nub $map (template is) $concatMap isRead axs
+--	 appTempt (Varray nm expr) = (nm,template is expr)
+	 isWrite (Write x) 	= [x]
+	 isWrite x 	        = []
+	 isRead  (Read x)	= [x]
+	 isRead x 	        = []
 
-parallelizable i b = False
+bjork:: [Variable]->(([[Int]],[Int]),([[Int]],[Int])) -> Bool
+bjork (i:[]) (x@(m,v),y@(n,u))  
+	| x == y = True
+	| otherwise  = False
+bjork (i:j:[]) (x@(m,v),y@(n,u)) 
+	| x == y = True
+	| otherwise  = False
+{-
+affinize (i:j:xs) axs = (ws, rs)
+	where
+	 ws=map template $concatMap isWrite axs
+	 rs=map template $concatMap isRead axs
+	 appTempt (Varray nm expr) = (nm,template [i,j] expr)
+	 isWrite (Write x) 	= [x]
+	 isWrite x 	        = []
+	 isRead  (Read x)	= [x]
+	 isRead x 	        = []
+-}
+--constant acces
+
+template:: [Variable] -> Variable -> ([[Int]],[Int])
+
+--simple ai+b access
+template (i:_) (Varray nm e) 
+	|(Add (Mul (Const a) (Loc i)) (Const b) ) <-e  =  aipb a b
+	|(Add (Mul (Loc i) (Const a)) (Const b) ) <-e = aipb a b
+	|(Add (Const b) (Mul (Const a) (Loc i))) <-e = aipb a b
+	|(Add (Const b) (Mul (Loc i) (Const a))) <-e = aipb a b
+	|(Add (Loc i) (Const b) ) <-e = aipb 1 b
+	|(Add (Const b) (Loc i)) <-e = aipb 1 b
+	|(Loc i) <-e = aipb 1 0
 
 
 
+-- ai+bj access
+template (i:j:_) (Varray nm e) 
+	|(Add (Mul (Const a) (Loc i)) (Mul (Const b) (Loc j))) <-e = aibj a b
+	|(Add (Mul (Loc i) (Const a)) (Mul (Const b) (Loc j))) <-e = aibj a b
+	|(Add (Mul (Loc i) (Const a)) (Mul (Loc j) (Const b))) <-e = aibj a b
+	|(Add (Mul (Const a) (Loc i)) (Mul (Loc j) (Const b))) <-e = aibj a b
+	|(Add (Loc j) (Mul (Loc i) (Const a))) <-e = aibj a 1
+	|(Add (Loc j) (Mul (Const a) (Loc i))) <-e = aibj a 1
+	|(Add (Mul (Const a) (Loc i)) (Loc j)) <-e = aibj a 1
+	|(Add (Mul (Loc i) (Const a)) (Loc j)) <-e = aibj a 1
+	|(Add (Loc i) (Mul (Loc j) (Const b))) <-e = aibj 1 b
+	|(Add (Loc i) (Mul (Const b) (Loc j))) <-e = aibj 1 b
+	|(Add (Mul (Const b) (Loc j)) (Loc i)) <-e = aibj 1 b
+	|(Add (Mul (Loc j) (Const b)) (Loc i)) <-e = aibj 1 b
+
+aipb a b = ([[a]],[b])
+aibj a b = ([[a,0],[0,b]],[0])
+
+
+-- not worth doing right now
+{-
+template (i:j:_) (Varray nm e) =
+	|() 	
+	|(Add (Mul (Const a) (Loc i)) (Mul (Const b) (Loc j))) <-e = aibj a b
+	|(Add (Mul (Loc i) (Const a)) (Mul (Const b) (Loc j))) <-e = aibj a b
+	|(Add (Mul (Loc i) (Const a)) (Mul (Loc j) (Const b))) <-e = aibj a b
+	|(Add (Mul (Const i) (Loc a)) (Mul (Loc j) (Const b))) <-e = aibj a b
+	|(Add (Loc j) (Mul (Loc i) (Const a))) <-e = aibj a 1
+	|(Add (Loc j) (Mul (Const a) (Loc i))) <-e = aibj a 1
+	|(Add (Mul (Const a) (Loc i)) (Loc j)) <-e = aibj a 1
+	|(Add (Mul (Loc i) (Const a)) (Loc j)) <-e = aibj a 1
+	|(Add (Loc i) (Mul (Loc j) (Const b))) <-e = aibj 1 b
+	|(Add (Loc i) (Mul (Const b) (Loc j))) <-e = aibj 1 b
+	|(Add (Mul (Const b) (Loc j)) (Loc i)) <-e = aibj 1 b
+	|(Add (Mul (Loc j) (Const b)) (Loc i)) <-e = aibj 1 b
+
+e
+-}
+
+--	| <-e 
+---	| <-e 
+--	| <-e 
+--	| <-e 
+--	| <-e 
+--	| <-e 
+--
 
 
 

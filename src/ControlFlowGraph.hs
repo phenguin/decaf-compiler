@@ -25,6 +25,7 @@ data BranchingStatement = Jump BlockId
                         | IfBranch Expression BlockId BlockId 
                         | WhileBranch Expression BlockId BlockId
                         | ForBranch Variable Expression BlockId BlockId
+                        | ParaforBranch Variable Expression BlockId BlockId
                         -- Initialbranch used to ensure all functions are included in the DFS
                         | InitialBranch [BlockId]-- | Continue | Break ... Not yet done
 			| None
@@ -34,6 +35,7 @@ instance HavingSuccessors BranchingStatement where
     succs (IfBranch _ bid1 bid2) = [bid1, bid2]
     succs (WhileBranch _ bid1 bid2) = [bid1, bid2]
     succs (ForBranch _ _ bid1 bid2) = [bid1, bid2]
+    succs (ParaforBranch _ _ bid1 bid2) = [bid1, bid2]
     succs (InitialBranch bs) = bs
 
 instance LastNode BranchingStatement where
@@ -65,6 +67,10 @@ stmtToAGraph (If cond thendo elsedo) =
 stmtToAGraph (ForLoop var cond body) = 
             mkFor cbranch (stmtsToAGraph body)
     where cbranch bid1 bid2 = mkLast $ ForBranch var cond bid1 bid2
+
+stmtToAGraph (Parafor var cond body) = 
+            mkFor cbranch (stmtsToAGraph body)
+    where cbranch bid1 bid2 = mkLast $ ParaforBranch var cond bid1 bid2
 
 stmtToAGraph (While cond body) = 
             mkWhile cbranch (stmtsToAGraph body)
@@ -108,6 +114,9 @@ instance PrettyPrint BranchingStatement where
                                  text "loop:" <+> ppr bid1 <+>
                                  text "end:" <+> ppr bid2
     ppr (ForBranch v e bid1 bid2) = text "For " <+> parens (ppr v <+> text "->"<+>ppr e) <+>
+                                 text "loop:" <+> ppr bid1 <+>
+                                 text "end:" <+> ppr bid2
+    ppr (ParaforBranch v e bid1 bid2) = text "Parafor " <+> parens (ppr v <+> text "->"<+>ppr e) <+>
                                  text "loop:" <+> ppr bid1 <+>
                                  text "end:" <+> ppr bid2
     ppr (InitialBranch bids) = text "Declared Functions:" <+> hsep (map ppr bids)

@@ -66,6 +66,17 @@ mkFor condBranch body =
         body <&> mkLabel testId <&> condBranch bodyId endId <&>
         mkLabel endId
 
+mkParafor :: (PrettyPrint m, PrettyPrint l, LastNode l) => 
+    (BlockId -> BlockId -> AGraph m l) -> AGraph m l -> AGraph m l
+mkParafor condBranch body = 
+    withNewBlockId ".parafor_test" $ \testId ->
+    withNewBlockId ".parafor_body" $ \bodyId ->
+    withNewBlockId ".parafor_end" $ \endId ->
+        mkBranch testId <&> mkLabel bodyId <&>
+        body <&> mkLabel testId <&> condBranch bodyId endId <&>
+        mkLabel endId
+
+
 
 -- Makes the CFG for a method declaration
 mkMethod :: (PrettyPrint m, PrettyPrint l, LastNode l) =>
