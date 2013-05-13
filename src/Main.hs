@@ -153,10 +153,10 @@ assembleTree configuration input = do
   let midcfg = lgraphSpanningFunctions cfg
   let	scopedcfg  = scopeMidir midcfg globals
   let	parallelcfg  = parallelize scopedcfg
-  Right $ [pprIO parallelcfg]
---  let lowIRCFG = toLowIRCFG parallelcfg
---  let (prolog,asm,epilog) = navigate globals funmap lowIRCFG
- -- if debug configuration
---	then Right $ [putStrLn prolog,pprIO asm, putStrLn epilog]
---	else Right [return ()]
+--  Right $ [pprIO parallelcfg]
+  let lowIRCFG = toLowIRCFG parallelcfg
+  let (prolog,asm,epilog) = navigate globals funmap lowIRCFG
+  if debug configuration
+	then Right $ [putStrLn prolog,pprIO asm, putStrLn epilog]
+ 	else Right [return ()]
       

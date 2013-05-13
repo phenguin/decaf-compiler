@@ -34,8 +34,8 @@ navigate globals funmap cfg = unsafePerformIO $ do
 		
 		let appendGlobalLabel (Symbol x) = (Symbol $"global_"++x)
 		    appendGlobalLabel (Array x t) = (Array ("global_"++x) t)
-		let vardata = (concatMap datifyVars (vars) )
-		
+		let vardata = (concatMap datifyVars (vars ++ map (appendGlobalLabel.var2val) globals) )
+			
 		-- handles strings strings
 		strings <- return $ nub $ map (\(EvilString x) -> x)$findAllStrings cfg
 		finalcfg <- return $ mapLGraphNodes (replaceStrings) (\_ x -> (([],[]),x)) cfg
@@ -65,6 +65,8 @@ navigate globals funmap cfg = unsafePerformIO $ do
 		addorappend s (Just x) = Just $ x ++ [s]
 		addorappend s Nothing = Just $ [s]
 		prolog = ".global main\n"
+		var2val (Var str) = Symbol str
+		var2val (Varray str (Const i)) = Array str (Literal i)
 
 
 scopeMidir midir globals = fst $ hemorhage midir scoper lfixBranch globalmap
@@ -310,6 +312,7 @@ lfixBranch lst scope = do
 			(IfBranch e b1 b2) -> return $ IfBranch (le e) b1 b2
 			(WhileBranch e b1 b2) -> return $ WhileBranch (le e) b1 b2
 			(ForBranch v e b1 b2) -> return $ ForBranch (lv v) (le e) b1 b2
+			(ParaforBranch v e b1 b2) -> return $ ParaforBranch (lv v) (le e) b1 b2
 			x -> return x
 		where
 			prescope pre = intercalate "_" $reverse$dropWhile (/=pre) scope 
