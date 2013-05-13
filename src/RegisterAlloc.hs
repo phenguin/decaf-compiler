@@ -121,7 +121,7 @@ interferenceFromBlock blockStates blk@(Block bid _) = fst $ runState results blk
           foldingF acc stmt = do
               liveVars <- get
               put $ liveVarUpdateState stmt liveVars 
-              let relevantLiveVarNames = Set.map symbol $ Set.filter (not . isArray) $ liveVars
+              let relevantLiveVarNames = Set.map varName $ Set.filter (not . isArray) $ liveVars
               return $ unionIG acc (completeOnVertices relevantLiveVarNames)
           results = foldM foldingF emptyIG (reverse $ blockMiddles blk)
 

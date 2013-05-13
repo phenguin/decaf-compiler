@@ -1,12 +1,13 @@
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleInstances, DeriveDataTypeable #-}
 module Transforms where
 
 import Parser 
+import Data.Generics
 import MultiTree
 import Data.Hashable (hash)
 
-data LitType = IntType | BoolType | VoidType | StrType deriving (Show, Eq, Ord)
-data FDType = Single | Array Int deriving (Show, Eq, Ord)
+data LitType = IntType | BoolType | VoidType | StrType deriving (Show, Eq, Ord, Data, Typeable)
+data FDType = Single | Array Int deriving (Show, Eq, Ord, Data, Typeable)
 
 data Id = IdWithHash {hashInt::Int , idString::String} deriving (Ord)
 

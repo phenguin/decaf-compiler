@@ -1,6 +1,9 @@
+{-# LANGUAGE DeriveDataTypeable #-}
 module DataflowAnalysis where
 
 import CFGConcrete
+import Data.Typeable
+import Data.Data
 import Transforms (FDType (..))
 import Debug.Trace (trace)
 import Data.List (foldl1)
@@ -202,9 +205,21 @@ killsExpr var@(Varray s _) e = case e of
 
 -- Liveness analysis
 
+data VarMarker = VarMarker {
+    varName :: String,
+    varType :: FDType
+    } deriving (Show, Eq, Ord, Data, Typeable)
+
+isArray :: VarMarker -> Bool
+isArray (VarMarker _ (Array _)) = True
+isArray _ = False
+
+instance PrettyPrint VarMarker where
+    ppr (VarMarker name Single) = text name
+    ppr (VarMarker name (Array _)) = text name <> lbrack <> rbrack
 
 -- Needs a better name
-type LiveVarState = Set Variable
+type LiveVarState = Set VarMarker
 
 liveVariableAnalysis :: (PrettyPrint l, LastNode l) => 
     DFAnalysis Statement l LiveVarState
@@ -223,17 +238,25 @@ liveVarInit :: LiveVarState
 liveVarInit = Set.empty
 
 -- Again using Data.Generics to simplify this code
-usedVars :: Statement -> Set Variable
+usedVars :: Statement -> Set VarMarker
+usedVars (Set (Varray _ indexExpr) expr) = 
+    Set.union (everything Set.union (Set.empty `mkQ` getVariables) indexExpr)
+              (everything Set.union (Set.empty `mkQ` getVariables) expr)
 usedVars (Set _ expr) = everything Set.union (Set.empty `mkQ` getVariables) expr
 usedVars (DFun _ _ _) = Set.empty
 usedVars (DVar _) = Set.empty
 usedVars stmt = everything Set.union (Set.empty `mkQ` getVariables) stmt
 
-definedVars :: Statement -> Set Variable
-definedVars (Set var _) = Set.singleton var
-definedVars (DFun _ params _) = Set.fromList params
+definedVars :: Statement -> Set VarMarker
+definedVars (Set var _) = Set.singleton $ varToVarMarker var
+definedVars (DFun _ params _) = Set.fromList $ map varToVarMarker params
 definedVars _ = Set.empty
 
 -- Base case..
-getVariables :: Variable -> Set Variable
-getVariables var = Set.singleton var
+getVariables :: Variable -> Set VarMarker
+getVariables var = Set.singleton $ varToVarMarker var
+
+varToVarMarker :: Variable -> VarMarker
+varToVarMarker (Var name) = VarMarker name Single
+-- TODO: FDType of Array 0 doesn't accurately reflect whats going on here.
+varToVarMarker (Varray name _) = VarMarker name (Array 0)
