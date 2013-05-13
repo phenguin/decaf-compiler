@@ -103,8 +103,7 @@ addVertex v ig = IG (Set.insert v $ vertices ig) (edges ig)
 -----------------------------------------------------
 
 -- Uses the liveness analysis of a program to build its interference graph for register allocation
-buildInterferenceGraph :: (Data l, PrettyPrint l, LastNode l) => 
-    LGraph Statement l -> InterferenceGraph Var
+buildInterferenceGraph :: LGraph Statement BranchingStatement -> InterferenceGraph Var
 
 buildInterferenceGraph lgraph = unionIG (discreteOnVertices $ allNonArrayVariables lgraph) conflictsGraph
     where DFR _ blockLivenessMap = runAnalysis liveVariableAnalysis lgraph
@@ -113,14 +112,14 @@ buildInterferenceGraph lgraph = unionIG (discreteOnVertices $ allNonArrayVariabl
           -- variables are assigned registers too.
           conflictsGraph = unionIGs $ map (interferenceFromBlock blockLivenessMap) $ postorderDFS lgraph
 
-interferenceFromBlock :: (Data l, PrettyPrint l, LastNode l) => M.Map BlockId LiveVarState -> Block Statement l -> InterferenceGraph Var
+interferenceFromBlock :: M.Map BlockId LiveVarState -> Block Statement BranchingStatement -> InterferenceGraph Var
 interferenceFromBlock blockStates blk@(Block bid _) = fst $ runState results blkOutState
     where blkOutState = case M.lookup bid blockStates of
                     Nothing -> error "Cant find block in results.  liveness analysis must have failed"
                     Just b -> b
           foldingF acc stmt = do
               liveVars <- get
-              put $ liveVarUpdateState stmt liveVars 
+              put $ liveVarUpdateM stmt liveVars 
               let relevantLiveVarNames = Set.map varName $ Set.filter (not . isArray) $ liveVars
               return $ unionIG acc (completeOnVertices relevantLiveVarNames)
           results = foldM foldingF emptyIG (reverse $ blockMiddles blk)

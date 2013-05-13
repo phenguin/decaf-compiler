@@ -21,6 +21,7 @@ import qualified Data.Set as Set
 import qualified Data.Map as M
 import Text.PrettyPrint.HughesPJ
 import Data.Generics
+import ControlFlowGraph
 
 data DataflowResults m l s = DFR (LGraph m l) (M.Map BlockId s) deriving (Eq)
 
@@ -41,22 +42,31 @@ data DFDirection = Backward | Forward deriving (Show, Eq, Ord)
 data DFAnalysis m l s = DFAnalysis {
     -- Computes output state of block from input state
     -- maybe need to add update state for last node?
-    update_state :: m -> s -> s,
+    updateStateM :: m -> s -> s,
+    updateStateL :: l -> s -> s,
     -- Combines states
-    join_func :: s -> s -> s,
+    joinStates :: s -> s -> s,
     initState :: s,
     direction :: DFDirection
     }
 
 computeTransferFunc :: (PrettyPrint l, LastNode l, PrettyPrint m) =>
     DFAnalysis m l s -> Block m l -> s -> s
-computeTransferFunc (DFAnalysis update_func _ _ Forward) block inState = foldl (flip update_func) inState $ blockMiddles block
-computeTransferFunc (DFAnalysis update_func _ _ Backward) block inState = foldl (flip update_func) inState $ reverse (blockMiddles block)
+
+computeTransferFunc (DFAnalysis updateM updateL _ _ Forward) block inState = case getZLast block of
+    LastExit -> resultOfMids
+    LastOther l -> updateL l resultOfMids
+  where resultOfMids = foldl (flip updateM) inState $ blockMiddles block
+
+computeTransferFunc (DFAnalysis updateM updateL _ _ Backward) block inState = foldl (flip updateM) inState' $ reverse (blockMiddles block)
+    where inState' = case getZLast block of
+            LastExit -> inState
+            LastOther l -> updateL l inState
 
 stepAnalysis :: (Eq s, PrettyPrint m, PrettyPrint l, LastNode l, PrettyPrint s) => 
     DFAnalysis m l s -> BlockLookup m l -> M.Map BlockId s -> BlockId -> State (Set BlockId) (M.Map BlockId s)
 
-stepAnalysis dfa@(DFAnalysis updateF join initState Forward) bLookup res bid = do
+stepAnalysis dfa@(DFAnalysis updateM updateL join initState Forward) bLookup res bid = do
     let block = case lookupBlock bid bLookup of
            Nothing -> error "Cant find block"
            Just b -> b
@@ -77,7 +87,7 @@ stepAnalysis dfa@(DFAnalysis updateF join initState Forward) bLookup res bid = d
     when ((Just bInState) /= oldInState) $ modify (Set.union (Set.fromList $ succs block))
     return $ M.insert bid bInState res
 
-stepAnalysis dfa@(DFAnalysis updateF join initState Backward) bLookup res bid = do
+stepAnalysis dfa@(DFAnalysis updateM updateL join initState Backward) bLookup res bid = do
     let block = case lookupBlock bid bLookup of
            Nothing -> error "Cant find block"
            Just b -> b
@@ -131,14 +141,27 @@ type AvailExprState = Set Expression
 
 -- Available expressions analysis
 
-availableExprAnalysis :: (PrettyPrint l, LastNode l) => DFAnalysis Statement l AvailExprState
-availableExprAnalysis = DFAnalysis availExprUpdateState availExprJoin availExprInit Forward
+availableExprAnalysis :: DFAnalysis Statement BranchingStatement AvailExprState
+availableExprAnalysis = DFAnalysis {
+    updateStateM = availExprUpdateM,
+    updateStateL = availExprUpdateL,
+    joinStates = availExprJoin,
+    initState = availExprInit,
+    direction = Forward
+    }
 
-availExprUpdateState :: Statement -> AvailExprState -> AvailExprState 
-availExprUpdateState (Set v e) exprs = case v of
+availExprUpdateM :: Statement -> AvailExprState -> AvailExprState 
+availExprUpdateM (Set v e) exprs = case v of
     (Var "i") -> removeKilled v $ Set.union exprs (Set.fromList $ subexpressions e)
+    -- TODO: Why are these lines the same? Double check logic later.
     _         -> removeKilled v $ Set.union exprs (Set.fromList $ subexpressions e)
-availExprUpdateState _ s = s
+availExprUpdateM _ s = s
+
+-- TODO: Fix me! This isn't the correct semantic behavior for expressions
+--       in if, while, and for loop statements.  We can cache expressions
+--       from these as well. 
+availExprUpdateL :: BranchingStatement -> AvailExprState -> AvailExprState
+availExprUpdateL _ = id
 
 availExprJoin :: AvailExprState -> AvailExprState -> AvailExprState
 availExprJoin exprs exprs' = Set.intersection exprs exprs'
@@ -221,15 +244,26 @@ instance PrettyPrint VarMarker where
 -- Needs a better name
 type LiveVarState = Set VarMarker
 
-liveVariableAnalysis :: (PrettyPrint l, LastNode l) => 
-    DFAnalysis Statement l LiveVarState
-liveVariableAnalysis = DFAnalysis liveVarUpdateState liveVarJoin liveVarInit Backward
+liveVariableAnalysis :: DFAnalysis Statement BranchingStatement LiveVarState
+liveVariableAnalysis = DFAnalysis {
+    updateStateM = liveVarUpdateM,
+    updateStateL = liveVarUpdateL,
+    joinStates = liveVarJoin,
+    initState = liveVarInit,
+    direction = Backward
+    }
 
 -- Needs to incorporate last nodes as well.. TODO
-liveVarUpdateState :: Statement -> LiveVarState -> LiveVarState
-liveVarUpdateState stmt prevState = Set.union used prevMinusDef
-    where used = usedVars stmt
-          prevMinusDef = Set.difference prevState (definedVars stmt)
+liveVarUpdateM :: Statement -> LiveVarState -> LiveVarState
+liveVarUpdateM stmt prevState = Set.union used prevMinusDef
+    where used = varsUsedInStmt stmt
+          prevMinusDef = Set.difference prevState (varsDefinedInStmt stmt)
+
+-- Needs to incorporate last nodes as well.. TODO
+liveVarUpdateL :: BranchingStatement -> LiveVarState -> LiveVarState
+liveVarUpdateL bStmt prevState = Set.union used prevMinusDef
+    where used = varsUsedInBranchStmt bStmt
+          prevMinusDef = Set.difference prevState (varsDefinedInBranchStmt bStmt)
 
 liveVarJoin :: LiveVarState -> LiveVarState -> LiveVarState
 liveVarJoin = Set.union
@@ -238,19 +272,27 @@ liveVarInit :: LiveVarState
 liveVarInit = Set.empty
 
 -- Again using Data.Generics to simplify this code
-usedVars :: Statement -> Set VarMarker
-usedVars (Set (Varray _ indexExpr) expr) = 
+varsUsedInStmt :: Statement -> Set VarMarker
+varsUsedInStmt (Set (Varray _ indexExpr) expr) = 
     Set.union (everything Set.union (Set.empty `mkQ` getVariables) indexExpr)
               (everything Set.union (Set.empty `mkQ` getVariables) expr)
-usedVars (Set _ expr) = everything Set.union (Set.empty `mkQ` getVariables) expr
-usedVars (DFun _ _ _) = Set.empty
-usedVars (DVar _) = Set.empty
-usedVars stmt = everything Set.union (Set.empty `mkQ` getVariables) stmt
+varsUsedInStmt (Set _ expr) = everything Set.union (Set.empty `mkQ` getVariables) expr
+varsUsedInStmt (DFun _ _ _) = Set.empty
+varsUsedInStmt (DVar _) = Set.empty
+varsUsedInStmt stmt = everything Set.union (Set.empty `mkQ` getVariables) stmt
 
-definedVars :: Statement -> Set VarMarker
-definedVars (Set var _) = Set.singleton $ varToVarMarker var
-definedVars (DFun _ params _) = Set.fromList $ map varToVarMarker params
-definedVars _ = Set.empty
+varsDefinedInStmt :: Statement -> Set VarMarker
+varsDefinedInStmt (Set var _) = Set.singleton $ varToVarMarker var
+varsDefinedInStmt (DFun _ params _) = Set.fromList $ map varToVarMarker params
+varsDefinedInStmt _ = Set.empty
+
+varsUsedInBranchStmt :: BranchingStatement -> Set VarMarker
+varsUsedInBranchStmt (ForBranch _ expr _ _) = everything Set.union (Set.empty `mkQ` getVariables) expr
+varsUsedInBranchStmt bStmt = everything Set.union (Set.empty `mkQ` getVariables) bStmt
+
+varsDefinedInBranchStmt :: BranchingStatement -> Set VarMarker
+varsDefinedInBranchStmt (ForBranch var _ _ _) = Set.singleton $ varToVarMarker var
+varsDefinedInBranchStmt _ = Set.empty
 
 -- Base case..
 getVariables :: Variable -> Set VarMarker
