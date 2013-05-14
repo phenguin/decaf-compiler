@@ -48,7 +48,7 @@ indians stmt
         | DFun name params bod		<- stmt = concatMap indians bod
         | If expression thens elses 	<- stmt = concatMap indians thens ++ concatMap indians elses
         | While cond bod		<- stmt = concatMap indians bod
-        | ForLoop i end bod		<- stmt = [i] ++ concatMap indians bod 
+        | ForLoop i start end bod		<- stmt = [i] ++ concatMap indians bod 
 	| otherwise 				= [] 
 
 fornicake stmt 	
@@ -62,7 +62,7 @@ fornicake stmt
         | While cond bod		<- stmt = do
 				bod' <- mapM fornicake bod
 				return $ While cond bod'
-        | ForLoop i end bod		<- stmt = do
+        | ForLoop i start end bod		<- stmt = do
 				st<-get
 				ret<- return $evalState (fortress stmt) st
 				return ret
@@ -81,14 +81,14 @@ drip sl el stmt
         | While cond bod		<- stmt = do
 				bod' <- mapM (drip sl el) bod
 				sl $While cond bod'
-        | ForLoop i end bod		<- stmt = do	
+        | ForLoop i start end bod		<- stmt = do	
 				bod' <- mapM (drip sl el) bod
-				sl $ForLoop i end bod'
+				sl $ForLoop i start end bod'
         | otherwise 				= do 
 				sl stmt
 
 
-fortress for@(ForLoop i end bod) = do 
+fortress for@(ForLoop i start end bod) = do 
 	bod' <- mapM fornicake bod
 	vars<-get
 	let     is:: [(Variable,Expression)]
@@ -96,10 +96,10 @@ fortress for@(ForLoop i end bod) = do
 	ars <- return $ execState (drip (extractArrs) (return) for) []
 	risky <-return $ nub $ filter (isInductive $ map fst is) ars
 	if parallelizable (map fst is) (map snd is) risky
-		then return $ Parafor i end bod'
-		else return $ ForLoop i end bod'
+		then return $ Parafor i start end bod'
+		else return $ ForLoop i start end bod'
 
-induct for@(ForLoop i end bod) = do
+induct for@(ForLoop i start end bod) = do
 	vars<-get 
 	put $ vars ++ [(i,end)]
 	return for
@@ -140,7 +140,7 @@ extractArrs stmt
 		put $ vars ++ extractExprArrs expr	
 		return stmt
 	
-	| ForLoop  _ expr _ <- stmt = do 
+	| ForLoop  _ _ expr _ <- stmt = do 
 		vars <- get
 		put $ vars ++ extractExprArrs expr	
 		return stmt
@@ -313,7 +313,7 @@ hemorhage' stop prestate visited scope g blk l = if (BID stop) == bid
                                                 else (rightg,newstate)
 
 
-                                (LastOther (ForBranch _ _ b1 b2)) -> let
+                                (LastOther (ForBranch _ _ _ b1 b2)) -> let
                                         stop' = endLabel b1
                                         blk1 = getblk b1 g
                                         blk2 = getblk b2 g
@@ -389,7 +389,7 @@ bleed' prestate visited scope g blk l = (M.insert bid newblock g' ,stateout)
                                         in if unvisited (BID stop')
                                                 then bleed' state' ((BID stop'):bid2:bid1:bid:visited) scope rightg (getblk (BID stop') g) l
                                                 else (rightg,state'')
-				(LastOther (ForBranch _ _ b1 b2)) -> let
+				(LastOther (ForBranch _ _ _ b1 b2)) -> let
                                         stop' = endLabel b1
                                         blk1 = getblk b1 g
                                         blk2 = getblk b2 g

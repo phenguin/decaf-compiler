@@ -41,7 +41,19 @@ navigate globals funmap cfg = unsafePerformIO $ do
 		finalcfg <- return $ mapLGraphNodes (replaceStrings) (\_ x -> (([],[]),x)) cfg
 		
 		-- Data section
-		epilog <- return $ (makeDataSection strings) ++ vardata
+		epilog <- return $ (makeDataSection strings) ++ vardata ++ 
+			"\n.com p1,32\n"
+			++".com p2,32\n"
+			++".com p3,32\n"
+			++".com p4,32\n"
+			++".com p5,32\n"
+			++".com p2,32\n"
+			++".com p2,32\n"
+			++".com p2,32\n"
+			++".com p2,32\n"
+			++".com p2,32\n"
+			++".com p2,32\n"
+			++".com p2,32\n"
 		
 		-- Adds enter commands at the begining of every function
 		entercfg <- return $ cruise finalcfg addEnter 
@@ -54,7 +66,7 @@ navigate globals funmap cfg = unsafePerformIO $ do
 		
 		-- Peephoel optimaztion : gets rid of useless push and pops	
 		poppushcfg <- return $ fst $ esiurk zigcfg popAlot M.empty
-		
+				
 		-- replaces breaks and continues with jumps to labels
 		outcfg <-return$ fst $ trickleLast poppushcfg replaceBreakContinue Nil 
 		-- output to be printed
@@ -311,8 +323,8 @@ lfixBranch lst scope = do
 		case lst of 
 			(IfBranch e b1 b2) -> return $ IfBranch (le e) b1 b2
 			(WhileBranch e b1 b2) -> return $ WhileBranch (le e) b1 b2
-			(ForBranch v e b1 b2) -> return $ ForBranch (lv v) (le e) b1 b2
-			(ParaforBranch v e b1 b2) -> return $ ParaforBranch (lv v) (le e) b1 b2
+			(ForBranch v s e b1 b2) -> return $ ForBranch (lv v) (le s) (le e) b1 b2
+			(ParaforBranch v s e b1 b2) -> return $ ParaforBranch (lv v) (le s) (le e) b1 b2
 			x -> return x
 		where
 			prescope pre = intercalate "_" $reverse$dropWhile (/=pre) scope 
@@ -330,7 +342,8 @@ fixStatement le lv stmt
                 | Function name prams<-stmt= Function name (map le prams)
 		| If cond t e  <-stmt= If (le cond) t e
 		| While cond b <-stmt= While (le cond) b
-		| ForLoop i end b <-stmt= ForLoop (lv i) (le end) b
+		| ForLoop i s end b <-stmt= ForLoop (lv i) (le s) (le end) b
+		| Parafor i s end b <-stmt= Parafor (lv i) (le s) (le end) b
 		| otherwise = stmt
 
 fixExpression l expr

@@ -18,7 +18,7 @@ executable decafc
                      , Configuration.Types
                      , Parser
                      , Scanner
-  ghc-options:         -Wall -O3
+  ghc-options:         -Wall -O3 +RTS -xc -RTS
   build-depends:       base ==4.5.*
                      , array ==0.4.*
                      , filepath ==1.3.*

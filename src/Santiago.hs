@@ -69,7 +69,7 @@ cruise' visited g blk l =M.insert bid newblock g'
 					in if unvisited (BID stop')
 						then cruise' ((BID stop'):bid2:bid1:bid:visited) rightg (getblk (BID stop') g) l
 						else rightg
-				(LastOther (For' _ _ _ (b1:b2:_))) -> let
+				(LastOther (For' _ _ _ _ (b1:b2:_))) -> let
 					stop' = endLabel b1
 					blk1 = getblk b1 g 
 					blk2 = getblk b2 g
@@ -84,7 +84,7 @@ cruise' visited g blk l =M.insert bid newblock g'
 					in if unvisited (BID stop')
 						then cruise' ((BID stop'):bid2:bid1:bid:visited) rightg (getblk (BID stop') g) l
 						else rightg
-				(LastOther (Parafor' _ _ _ (b1:b2:_))) -> let
+				(LastOther (Parafor' _ _ _ _ (b1:b2:_))) -> let
 					stop' = endLabel b1
 					blk1 = getblk b1 g 
 					blk2 = getblk b2 g
@@ -164,7 +164,7 @@ kruise' prestate visited scope g blk l = (M.insert bid newblock g' ,stateout)
 						then kruise' state' ((BID stop'):bid2:bid1:bid:visited) scope rightg (getblk (BID stop') g) l
 						else (rightg,state'')
 	
-				(LastOther (For' _ _ _ (b1:b2:_))) -> let
+				(LastOther (For' _ _ _ _ (b1:b2:_))) -> let
 					stop' = endLabel b1
 					blk1 = getblk b1 g 
 					blk2 = getblk b2 g
@@ -179,7 +179,7 @@ kruise' prestate visited scope g blk l = (M.insert bid newblock g' ,stateout)
 					in if unvisited (BID stop')
 						then kruise' state' ((BID stop'):bid2:bid1:bid:visited) scope rightg (getblk (BID stop') g) l
 						else (rightg,state'')
-				(LastOther (Parafor' _ _ _ (b1:b2:_))) -> let
+				(LastOther (Parafor' _ _ _ _ (b1:b2:_))) -> let
 					stop' = endLabel b1
 					blk1 = getblk b1 g 
 					blk2 = getblk b2 g
@@ -265,7 +265,7 @@ trickle' stop prestate visited scope g blk l = if (BID stop) == bid
 					in if unvisited (BID stop')
 						then trickle' stop newstate ((BID stop'):bid2:bid1:bid:visited) scope rightg (getblk (BID stop') g) l
 						else (rightg,newstate)
-				(LastOther (For' _ _ _ (b1:b2:_))) -> let
+				(LastOther (For' _ _ _ _ (b1:b2:_))) -> let
 					stop' = endLabel b1
 					blk1 = getblk b1 g 
 					blk2 = getblk b2 g
@@ -282,7 +282,7 @@ trickle' stop prestate visited scope g blk l = if (BID stop) == bid
 						then trickle' stop newstate ((BID stop'):bid2:bid1:bid:visited) scope rightg (getblk (BID stop') g) l
 						else (rightg,newstate)
 	
-				(LastOther (Parafor' _ _ _ (b1:b2:_))) -> let
+				(LastOther (Parafor' _ _ _ _ (b1:b2:_))) -> let
 					stop' = endLabel b1
 					blk1 = getblk b1 g 
 					blk2 = getblk b2 g
@@ -341,6 +341,9 @@ bid2scope bid = endlabel name
 		| isPrefixOf ".for_end_" str = "for" ++  drop 8 str
 		| isPrefixOf ".for_body_" str = "for" ++  drop 9 str
 		| isPrefixOf ".for_test_" str = "for" ++  drop 9 str
+		| isPrefixOf ".parafor_end_" str = "parafor" ++  drop 12 str
+		| isPrefixOf ".parafor_body_" str = "parafor" ++  drop 13 str
+		| isPrefixOf ".parafor_test_" str = "parafor" ++  drop 13 str
 	
 testLabel bid = testlabel name  
       where
@@ -363,6 +366,9 @@ endLabel bid = endlabel name
 		| isPrefixOf ".for_end_" str = ".for_end_" ++  drop 9 str
 		| isPrefixOf ".for_body_" str = ".for_end_" ++  drop 10 str
 		| isPrefixOf ".for_test_" str = ".for_end_" ++  drop 10 str
+		| isPrefixOf ".parafor_end_" str = ".parafor_end_" ++  drop 13 str
+		| isPrefixOf ".parafor_body_" str = ".parafor_end_" ++  drop 14 str
+		| isPrefixOf ".parafor_test_" str = ".parafor_end_" ++  drop 14 str
 
 trickleLast g@(LGraph entryId blocks) l i  = (LGraph entryId outmap , state)
 	where 
@@ -402,7 +408,7 @@ trickleL' stop prestate visited scope g blk l = if (BID stop) == bid
 						then trickleL' stop newstate (bid:visited) scope rightg (getblk (BID stop') g) l
 						else (rightg,newstate)
 
-				(LastOther k@(For' _ _ _ (b1:b2:_))) -> let
+				(LastOther k@(For' _ _ _ _ (b1:b2:_))) -> let
 					stop' = endLabel b1
 					blk1 = getblk b1 g 
 					blk2 = getblk b2 g
@@ -417,7 +423,7 @@ trickleL' stop prestate visited scope g blk l = if (BID stop) == bid
 						then trickleL' stop newstate (bid:visited) scope rightg (getblk (BID stop') g) l
 						else (rightg,newstate)
 	
-				(LastOther k@(Parafor' _ _ _ (b1:b2:_))) -> let
+				(LastOther k@(Parafor' _ _ _ _ (b1:b2:_))) -> let
 					stop' = endLabel b1
 					blk1 = getblk b1 g 
 					blk2 = getblk b2 g
@@ -494,7 +500,7 @@ esiurk' prestate visited scope g blk l = (M.insert bid newblock g' ,newstate)
 						then esiurk' state' ((BID stop'):bid2:bid1:bid:visited) scope rightg (getblk (BID stop') g) l
 						else (rightg,state'')
 	
-				(LastOther (For' _ _ _ (b1:b2:_))) -> let
+				(LastOther (For' _ _ _ _ (b1:b2:_))) -> let
 					stop' = endLabel b1
 					blk1 = getblk b2 g 
 					blk2 = getblk b1 g
@@ -510,7 +516,7 @@ esiurk' prestate visited scope g blk l = (M.insert bid newblock g' ,newstate)
 						then esiurk' state' ((BID stop'):bid2:bid1:bid:visited) scope rightg (getblk (BID stop') g) l
 						else (rightg,state'')
 		
-				(LastOther (Parafor' _ _ _ (b1:b2:_))) -> let
+				(LastOther (Parafor' _ _ _ _ (b1:b2:_))) -> let
 					stop' = endLabel b1
 					blk1 = getblk b2 g 
 					blk2 = getblk b1 g
@@ -596,7 +602,7 @@ hemorhage' stop prestate visited scope g blk l ll= if (BID stop) == bid
                                                 else (rightg,state'')
 
 
-                                (LastOther (ForBranch _ _ b1 b2)) -> let
+                                (LastOther (ForBranch _ _ _ b1 b2)) -> let
                                         stop' = endLabel b1
                                         blk1 = getblk b1 g
                                         blk2 = getblk b2 g
@@ -612,7 +618,7 @@ hemorhage' stop prestate visited scope g blk l ll= if (BID stop) == bid
                                                 then hemorhage' stop newstate ((BID stop'):bid2:bid1:bid:visited) scope rightg (getblk (BID stop') g) l ll
                                                 else (rightg,state'')
 
-				(LastOther (ParaforBranch _ _ b1 b2)) -> let
+				(LastOther (ParaforBranch _ _ _ b1 b2)) -> let
                                         stop' = endLabel b1
                                         blk1 = getblk b1 g
                                         blk2 = getblk b2 g
