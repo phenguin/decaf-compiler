@@ -40,7 +40,7 @@ data Statement =  Set Variable Expression
 		| Function {functionName::String, params::[Expression]}
 		deriving (Show,Eq,Ord, Data, Typeable) 
 
-data Scoped = Global | Func String | Loop String 
+data Scoped = Temp | Global | Func String | Loop String 
 		deriving (Show,Eq,Ord, Data, Typeable)
 
 data Variable = Var {getSymbol::String}

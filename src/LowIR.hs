@@ -4,6 +4,7 @@ module LowIR where
 import MidIR
 import qualified Data.Map 
 import Data.Generics
+import qualified Transforms 
 import ControlFlowGraph
 import CFGConstruct
 import CFGConcrete
@@ -74,13 +75,22 @@ data ProtoBranch =  Jump' BlockId
 	| Nil --for stateful traversion
 	deriving (Show,Eq,Ord,Data,Typeable)
 
-allNonArrayVarsForLowCfg  :: (Data m, Data l) => LGraph m l -> Set String
-allNonArrayVarsForLowCfg = everything Set.union (Set.empty `mkQ` selectLowIRVariable)
+allNonArrayVarsForLowCfg  :: (Data m, Data l) => LGraph m l -> Set VarMarker
+allNonArrayVarsForLowCfg = everything Set.union (Set.empty `mkQ` scopedValToVMSet)
 
-selectLowIRVariable :: Value -> Set String
-selectLowIRVariable val = case val of
-    Symbol s -> Set.singleton s
-    _ -> Set.empty
+scopedValToVMSet :: Value -> Set VarMarker
+scopedValToVMSet v = Set.filter isScoped (valToVMSet v)
+
+valToVMSet :: Value -> Set VarMarker
+valToVMSet v = Set.filter isScoped $ valToVMSet' v
+valToVMSet' (Symbol s) = Set.singleton $ VarMarker s Transforms.Single []
+valToVMSet' (Array s _) = Set.singleton $ VarMarker s (Transforms.Array 0) []
+
+valToVMSet' yada@(Scoped scp v) = Set.map (setScope scp) $ valToVMSet' v
+valToVMSet' _ = Set.empty
+
+valsToVMSet :: [Value] -> Set VarMarker
+valsToVMSet vals = foldl Set.union Set.empty $ map valToVMSet vals
 
 usesVariable :: (Data a) => a -> String -> Bool
 usesVariable x name = everything (||) (False `mkQ` (selectVarByName name)) x

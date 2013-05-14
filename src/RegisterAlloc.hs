@@ -15,6 +15,7 @@ import CFGConstruct
 import Data.Data
 import Data.Typeable
 import Data.Generics
+import qualified Transforms
 import System.IO.Unsafe
 import PrettyPrint
 import Text.PrettyPrint.HughesPJ hiding (Str)
@@ -173,23 +174,26 @@ computeIGfromMidIRNode (Right m, liveVars) = case m of
     where relevantVarNames = Set.filter (not . isArray) $ liveVars
           beforePEdges = completeOnVertices relevantVarNames
 
--- buildIGFromLowCfg :: LGraph ProtoASM ProtoBranch -> InterferenceGraph Var
--- buildIGFromLowCfg cfg = unionIG (discreteOnVertices (allNonArrayVarsForLowCfg cfg)) conflictsIG
---     where conflictsIG = foldWithDFR lowLVAnalysis computeIGfromLowIRNode unionIG emptyIG cfg
+buildIGFromLowCfg :: LGraph ProtoASM ProtoBranch -> InterferenceGraph VarMarker
+buildIGFromLowCfg cfg = unionIG (discreteOnVertices (allNonArrayVarsForLowCfg cfg)) conflictsIG
+    where conflictsIG = foldWithDFR lowLVAnalysis computeIGfromLowIRNode unionIG emptyIG cfg
 
--- computeIGfromLowIRNode :: (Either ProtoBranch ProtoASM, LiveVarState) -> InterferenceGraph Var
--- computeIGfromLowIRNode (Left l, liveVars) = completeOnVertices $ Set.map varName $ Set.filter (not . isArray) $ liveVars
--- computeIGfromLowIRNode (Right m, liveVars) = case m of
---                 Mov' (Symbol s) (Symbol s') -> addPEdge (makeVertex s) (makeVertex s') beforePEdges
---                 CMove' (Symbol s) (Symbol s') -> addPEdge (makeVertex s) (makeVertex s') beforePEdges
---                 CMovne' (Symbol s) (Symbol s') -> addPEdge (makeVertex s) (makeVertex s') beforePEdges
---                 CMovg' (Symbol s) (Symbol s') -> addPEdge (makeVertex s) (makeVertex s') beforePEdges
---                 CMovl' (Symbol s) (Symbol s') -> addPEdge (makeVertex s) (makeVertex s') beforePEdges
---                 CMovge' (Symbol s) (Symbol s') -> addPEdge (makeVertex s) (makeVertex s') beforePEdges
---                 CMovle' (Symbol s) (Symbol s') -> addPEdge (makeVertex s) (makeVertex s') beforePEdges
---                 _ -> beforePEdges
---     where relevantVarNames = Set.map varName $ Set.filter (not . isArray) $ liveVars
---           beforePEdges = completeOnVertices relevantVarNames
+computeIGfromLowIRNode :: (Either ProtoBranch ProtoASM, LiveVarState) -> InterferenceGraph VarMarker
+computeIGfromLowIRNode (Left l, liveVars) = completeOnVertices $ Set.filter (not . isArray) $ liveVars
+computeIGfromLowIRNode (Right m, liveVars) = case m of
+                Mov' v v' -> addPEdgeOrId v v' beforePEdges
+                CMove' v v' -> addPEdgeOrId v v' beforePEdges
+                CMovne' v v' -> addPEdgeOrId v v' beforePEdges
+                CMovg' v v' -> addPEdgeOrId v v' beforePEdges
+                CMovl' v v' -> addPEdgeOrId v v' beforePEdges
+                CMovge' v v' -> addPEdgeOrId v v' beforePEdges
+                CMovle' v v' -> addPEdgeOrId v v' beforePEdges
+                _ -> beforePEdges
+    where relevantVarNames = Set.filter (not . isArray) $ liveVars
+          beforePEdges = completeOnVertices relevantVarNames
+          addPEdgeOrId (Scoped scp (Symbol s)) (Scoped scp' (Symbol s')) = addPEdge (makeVertex (VarMarker s Transforms.Single scp))
+                                                                                    (makeVertex (VarMarker s' Transforms.Single scp'))
+          addPEdgeOrId _ _ = id
 
 ------------------------------------------------------------
 -- Implement actual register allocation via graph coloring..
@@ -235,12 +239,13 @@ instance RegisterAllocatable (LGraph Statement BranchingStatement) where
     computeInterferenceGraph = buildIGFromMidCfg
     updateForSpills _ = error "not yet implemented"
 
--- instance RegisterAllocatable (LGraph ProtoASM ProtoBranch) where
---     computeInterferenceGraph = buildIGFromLowCfg
---     updateForSpills spilled graph =  res
---         where flattener (xs, y) = zip xs (repeat y)
---               spilled' = concatMap (flattener . mapFst toList) spilled
---               res = foldl updateForSpill graph $ spilled'
+instance RegisterAllocatable (LGraph ProtoASM ProtoBranch) where
+    computeInterferenceGraph = buildIGFromLowCfg
+    updateForSpills = error "not yet implemented"
+    -- updateForSpills spilled graph =  res
+    --     where flattener (xs, y) = zip xs (repeat y)
+    --           spilled' = concatMap (flattener . mapFst toList) spilled
+    --           res = foldl updateForSpill graph $ spilled'
 
 -- updateForSpill :: LGraph ProtoASM ProtoBranch -> (Var, MemLoc) -> LGraph ProtoASM ProtoBranch
 -- updateForSpill graph (spillVar, BasePtrOffset i) = trace ("updateForSpill called with var: " ++ spillVar) $ res
