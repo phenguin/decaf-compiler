@@ -156,35 +156,40 @@ addVertex v ig = IG (Set.insert v $ vertices ig) (iEdges ig) (pEdges ig)
 -----------------------------------------------------
 
 -- Uses the liveness analysis of a program to build its interference graph for register allocation
-buildIGFromMidCfg :: LGraph Statement BranchingStatement -> InterferenceGraph Var
+buildIGFromMidCfg :: LGraph Statement BranchingStatement -> InterferenceGraph VarMarker
 buildIGFromMidCfg cfg = unionIG (discreteOnVertices (allNonArrayVarsForMidCfg cfg)) conflictsIG
     where conflictsIG = foldWithDFR liveVariableAnalysis computeIGfromMidIRNode unionIG emptyIG cfg
 
-computeIGfromMidIRNode :: (Either BranchingStatement Statement, LiveVarState) -> InterferenceGraph Var
-computeIGfromMidIRNode (Left l, liveVars) = completeOnVertices $ Set.map varName $ Set.filter (not . isArray) $ liveVars
+computeIGfromMidIRNode :: (Either BranchingStatement Statement, LiveVarState) -> InterferenceGraph VarMarker
+computeIGfromMidIRNode (Left l, liveVars) = completeOnVertices $ Set.filter (not . isArray) $ liveVars
 computeIGfromMidIRNode (Right m, liveVars) = case m of
-                Set (Var s) (Loc (Var s')) -> addPEdge (makeVertex s) (makeVertex s') beforePEdges
+                Set v (Loc v') -> let vm = varToVarMarker v
+                                      vm' = varToVarMarker v' in
+                                  if not $ (isArray vm || isArray vm') then
+                                     addPEdge (makeVertex vm) (makeVertex vm') beforePEdges
+                                     else
+                                     beforePEdges
                 _ -> beforePEdges
-    where relevantVarNames = Set.map varName $ Set.filter (not . isArray) $ liveVars
+    where relevantVarNames = Set.filter (not . isArray) $ liveVars
           beforePEdges = completeOnVertices relevantVarNames
 
-buildIGFromLowCfg :: LGraph ProtoASM ProtoBranch -> InterferenceGraph Var
-buildIGFromLowCfg cfg = unionIG (discreteOnVertices (allNonArrayVarsForLowCfg cfg)) conflictsIG
-    where conflictsIG = foldWithDFR lowLVAnalysis computeIGfromLowIRNode unionIG emptyIG cfg
+-- buildIGFromLowCfg :: LGraph ProtoASM ProtoBranch -> InterferenceGraph Var
+-- buildIGFromLowCfg cfg = unionIG (discreteOnVertices (allNonArrayVarsForLowCfg cfg)) conflictsIG
+--     where conflictsIG = foldWithDFR lowLVAnalysis computeIGfromLowIRNode unionIG emptyIG cfg
 
-computeIGfromLowIRNode :: (Either ProtoBranch ProtoASM, LiveVarState) -> InterferenceGraph Var
-computeIGfromLowIRNode (Left l, liveVars) = completeOnVertices $ Set.map varName $ Set.filter (not . isArray) $ liveVars
-computeIGfromLowIRNode (Right m, liveVars) = case m of
-                Mov' (Symbol s) (Symbol s') -> addPEdge (makeVertex s) (makeVertex s') beforePEdges
-                CMove' (Symbol s) (Symbol s') -> addPEdge (makeVertex s) (makeVertex s') beforePEdges
-                CMovne' (Symbol s) (Symbol s') -> addPEdge (makeVertex s) (makeVertex s') beforePEdges
-                CMovg' (Symbol s) (Symbol s') -> addPEdge (makeVertex s) (makeVertex s') beforePEdges
-                CMovl' (Symbol s) (Symbol s') -> addPEdge (makeVertex s) (makeVertex s') beforePEdges
-                CMovge' (Symbol s) (Symbol s') -> addPEdge (makeVertex s) (makeVertex s') beforePEdges
-                CMovle' (Symbol s) (Symbol s') -> addPEdge (makeVertex s) (makeVertex s') beforePEdges
-                _ -> beforePEdges
-    where relevantVarNames = Set.map varName $ Set.filter (not . isArray) $ liveVars
-          beforePEdges = completeOnVertices relevantVarNames
+-- computeIGfromLowIRNode :: (Either ProtoBranch ProtoASM, LiveVarState) -> InterferenceGraph Var
+-- computeIGfromLowIRNode (Left l, liveVars) = completeOnVertices $ Set.map varName $ Set.filter (not . isArray) $ liveVars
+-- computeIGfromLowIRNode (Right m, liveVars) = case m of
+--                 Mov' (Symbol s) (Symbol s') -> addPEdge (makeVertex s) (makeVertex s') beforePEdges
+--                 CMove' (Symbol s) (Symbol s') -> addPEdge (makeVertex s) (makeVertex s') beforePEdges
+--                 CMovne' (Symbol s) (Symbol s') -> addPEdge (makeVertex s) (makeVertex s') beforePEdges
+--                 CMovg' (Symbol s) (Symbol s') -> addPEdge (makeVertex s) (makeVertex s') beforePEdges
+--                 CMovl' (Symbol s) (Symbol s') -> addPEdge (makeVertex s) (makeVertex s') beforePEdges
+--                 CMovge' (Symbol s) (Symbol s') -> addPEdge (makeVertex s) (makeVertex s') beforePEdges
+--                 CMovle' (Symbol s) (Symbol s') -> addPEdge (makeVertex s) (makeVertex s') beforePEdges
+--                 _ -> beforePEdges
+--     where relevantVarNames = Set.map varName $ Set.filter (not . isArray) $ liveVars
+--           beforePEdges = completeOnVertices relevantVarNames
 
 ------------------------------------------------------------
 -- Implement actual register allocation via graph coloring..
@@ -219,38 +224,38 @@ coalesce ig@(IG vertices iEdges pEdges) = case relevantPEdges of
 insertAllWithKey :: (Ord k) => Set k -> a -> M.Map k a -> M.Map k a
 insertAllWithKey keys val = compose $ map (\k -> M.insert k val) (toList keys)
 
-defAllocateRegisters :: (RegisterAllocatable b) => b -> Coloring Var
+defAllocateRegisters :: (RegisterAllocatable b) => b -> Coloring VarMarker
 defAllocateRegisters = allocateRegisters (const 0)
 
 class RegisterAllocatable a where
-    computeInterferenceGraph :: a -> InterferenceGraph Var
-    updateForSpills :: [(IGVertex Var, MemLoc)] -> a -> a
+    computeInterferenceGraph :: a -> InterferenceGraph VarMarker
+    updateForSpills :: [(IGVertex VarMarker, MemLoc)] -> a -> a
 
 instance RegisterAllocatable (LGraph Statement BranchingStatement) where
     computeInterferenceGraph = buildIGFromMidCfg
     updateForSpills _ = error "not yet implemented"
 
-instance RegisterAllocatable (LGraph ProtoASM ProtoBranch) where
-    computeInterferenceGraph = buildIGFromLowCfg
-    updateForSpills spilled graph =  res
-        where flattener (xs, y) = zip xs (repeat y)
-              spilled' = concatMap (flattener . mapFst toList) spilled
-              res = foldl updateForSpill graph $ spilled'
+-- instance RegisterAllocatable (LGraph ProtoASM ProtoBranch) where
+--     computeInterferenceGraph = buildIGFromLowCfg
+--     updateForSpills spilled graph =  res
+--         where flattener (xs, y) = zip xs (repeat y)
+--               spilled' = concatMap (flattener . mapFst toList) spilled
+--               res = foldl updateForSpill graph $ spilled'
 
-updateForSpill :: LGraph ProtoASM ProtoBranch -> (Var, MemLoc) -> LGraph ProtoASM ProtoBranch
-updateForSpill graph (spillVar, BasePtrOffset i) = trace ("updateForSpill called with var: " ++ spillVar) $ res
-    where mMap = \_ asm -> case asm `usesVariable` spillVar of
-                True -> [Mov' (Stack i) (Symbol spillVar), asm, Mov' (Symbol spillVar) (Stack i)]
-                False -> [asm]
-          lMap _ LastExit = (([], []), LastExit)
-          lMap _ zl@(LastOther branch) = case branch `usesVariable` spillVar of
-              True -> (([],[Mov' (Stack i) (Symbol spillVar)]), zl) -- Fix me yada yada
-              False -> (([],[]), zl)
-          res = mapLGraphNodes mMap lMap graph
+-- updateForSpill :: LGraph ProtoASM ProtoBranch -> (Var, MemLoc) -> LGraph ProtoASM ProtoBranch
+-- updateForSpill graph (spillVar, BasePtrOffset i) = trace ("updateForSpill called with var: " ++ spillVar) $ res
+--     where mMap = \_ asm -> case asm `usesVariable` spillVar of
+--                 True -> [Mov' (Stack i) (Symbol spillVar), asm, Mov' (Symbol spillVar) (Stack i)]
+--                 False -> [asm]
+--           lMap _ LastExit = (([], []), LastExit)
+--           lMap _ zl@(LastOther branch) = case branch `usesVariable` spillVar of
+--               True -> (([],[Mov' (Stack i) (Symbol spillVar)]), zl) -- Fix me yada yada
+--               False -> (([],[]), zl)
+--           res = mapLGraphNodes mMap lMap graph
           
 
 
-allocateRegisters :: (Ord a, RegisterAllocatable b) => (IGVertex Var -> a) -> b -> Coloring Var
+allocateRegisters :: (Ord a, RegisterAllocatable b) => (IGVertex VarMarker -> a) -> b -> Coloring VarMarker
 allocateRegisters spillHeuristic cfg = case coloringOrSpills of
             Right coloring -> coloring
             Left spills -> allocateRegisters spillHeuristic (updateForSpills spills cfg)

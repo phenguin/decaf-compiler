@@ -50,16 +50,20 @@ instance LastNode BranchingStatement where
         Jump _ -> True
         _ -> False
 
-allNonArrayVarsForMidCfg :: (LastNode l, Data l) => LGraph Statement l -> Set String
-allNonArrayVarsForMidCfg = everything Set.union (Set.empty `mkQ` selectVariable)
+allNonArrayVarsForMidCfg :: (LastNode l, Data l) => LGraph Statement l -> Set VarMarker
+allNonArrayVarsForMidCfg = everything Set.union (Set.empty `mkQ` selectVarFromStatement)
 
-selectVariable :: Variable -> Set String
-selectVariable var = case isArray var of
+selectVarFromStatement :: Statement -> Set VarMarker
+selectVarFromStatement (DFun _ _ _) = Set.empty
+selectVarFromStatement (DVar _) = Set.empty
+selectVarFromStatement stmt = everything Set.union (Set.empty `mkQ` selectVariable) stmt
+
+selectVariable :: Variable -> Set VarMarker
+selectVariable var = case isArray varmarker of
     True -> Set.empty
-    False -> Set.singleton $ symbol var
-  where isArray (Varray _ _) = True
-        isArray (Scopedvar _ v) = isArray v
-        isArray _ = False
+    False -> Set.singleton $ varmarker
+  where varmarker = varToVarMarker var
+        
 
 getFunctionParamMap :: LGraph Statement BranchingStatement -> M.Map String [Variable]
 getFunctionParamMap (LGraph _ bLookup) = 

@@ -377,7 +377,7 @@ instance PrettyPrint Value where
             R13 -> text "%r13"
             R14 -> text "%r14"
             R15 -> text "%r15"
-            Scoped _ v -> ppr v
+            Scoped scope v -> (text.show) scope <+> ppr v
             _ 			-> text (show x)
 
 

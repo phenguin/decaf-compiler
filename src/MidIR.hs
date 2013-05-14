@@ -12,6 +12,7 @@ import MultiTree
 import qualified Transforms as T
 import qualified Data.Map as Map
 import Control.Monad.State
+import Transforms (FDType, FDType(..))
 import Data.List 
 import Data.Char 
 import Debug.Trace
@@ -46,6 +47,29 @@ data Variable = Var {getSymbol::String}
 		| Varray {getSymbol::String, index::Expression}
 		| Scopedvar {getScope::[Scoped] , getVar::Variable}
 		deriving (Show,Eq, Ord, Data, Typeable) 
+
+data VarMarker = VarMarker {
+    varName :: String,
+    varType :: Transforms.FDType,
+    varScope :: Maybe [Scoped]
+    } deriving (Show, Eq, Ord, Data, Typeable)
+
+varToVarMarker :: Variable -> VarMarker
+varToVarMarker (Var name) = VarMarker name Transforms.Single Nothing
+-- TODO: FDType of Array 0 doesn't accurately reflect whats going on here.
+varToVarMarker (Varray name _) = VarMarker name (Transforms.Array 0) Nothing
+varToVarMarker (Scopedvar s v) = setScope s $ varToVarMarker v
+
+setScope :: [Scoped] -> VarMarker -> VarMarker
+setScope s (VarMarker n t _) = VarMarker n t (Just s)
+
+isArray :: VarMarker -> Bool
+isArray (VarMarker _ (Transforms.Array _) _) = True
+isArray _ = False
+
+instance PrettyPrint VarMarker where
+    ppr (VarMarker name Transforms.Single scope) = text name
+    ppr (VarMarker name (Transforms.Array _) scope) = text name <> lbrack <> rbrack
 
 symbol :: Variable -> String
 symbol (Scopedvar _ v) = symbol v

@@ -293,6 +293,9 @@ pprZTail :: (PrettyPrint m, PrettyPrint l, HavingSuccessors l) => ZTail m l -> D
 pprZTail (ZTail m t) = ppr m $$ ppr t
 pprZTail (ZLast l) = ppr l
 
+pprDetailZTail (ZTail m t) = (text . show) m $$ pprDetailZTail t
+pprDetailZTail (ZLast l) = (text . show) l
+
 pprLast :: (PrettyPrint l, HavingSuccessors l) => ZLast l -> Doc
 pprLast LastExit = text "leave\nret"
 pprLast (LastOther l) = ppr l
@@ -301,8 +304,14 @@ pprBlock :: (PrettyPrint m, PrettyPrint l, HavingSuccessors l) => Block m l -> D
 pprBlock (Block bid tl) = ppr bid <> colon
                                   $$ (nest 3 (ppr tl))
 
+pprDetailBlock (Block bid tl) = ppr bid <> colon
+                         $$ (nest 3 (pprDetailZTail tl))
+
 pprGraph (Graph ztail blocks) = vcat $ (ppr ztail) : map ppr (listBlocks blocks)
+
 pprLGraph lgraph = vcat $ map ppr (postorderDFS lgraph)
+
+pprDetailLGraph lgraph = vcat $ map pprDetailBlock (postorderDFS lgraph)
 
 -- Test data
 testBlock :: Block Int SuccBlocks

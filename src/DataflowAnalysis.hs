@@ -287,20 +287,6 @@ killsExpr var@(Varray s _) e = case e of
 
 -- Liveness analysis for MidIR
 
-data VarMarker = VarMarker {
-    varName :: String,
-    varType :: Transforms.FDType,
-    varScope :: Maybe [Scoped]
-    } deriving (Show, Eq, Ord, Data, Typeable)
-
-isArray :: VarMarker -> Bool
-isArray (VarMarker _ (Transforms.Array _) _) = True
-isArray _ = False
-
-instance PrettyPrint VarMarker where
-    ppr (VarMarker name Transforms.Single scope) = text name
-    ppr (VarMarker name (Transforms.Array _) scope) = text name <> lbrack <> rbrack
-
 -- Needs a better name
 type LiveVarState = Set VarMarker
 
@@ -352,15 +338,6 @@ varsDefinedInBranchStmt _ = Set.empty
 -- Base case..
 getVariables :: Variable -> Set VarMarker
 getVariables var = Set.singleton $ varToVarMarker var
-
-varToVarMarker :: Variable -> VarMarker
-varToVarMarker (Var name) = VarMarker name Transforms.Single Nothing
--- TODO: FDType of Array 0 doesn't accurately reflect whats going on here.
-varToVarMarker (Varray name _) = VarMarker name (Transforms.Array 0) Nothing
-varToVarMarker (Scopedvar s v) = setScope s $ varToVarMarker v
-
-setScope :: [Scoped] -> VarMarker -> VarMarker
-setScope s (VarMarker n t _) = VarMarker n t (Just s)
 
 -- Liveness analysis for LowIR
 

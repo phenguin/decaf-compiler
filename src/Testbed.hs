@@ -10,7 +10,7 @@ import PrettyPrint
 import ControlFlowGraph
 import Codegen
 import CFGConstruct (lgraphFromAGraphBlocks)
-import CFGConcrete (LGraph, BlockId(..))
+import CFGConcrete (LGraph, BlockId(..),pprDetailLGraph)
 import Semantics (SemanticTreeWithSymbols, addSymbolTables)
 import Transforms
 import Optimization
