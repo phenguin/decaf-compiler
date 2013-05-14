@@ -49,9 +49,13 @@ pPrintE (Right x) = putStrLn $ pPrint x
 
 testfilepath = "test.dcf"
 
-testCfgMid x = fromRight $ cfgFromFile testfilepath
+testMidIr = fromRight $ midIRFromFile testfilepath
+testGlobals = scrapeGlobals testMidIr
+testCfgMid' = fromRight $ cfgFromFile testfilepath
+-- add scoping
+testCfgMid = scopeMidir testCfgMid' testGlobals
 
-testCfgLow = (\(_,x,_) -> x) $ navigate globals funcParamMap $ toLowIRCFG $ cfg 
+testCfgLow = (\(_,x,_) -> x) $ navigate globals funcParamMap $ toLowIRCFG $ testCfgMid
     where midIR = fromRight $ midIRFromFile testfilepath
           cfg = fromRight $ cfgFromFile testfilepath
           globals = scrapeGlobals midIR
