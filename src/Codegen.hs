@@ -26,32 +26,34 @@ import Parallel
 -- sequential operations that navigate through the CFG and prepair assembly
 navigate globals funmap cfg = unsafePerformIO $ do 
 		let cfg' = focus (BID "main" ) cfg 
-		let convertVariableToVar (Var sym) = (Symbol sym)
-		    convertVariableToVar (Varray sym (Const i)) = (Array sym (Literal i)) -- IMPORTANT CONVENTION
-		let globalist =  map (\x -> (convertVariableToVar x ,"global")) $ globals
-		let standardizeArrays (Array sym _) = (Array sym RAX)
-		    standardizeArrays x = x
-		--  map of globals
-		let globalmap =  insertListMap ( map (\(x,y) -> ((standardizeArrays x) , y)) globalist) $ M.empty
-		
-		-- does scoped variables
-		cfgVars <- return $ fst $ trickle cfg scoper globalmap
 		
 		-- removes variables so we can make a data section
-		let (_,vars') = kruise cfgVars extractVars []
+		let (_,vars') = kruise cfg extractVars []
 		let vars = nub vars'
 
 		
 		let appendGlobalLabel (Symbol x) = (Symbol $"global_"++x)
 		    appendGlobalLabel (Array x t) = (Array ("global_"++x) t)
-		let vardata = (concatMap datifyVars (vars++ map (\x -> appendGlobalLabel $fst x) globalist) )
-		
+		let vardata = (concatMap datifyVars (vars ++ map (appendGlobalLabel.var2val) globals) )
+			
 		-- handles strings strings
-		strings <- return $ nub $ map (\(EvilString x) -> x)$findAllStrings cfgVars
-		finalcfg <- return $ mapLGraphNodes (replaceStrings) (\_ x -> (([],[]),x)) cfgVars
+		strings <- return $ nub $ map (\(EvilString x) -> x)$findAllStrings cfg
+		finalcfg <- return $ mapLGraphNodes (replaceStrings) (\_ x -> (([],[]),x)) cfg
 		
 		-- Data section
-		epilog <- return $ (makeDataSection strings) ++ vardata
+		epilog <- return $ (makeDataSection strings) ++ vardata ++ 
+			"\n.com p1,32\n"
+			++".com p2,32\n"
+			++".com p3,32\n"
+			++".com p4,32\n"
+			++".com p5,32\n"
+			++".com p2,32\n"
+			++".com p2,32\n"
+			++".com p2,32\n"
+			++".com p2,32\n"
+			++".com p2,32\n"
+			++".com p2,32\n"
+			++".com p2,32\n"
 		
 		-- Adds enter commands at the begining of every function
 		entercfg <- return $ cruise finalcfg addEnter 
@@ -64,10 +66,9 @@ navigate globals funmap cfg = unsafePerformIO $ do
 		
 		-- Peephoel optimaztion : gets rid of useless push and pops	
 		poppushcfg <- return $ fst $ esiurk zigcfg popAlot M.empty
-		
+				
 		-- replaces breaks and continues with jumps to labels
 		outcfg <-return$ fst $ trickleLast poppushcfg replaceBreakContinue Nil 
-		
 		-- output to be printed
 		return (prolog, outcfg,epilog)
 	where 	mappify:: (Ord a, Ord k) => (M.Map a [k]) -> [(a,k)]-> (M.Map a [k])
@@ -76,6 +77,45 @@ navigate globals funmap cfg = unsafePerformIO $ do
 		addorappend s (Just x) = Just $ x ++ [s]
 		addorappend s Nothing = Just $ [s]
 		prolog = ".global main\n"
+		var2val (Var str) = Symbol str
+		var2val (Varray str (Const i)) = Array str (Literal i)
+
+
+scopeMidir midir globals = fst $ hemorhage midir scoper lfixBranch globalmap
+		where
+			 globalist =  map (\x -> (x ,"global")) $ globals
+			 standardizeArrays (Varray sym _) = (Varray sym (Const 0))
+		    	 standardizeArrays x = x
+			 globalmap =  insertListMap ( map (\(x,y) -> ((standardizeArrays x) , y)) globalist) $ M.empty
+		
+
+{-
+varMap cfg = execState (kruise varMap' cfg) M.empty
+	
+varMap':: State ((M.Map String BlockId),(M.Map (BlockId String) BlockId))
+varMap' bid scope p =
+	(var2bid,bidvar2bid)<- get 
+	defVars <- decls
+	var2bid' <- updatemap' defVars var2bid
+	blockvars <- return $ map name $ filter isVar $concatMap values p 
+	let varbid v
+		| Just bid <- M.lookup v var2bid' = bid
+	put $ insertListMap $ map (\v-> ((bid,name v), varbid v)) blockvar
+	return $ p
+		
+	where
+		params = extractParams instrs
+		extractParams ((DFun' _ v):xs) = v
+		extractParams _ = []
+		decls = (concatMap isDecl instrs) ++ params
+		isDecl (Dec' v) =  [v]
+		isDecl _ =  []
+		updatemap':: [Value] -> M.Map Value [Char] -> M.Map Value [Char]
+		updatemap' (x:xs) mp = M.insert x bid (updatemap' xs mp)
+		updatemap' [] mp = mp 
+-}
+
+
  
 -- add an enter instruction at the begining of all functions
 addEnter:: BlockId -> [ProtoASM] -> [ProtoASM]
@@ -236,6 +276,7 @@ replaceBreakContinue last bid scope instrs = do
 	put newloop
 	let (b1,b2) = case loop of
 		 (While' _ (ba:bb:xs)) -> (ba,bb)
+		 --(For' _ _ (ba:bb:xs)) -> (ba,bb)
 		 _ -> ((BID "NIGERIA"),(BID "NIGERIA")) -- please please please NEVER happen!   	
 	let	fixit (Break') = Jmp' b2  	
 		fixit (Continue') = Jmp' $ BID $ testLabel b1
@@ -251,30 +292,81 @@ scoper bid scope instrs =  do
 	premap <- get
 	varmap <- return $  (updatemap premap) 
 	put  varmap 
-	return $ concatMap ((fixInstructionInputs (mapswap varmap))) instrs
+	return $ map (fixStatement (fixExpression (mapswap varmap)) (mapswap varmap)) instrs
 		
 	where
-		mapswap:: M.Map Value String -> Value -> Value
-		mapswap vmp v@(Symbol str) = Symbol $ prescope prefix ++ "_" ++  str
+	--	mapswap:: M.Map Value String -> Value -> Value
+		mapswap vmp v@(Var str) = Var $ prescope prefix ++ "_" ++  str
 			where prefix = fj$ M.lookup v vmp
-		mapswap vmp v@(Array str va) = Array (prescope prefix ++ "_" ++ str) va
-			where prefix = fj $ M.lookup (Array str RAX) vmp -- important convention array always RAX in tables!
+		mapswap vmp v@(Varray str va) = Varray (prescope prefix ++ "_" ++ str) va
+			where prefix = fj $ M.lookup (Varray str (Const 0)) vmp -- important convention array always RAX in tables!
 		mapswap vmp v = v
 		params = extractParams instrs
-		extractParams ((DFun' _ v):xs) = v
+		extractParams ((DFun _ v _):xs) = v
 		extractParams _ = []
 		decls = (concatMap isDecl instrs) ++ params
-		isDecl (Dec' v) =  [v]
+		isDecl (DVar v) =  [v]
 		isDecl _ =  []
-		updatemap:: M.Map Value [Char] -> M.Map Value [Char]
+	--	updatemap:: M.Map Value [Char] -> M.Map Value [Char]
 		updatemap mp = updatemap' decls mp
-		updatemap':: [Value] -> M.Map Value [Char] -> M.Map Value [Char]
-		updatemap' (x:xs) mp = M.insert x (head scope) (updatemap' xs mp)
+	--	updatemap':: [Value] -> M.Map Value [Char] -> M.Map Value [Char]
+		updatemap' (x:xs) mp 
+			| (Varray nm _) <-x = M.insert (Varray nm (Const 0)) (head scope) (updatemap' xs mp)
+			| otherwise = M.insert x (head scope) (updatemap' xs mp)
 		updatemap' [] mp = mp 
 		prescope pre = intercalate "_" $reverse$dropWhile (/=pre) scope 
 
+lfixBranch lst scope = do 
+		varmap <- get
+		let lv = mapswap varmap
+		let le = fixExpression lv
+		case lst of 
+			(IfBranch e b1 b2) -> return $ IfBranch (le e) b1 b2
+			(WhileBranch e b1 b2) -> return $ WhileBranch (le e) b1 b2
+			(ForBranch v s e b1 b2) -> return $ ForBranch (lv v) (le s) (le e) b1 b2
+			(ParaforBranch v s e b1 b2) -> return $ ParaforBranch (lv v) (le s) (le e) b1 b2
+			x -> return x
+		where
+			prescope pre = intercalate "_" $reverse$dropWhile (/=pre) scope 
+			mapswap vmp v@(Var str) = Var $ prescope prefix ++ "_" ++  str
+				where prefix = fj$ M.lookup v vmp
+			mapswap vmp v@(Varray str va) = Varray (prescope prefix ++ "_" ++ str) va
+				where prefix = fj $ M.lookup (Varray str (Const 0)) vmp -- important convention array always RAX in tables!
+	
 
+fixStatement le lv stmt   
+		| Set v e <-stmt= Set (lv v) (le e)
+                | Return e<-stmt= Return (le e)
+                | DVar v  <-stmt= DVar $ lv v 
+                | Callout name prams <-stmt= Callout name (map le prams)
+                | Function name prams<-stmt= Function name (map le prams)
+		| If cond t e  <-stmt= If (le cond) t e
+		| While cond b <-stmt= While (le cond) b
+		| ForLoop i s end b <-stmt= ForLoop (lv i) (le s) (le end) b
+		| Parafor i s end b <-stmt= Parafor (lv i) (le s) (le end) b
+		| otherwise = stmt
 
+fixExpression l expr
+	| c@(Const _) <- expr = c 
+	| c@(Str _) <- expr = c 
+	| c@(FuncCall nm params) <- expr = FuncCall nm (map (fixExpression l) params) 
+	| c@(Not i) <- expr = Not $ fixExpression l i 
+	| c@(Neg i) <- expr = Not $ fixExpression l i
+	| Add ex ey <- expr = Add (fixExpression l ex) (fixExpression l ey)
+        | Sub ex ey <- expr = Sub (fixExpression l ex) (fixExpression l ey)
+        | Mul ex ey <- expr = Mul (fixExpression l ex) (fixExpression l ey)
+        | Div ex ey <- expr = Div (fixExpression l ex) (fixExpression l ey)
+        | Mod ex ey <- expr = Mod (fixExpression l ex) (fixExpression l ey)
+        | And ex ey <- expr = And (fixExpression l ex) (fixExpression l ey)
+        | Or ex ey <- expr = Or  (fixExpression l ex) (fixExpression l ey)
+        | Eq  ex ey <- expr = Eq  (fixExpression l ex) (fixExpression l ey)
+        | Lt  ex ey <- expr = Lt  (fixExpression l ex) (fixExpression l ey)
+        | Gt  ex ey <- expr = Gt  (fixExpression l ex) (fixExpression l ey)
+        | Le  ex ey <- expr = Le  (fixExpression l ex) (fixExpression l ey)
+        | Ge  ex ey <- expr = Ge  (fixExpression l ex) (fixExpression l ey)
+        | Ne  ex ey <- expr = Ne  (fixExpression l ex) (fixExpression l ey)
+	| FuncCall nm prms <- expr = FuncCall nm (map (fixExpression l) prms)
+	| (Loc v) <- expr = Loc$  l v  
 
 stVarsCollect bid scope p = do
 	vars <- get

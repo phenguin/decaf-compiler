@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 module ControlFlowGraph where
 
+
 import CFGConcrete
 import Data.Set (Set)
 import qualified Data.Set as Set
@@ -28,7 +29,8 @@ lgraphSpanningFunctions agraph@(AGraph g) = removeUniqEnv $ do
 data BranchingStatement = Jump BlockId 
                         | IfBranch Expression BlockId BlockId 
                         | WhileBranch Expression BlockId BlockId
-                        | ForBranch Variable Expression BlockId BlockId
+                        | ForBranch Variable Expression Expression BlockId BlockId
+                        | ParaforBranch Variable Expression Expression BlockId BlockId
                         -- Initialbranch used to ensure all functions are included in the DFS
                         | InitialBranch [BlockId]-- | Continue | Break ... Not yet done
                         | None
@@ -38,7 +40,8 @@ instance HavingSuccessors BranchingStatement where
     succs (Jump bid) = [bid]
     succs (IfBranch _ bid1 bid2) = [bid1, bid2]
     succs (WhileBranch _ bid1 bid2) = [bid1, bid2]
-    succs (ForBranch _ _ bid1 bid2) = [bid1, bid2]
+    succs (ForBranch _ _ _ bid1 bid2) = [bid1, bid2]
+    succs (ParaforBranch _ _ _ bid1 bid2) = [bid1, bid2]
     succs (InitialBranch bs) = bs
 
 instance LastNode BranchingStatement where
@@ -77,9 +80,13 @@ stmtToAGraph (If cond thendo elsedo) =
             mkIfElse cbranch (stmtsToAGraph thendo) (stmtsToAGraph elsedo)
     where cbranch bid1 bid2 = mkLast $ IfBranch cond bid1 bid2
 
-stmtToAGraph (ForLoop var cond body) = 
+stmtToAGraph (ForLoop var start cond body) = 
             mkFor cbranch (stmtsToAGraph body)
-    where cbranch bid1 bid2 = mkLast $ ForBranch var cond bid1 bid2
+    where cbranch bid1 bid2 = mkLast $ ForBranch var start cond bid1 bid2
+
+stmtToAGraph (Parafor var start cond body) = 
+            mkParafor cbranch (stmtsToAGraph body)
+    where cbranch bid1 bid2 = mkLast $ ParaforBranch var start cond bid1 bid2
 
 stmtToAGraph (While cond body) = 
             mkWhile cbranch (stmtsToAGraph body)
@@ -122,7 +129,10 @@ instance PrettyPrint BranchingStatement where
     ppr (WhileBranch e bid1 bid2) = text "While" <+> parens (ppr e) <+>
                                  text "loop:" <+> ppr bid1 <+>
                                  text "end:" <+> ppr bid2
-    ppr (ForBranch v e bid1 bid2) = text "For " <+> parens (ppr v <+> text "->"<+>ppr e) <+>
+    ppr (ForBranch v s e bid1 bid2) = text "For " <+> parens (ppr s <+> text "->"<+>ppr e) <+>
+                                 text "loop:" <+> ppr bid1 <+>
+                                 text "end:" <+> ppr bid2
+    ppr (ParaforBranch v s e bid1 bid2) = text "Parafor " <+> parens (ppr s <+> text "->"<+>ppr e) <+>
                                  text "loop:" <+> ppr bid1 <+>
                                  text "end:" <+> ppr bid2
     ppr (InitialBranch bids) = text "Declared Functions:" <+> hsep (map ppr bids)

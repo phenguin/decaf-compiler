@@ -13,7 +13,7 @@ import PrettyPrint
 import Text.PrettyPrint.HughesPJ hiding (Str)
 import Debug.Trace
 
-data Value = Symbol String | Array String Value | Literal Int | EvilSymbol String | EvilString{getString::String} | Label String | Dereference  Value Value | Verbatim String | Stack Int
+data Value = Symbol {name::String} | Array {name::String ,index::Value} | Literal Int | EvilSymbol String | EvilString{getString::String} | Label String | Dereference  Value Value | Verbatim String | Stack Int
 		| RAX | RBX | RCX | RDX | RSP | RBP | RSI | RDI | R8 | R9 | R10 | R11 
 		| R12 | R13 | R14 | R15 
 		deriving (Show,Eq,Ord)
@@ -67,6 +67,8 @@ restore = map Pop' (reverse saveFrame)
 data ProtoBranch =  Jump' BlockId
 	| If' [ProtoASM] [BlockId]
 	| While' [ProtoASM] [BlockId]
+	| For' Value [ProtoASM] [ProtoASM] [ProtoASM] [BlockId]
+	| Parafor' Value [ProtoASM] [ProtoASM] [ProtoASM] [BlockId]
 	| InitialBranch' [BlockId]
 	| Nil --for stateful traversion
 	deriving (Show,Eq,Ord)
@@ -82,6 +84,8 @@ instance HavingSuccessors ProtoBranch where
 		(Jump' b1) 	-> [b1]
 		(If' _ x) 	-> x
 		(While' _ x)    -> x
+		(For' _ _ _ _ x)    -> x
+		(Parafor' _ _ _ _ x)    -> x
 		(InitialBranch' bids)    -> bids
 
 instance LastNode ProtoBranch where
@@ -253,6 +257,15 @@ mapBranchToAsm bid (LastOther (WhileBranch expr bid1 bid2))
 --	= (([],expressed++[(Cmp' (Literal 0) R12),(Je' bid2)]), LastOther $ While' (expressed++[(Cmp' (Literal 0) R12 ),(Je' bid2)]) [bid1, bid2])
 	where expressed = mapExprToAsm expr
 
+mapBranchToAsm bid (LastOther (ForBranch (Var str) startexpr expr bid1 bid2))  
+	= (([], expressed++[(Cmp' (Symbol str) R12),(Je' bid2)]), LastOther $ For' (Literal 0) (mapExprToAsm expr) expressed [] [bid1, bid2])
+	where expressed = mapExprToAsm expr
+
+mapBranchToAsm bid (LastOther (ParaforBranch (Var str) startexpr expr bid1 bid2))  
+	= (([], expressed ++[(Cmp' (Symbol str) R12),(Je' bid2)]), LastOther $ Parafor' (Literal 0) (mapExprToAsm expr)  expressed [] [bid1, bid2])
+	where expressed = mapExprToAsm expr
+
+
 mapBranchToAsm bid (LastOther (InitialBranch bids)) = (([],[]), (LastOther (InitialBranch' bids)))
 
 mapBranchToAsm bid (LastExit) = (([],[]),LastExit)
@@ -263,7 +276,7 @@ instance PrettyPrint ProtoASM where
                 (Sub' x y)       -> binop "sub" x y
                 (Add' x y)       -> binop "add" x y
                 (Mul' x y)       -> binop "imul" x y
-                (Div' x y)       -> binop "div" x y
+                (Div' x y)       -> idiv x y
                 (And' x y)       -> binop "and" x y
                 (Or' x y)        -> binop "or" x y
                 (Lt' x y)        -> comparison "cmovl" x y
@@ -294,7 +307,14 @@ instance PrettyPrint ProtoASM where
 				$$ text ("movq" ++ " $1 , %rbx")
 				$$ text (name ++ " %rbx , %r12")
 	    uniop name x  = text (name++" " )<+> (ppr x)  
-
+  	    idiv x y =    text "mov %rax , %r11"
+			$$ text "mov %rdx , %r10" 
+			$$ text ("mov $0, %rdx") 
+			$$ text "mov "<+> (ppr x) <+> text", %rax"
+			$$ text "idiv " <+> (ppr y) 
+			$$ text "mov %rax, %r12 "
+			$$ text "mov %r11 , %rax"
+			$$ text "mov %r10 , %rdx"
 instance PrettyPrint Value where
 	ppr x = case x of 
             (Symbol str) 		-> text $  str   
@@ -328,6 +348,8 @@ instance PrettyPrint ProtoBranch where
     ppr (Jump' bid) = text "" --text "mp" <+> ppr bid
     ppr (If' stmts _) = vcat $ map ppr stmts
     ppr (While' stmts _) = text ""--vcat $ map ppr stmts
+    ppr (For' _ _ _ stmts _) = text ""--vcat $ map ppr stmts
+    ppr (Parafor' _  _ _ stmts _) = text ""--vcat $ map ppr stmts
     ppr (InitialBranch' bids) = text "# Methods Defined:" <+> hsep (map ppr bids)
 
 {--toLowIR = lowIRProg

@@ -15,7 +15,7 @@ import Prelude hiding (readFile)
 import qualified Prelude
 
 import Codegen
-import ControlFlowGraph (makeCFG,getFunctionParamMap)
+import ControlFlowGraph (BranchingStatement,makeCFG,getFunctionParamMap,lgraphSpanningFunctions)
 import CodeGeneration 
 import Control.Exception (bracket)
 import Control.Monad (forM_, void, liftM)
@@ -43,10 +43,10 @@ import PrettyPrint
 import Semantics (addSymbolTables)
 import Optimization 
 import LowIR
-import RegisterAlloc 
+import Codegen
 import CFGConcrete
 import CFGConstruct
-
+import Parallel(parallelize, treeParallelize)
 ------------------------ Impure code: Fun with ErrorT -------------------------
 
 main :: IO ()
@@ -147,12 +147,17 @@ assembleTree configuration input = do
   let irTree = convert parseTree 
   let irTreeWithST = addSymbolTables irTree 
   let midir = MidIR.toMidIR irTreeWithST
-  let globals = MidIR.scrapeGlobals midir
-  let cfg = lgraphFromAGraph $ makeCFG midir
-  let funmap = getFunctionParamMap $ cfg
-  let lowIRCFG = toLowIRCFG cfg
+  let paramidir = treeParallelize midir
+  let globals = MidIR.scrapeGlobals paramidir
+  let cfg = makeCFG paramidir
+  let funmap = getFunctionParamMap $lgraphFromAGraph  cfg
+  let midcfg = lgraphSpanningFunctions cfg
+  let	scopedcfg  = scopeMidir midcfg globals
+  let	parallelcfg  = parallelize scopedcfg
+--  Right $ [pprIO parallelcfg]
+  let lowIRCFG = toLowIRCFG parallelcfg
   let (prolog,asm,epilog) = navigate globals funmap lowIRCFG
   if debug configuration
 	then Right $ [putStrLn prolog,pprIO asm, putStrLn epilog]
-	else Right [return ()]
+ 	else Right [return ()]
       

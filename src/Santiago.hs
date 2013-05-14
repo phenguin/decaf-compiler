@@ -8,7 +8,8 @@ import LowIR
 import Data.Maybe
 import Data.List
 import Debug.Trace
-
+import MidIR
+import ControlFlowGraph
 import qualified Data.Map as M
 -- cfg is ugly. I fix. fo goood woking compirar !!!! hao hao hao-er zuo gong ke ye zuo dou dian nau wen ti!!!
 
@@ -68,7 +69,37 @@ cruise' visited g blk l =M.insert bid newblock g'
 					in if unvisited (BID stop')
 						then cruise' ((BID stop'):bid2:bid1:bid:visited) rightg (getblk (BID stop') g) l
 						else rightg
-	
+				(LastOther (For' _ _ _ _ (b1:b2:_))) -> let
+					stop' = endLabel b1
+					blk1 = getblk b1 g 
+					blk2 = getblk b2 g
+					bid2 = bId blk2
+					bid1 = bId blk1
+					leftg = if unvisited b1 
+						then cruise' ((BID stop'):bid2:bid1:visited) g blk1 l 
+						else g
+					rightg = if unvisited b2
+						then cruise' ((BID stop'):bid2:bid1:visited) leftg blk2 l
+						else leftg
+					in if unvisited (BID stop')
+						then cruise' ((BID stop'):bid2:bid1:bid:visited) rightg (getblk (BID stop') g) l
+						else rightg
+				(LastOther (Parafor' _ _ _ _ (b1:b2:_))) -> let
+					stop' = endLabel b1
+					blk1 = getblk b1 g 
+					blk2 = getblk b2 g
+					bid2 = bId blk2
+					bid1 = bId blk1
+					leftg = if unvisited b1 
+						then cruise' ((BID stop'):bid2:bid1:visited) g blk1 l 
+						else g
+					rightg = if unvisited b2
+						then cruise' ((BID stop'):bid2:bid1:visited) leftg blk2 l
+						else leftg
+					in if unvisited (BID stop')
+						then cruise' ((BID stop'):bid2:bid1:bid:visited) rightg (getblk (BID stop') g) l
+						else rightg
+			
 				(LastOther (If' _ (b1:b2:_))) -> let 
 					stop' = endLabel b1
 					blk1 = getblk b1 g 
@@ -133,7 +164,37 @@ kruise' prestate visited scope g blk l = (M.insert bid newblock g' ,stateout)
 						then kruise' state' ((BID stop'):bid2:bid1:bid:visited) scope rightg (getblk (BID stop') g) l
 						else (rightg,state'')
 	
-
+				(LastOther (For' _ _ _ _ (b1:b2:_))) -> let
+					stop' = endLabel b1
+					blk1 = getblk b1 g 
+					blk2 = getblk b2 g
+					bid2 = bId blk2
+					bid1 = bId blk1
+					(leftg ,state') = if unvisited b1 
+						then kruise' newstate ((BID stop'):bid2:bid1:bid:visited) scope g blk1 l 
+						else (g,newstate)
+					(rightg, state'') = if unvisited b2
+						then kruise' state' ((BID stop'):bid2:bid1:bid:visited) scope leftg blk2 l
+						else (leftg,state')
+					in if unvisited (BID stop')
+						then kruise' state' ((BID stop'):bid2:bid1:bid:visited) scope rightg (getblk (BID stop') g) l
+						else (rightg,state'')
+				(LastOther (Parafor' _ _ _ _ (b1:b2:_))) -> let
+					stop' = endLabel b1
+					blk1 = getblk b1 g 
+					blk2 = getblk b2 g
+					bid2 = bId blk2
+					bid1 = bId blk1
+					(leftg ,state') = if unvisited b1 
+						then kruise' newstate ((BID stop'):bid2:bid1:bid:visited) scope g blk1 l 
+						else (g,newstate)
+					(rightg, state'') = if unvisited b2
+						then kruise' state' ((BID stop'):bid2:bid1:bid:visited) scope leftg blk2 l
+						else (leftg,state')
+					in if unvisited (BID stop')
+						then kruise' state' ((BID stop'):bid2:bid1:bid:visited) scope rightg (getblk (BID stop') g) l
+						else (rightg,state'')
+	
 				(LastOther (If' _ (b1:b2:_))) -> let 
 					stop' = endLabel b1
 					blk1 = getblk b1 g 
@@ -204,6 +265,40 @@ trickle' stop prestate visited scope g blk l = if (BID stop) == bid
 					in if unvisited (BID stop')
 						then trickle' stop newstate ((BID stop'):bid2:bid1:bid:visited) scope rightg (getblk (BID stop') g) l
 						else (rightg,newstate)
+				(LastOther (For' _ _ _ _ (b1:b2:_))) -> let
+					stop' = endLabel b1
+					blk1 = getblk b1 g 
+					blk2 = getblk b2 g
+					bid2 = bId blk2
+					bid1 = bId blk1
+					sc' = bid2scope b1
+					(leftg ,state') = if unvisited b1 
+						then trickle' stop' newstate ((BID stop'):bid2:bid1:bid:visited) (sc':scope) g blk1 l 
+						else (g,newstate)
+					(rightg,state'') = if unvisited b2
+						then trickle' stop' newstate ((BID stop'):bid2:bid1:bid:visited) (sc':scope) leftg blk2 l
+						else (leftg,newstate)
+					in if unvisited (BID stop')
+						then trickle' stop newstate ((BID stop'):bid2:bid1:bid:visited) scope rightg (getblk (BID stop') g) l
+						else (rightg,newstate)
+	
+				(LastOther (Parafor' _ _ _ _ (b1:b2:_))) -> let
+					stop' = endLabel b1
+					blk1 = getblk b1 g 
+					blk2 = getblk b2 g
+					bid2 = bId blk2
+					bid1 = bId blk1
+					sc' = bid2scope b1
+					(leftg ,state') = if unvisited b1 
+						then trickle' stop' newstate ((BID stop'):bid2:bid1:bid:visited) (sc':scope) g blk1 l 
+						else (g,newstate)
+					(rightg,state'') = if unvisited b2
+						then trickle' stop' newstate ((BID stop'):bid2:bid1:bid:visited) (sc':scope) leftg blk2 l
+						else (leftg,newstate)
+					in if unvisited (BID stop')
+						then trickle' stop newstate ((BID stop'):bid2:bid1:bid:visited) scope rightg (getblk (BID stop') g) l
+						else (rightg,newstate)
+	
 				(LastOther (If' _ (b1:b2:_))) -> let 
 					sc' = bid2scope b1
 					stop' = endLabel b1
@@ -246,6 +341,9 @@ bid2scope bid = endlabel name
 		| isPrefixOf ".for_end_" str = "for" ++  drop 8 str
 		| isPrefixOf ".for_body_" str = "for" ++  drop 9 str
 		| isPrefixOf ".for_test_" str = "for" ++  drop 9 str
+		| isPrefixOf ".parafor_end_" str = "parafor" ++  drop 12 str
+		| isPrefixOf ".parafor_body_" str = "parafor" ++  drop 13 str
+		| isPrefixOf ".parafor_test_" str = "parafor" ++  drop 13 str
 	
 testLabel bid = testlabel name  
       where
@@ -268,6 +366,9 @@ endLabel bid = endlabel name
 		| isPrefixOf ".for_end_" str = ".for_end_" ++  drop 9 str
 		| isPrefixOf ".for_body_" str = ".for_end_" ++  drop 10 str
 		| isPrefixOf ".for_test_" str = ".for_end_" ++  drop 10 str
+		| isPrefixOf ".parafor_end_" str = ".parafor_end_" ++  drop 13 str
+		| isPrefixOf ".parafor_body_" str = ".parafor_end_" ++  drop 14 str
+		| isPrefixOf ".parafor_test_" str = ".parafor_end_" ++  drop 14 str
 
 trickleLast g@(LGraph entryId blocks) l i  = (LGraph entryId outmap , state)
 	where 
@@ -306,6 +407,38 @@ trickleL' stop prestate visited scope g blk l = if (BID stop) == bid
 					in if unvisited (BID stop')
 						then trickleL' stop newstate (bid:visited) scope rightg (getblk (BID stop') g) l
 						else (rightg,newstate)
+
+				(LastOther k@(For' _ _ _ _ (b1:b2:_))) -> let
+					stop' = endLabel b1
+					blk1 = getblk b1 g 
+					blk2 = getblk b2 g
+					sc' = bid2scope b1
+					(leftg ,state') = if unvisited b1 
+						then trickleL' stop' newstate (bid:visited) (sc':scope) g blk1 l 
+						else (g,newstate)
+					(rightg,state'') = if unvisited b2
+						then trickleL' stop' newstate (bid:visited) (sc':scope) leftg blk2 l
+						else (leftg,newstate)
+					in if unvisited (BID stop')
+						then trickleL' stop newstate (bid:visited) scope rightg (getblk (BID stop') g) l
+						else (rightg,newstate)
+	
+				(LastOther k@(Parafor' _ _ _ _ (b1:b2:_))) -> let
+					stop' = endLabel b1
+					blk1 = getblk b1 g 
+					blk2 = getblk b2 g
+					sc' = bid2scope b1
+					(leftg ,state') = if unvisited b1 
+						then trickleL' stop' newstate (bid:visited) (sc':scope) g blk1 l 
+						else (g,newstate)
+					(rightg,state'') = if unvisited b2
+						then trickleL' stop' newstate (bid:visited) (sc':scope) leftg blk2 l
+						else (leftg,newstate)
+					in if unvisited (BID stop')
+						then trickleL' stop newstate (bid:visited) scope rightg (getblk (BID stop') g) l
+						else (rightg,newstate)
+	
+
 				(LastOther k@(If' _ (b1:b2:_))) -> let 
 					sc' = bid2scope b1
 					stop' = endLabel b1
@@ -367,6 +500,39 @@ esiurk' prestate visited scope g blk l = (M.insert bid newblock g' ,newstate)
 						then esiurk' state' ((BID stop'):bid2:bid1:bid:visited) scope rightg (getblk (BID stop') g) l
 						else (rightg,state'')
 	
+				(LastOther (For' _ _ _ _ (b1:b2:_))) -> let
+					stop' = endLabel b1
+					blk1 = getblk b2 g 
+					blk2 = getblk b1 g
+					bid2 = bId blk2
+					bid1 = bId blk1
+					(leftg ,state') = if unvisited b1 
+						then esiurk' prestate ((BID stop'):bid2:bid1:bid:visited) scope g blk1 l 
+						else (g,prestate)
+					(rightg, state'') = if unvisited b2
+						then esiurk' state' ((BID stop'):bid2:bid1:bid:visited) scope leftg blk2 l
+						else (leftg,state')
+					in if unvisited (BID stop')
+						then esiurk' state' ((BID stop'):bid2:bid1:bid:visited) scope rightg (getblk (BID stop') g) l
+						else (rightg,state'')
+		
+				(LastOther (Parafor' _ _ _ _ (b1:b2:_))) -> let
+					stop' = endLabel b1
+					blk1 = getblk b2 g 
+					blk2 = getblk b1 g
+					bid2 = bId blk2
+					bid1 = bId blk1
+					(leftg ,state') = if unvisited b1 
+						then esiurk' prestate ((BID stop'):bid2:bid1:bid:visited) scope g blk1 l 
+						else (g,prestate)
+					(rightg, state'') = if unvisited b2
+						then esiurk' state' ((BID stop'):bid2:bid1:bid:visited) scope leftg blk2 l
+						else (leftg,state')
+					in if unvisited (BID stop')
+						then esiurk' state' ((BID stop'):bid2:bid1:bid:visited) scope rightg (getblk (BID stop') g) l
+						else (rightg,state'')
+	
+
 
 				(LastOther (If' _ (b1:b2:_))) -> let 
 					stop' = endLabel b1
@@ -399,4 +565,105 @@ esiurk' prestate visited scope g blk l = (M.insert bid newblock g' ,newstate)
 						else st
 			skewer st f [] = st
 
+
+-- fuck it Ill make it specific to scoping
+hemorhage g@(LGraph entryId blocks) l ll i = (LGraph entryId outmap , state)
+        where
+          (outmap,state) = hemorhage' "" i [] ["global"] blocks  (fj $ M.lookup (lgEntry g) blocks) l ll
+
+hemorhage' stop prestate visited scope g blk l ll= if (BID stop) == bid
+                        then (g,prestate)
+                        else (M.insert bid newblock g' ,newstate)
+                where
+                        newblock = Block bid $ newZtail content last
+                        (content,newstate) =  let pkg= gatherContent $ bTail blk
+                                in  runState (l bid scope pkg ) prestate
+                        bid = bId blk
+                        last = case getZLast blk of
+					(LastOther x) 	-> LastOther $evalState (ll x scope) stateout	
+					x 		-> x
+                                        --g':: BlockLookup ProtoASM ProtoBranch
+                        (g',stateout) = case last of
+                                (LastOther (WhileBranch _ b1 b2)) -> let
+                                        stop' = endLabel b1
+                                        blk1 = getblk b1 g
+                                        blk2 = getblk b2 g
+                                        bid2 = bId blk2
+                                        bid1 = bId blk1
+                                        sc' = bid2scope b1
+                                        (leftg ,state') = if unvisited b1
+                                                then hemorhage' stop' newstate ((BID stop'):bid2:bid1:bid:visited) (sc':scope) g blk1 l ll
+                                                else (g,newstate)
+                                        (rightg, state'') = if unvisited b2
+                                                then hemorhage' stop' newstate ((BID stop'):bid2:bid1:bid:visited) scope leftg blk2 l ll
+                                                else (leftg,state')
+                                        in if unvisited (BID stop')
+                                                then hemorhage' stop newstate ((BID stop'):bid2:bid1:bid:visited) scope rightg (getblk (BID stop') g) l ll
+                                                else (rightg,state'')
+
+
+                                (LastOther (ForBranch _ _ _ b1 b2)) -> let
+                                        stop' = endLabel b1
+                                        blk1 = getblk b1 g
+                                        blk2 = getblk b2 g
+                                        bid2 = bId blk2
+                                        bid1 = bId blk1
+                                        (leftg ,state') = if unvisited b1
+                                                then hemorhage' stop' newstate ((BID stop'):bid2:bid1:bid:visited) scope g blk1 l ll
+                                                else (g,newstate)
+                                        (rightg, state'') = if unvisited b2
+                                                then hemorhage' stop' newstate ((BID stop'):bid2:bid1:bid:visited) scope leftg blk2 l ll
+                                                else (leftg,state')
+                                        in if unvisited (BID stop')
+                                                then hemorhage' stop newstate ((BID stop'):bid2:bid1:bid:visited) scope rightg (getblk (BID stop') g) l ll
+                                                else (rightg,state'')
+
+				(LastOther (ParaforBranch _ _ _ b1 b2)) -> let
+                                        stop' = endLabel b1
+                                        blk1 = getblk b1 g
+                                        blk2 = getblk b2 g
+                                        bid2 = bId blk2
+                                        bid1 = bId blk1
+                                        (leftg ,state') = if unvisited b1
+                                                then hemorhage' stop' newstate ((BID stop'):bid2:bid1:bid:visited) scope g blk1 l ll
+                                                else (g,newstate)
+                                        (rightg, state'') = if unvisited b2
+                                                then hemorhage' stop' newstate ((BID stop'):bid2:bid1:bid:visited) scope leftg blk2 l ll
+                                                else (leftg,state')
+                                        in if unvisited (BID stop')
+                                                then hemorhage' stop newstate ((BID stop'):bid2:bid1:bid:visited) scope rightg (getblk (BID stop') g) l ll
+                                                else (rightg,state'')
+
+
+
+                                (LastOther (IfBranch _ b1 b2)) -> let
+                                        stop' = endLabel b1
+                                        blk1 = getblk b1 g
+                                        blk2 = getblk b2 g
+                                        bid2 = bId blk2
+                                        bid1 = bId blk1
+                                        (leftg,state') = if unvisited b1
+                                                then hemorhage' stop' newstate ((BID stop'):bid2:bid1:bid:visited) scope g blk1 l ll
+                                                 else (g,newstate)
+                                        (rightg,state'') = if unvisited b2
+                                                then hemorhage' stop' newstate ((BID stop'):bid2:bid1:bid:visited) scope leftg blk2 l ll
+                                                else (leftg, state')
+                                        in if unvisited (BID stop')
+                                                then hemorhage' stop newstate ((BID stop'):bid2:bid1:bid:visited) scope rightg (getblk (BID stop') g) l ll
+                                                else (rightg,state'')
+
+
+                                (LastOther (Jump b)) -> if unvisited b
+                                                then  hemorhage' stop newstate (bid:visited) scope g (getblk b g) l ll
+                                                else (g,newstate)
+                                (LastOther (InitialBranch bs)) -> let cruz stt elm = hemorhage' stop (snd stt) ((bId $getblk elm $fst stt):bid:visited) ((getStr elm):scope)(fst stt) (getblk elm (fst stt)) l ll
+                                        in skewer (g,newstate) cruz bs
+                                _ -> (g,newstate) 
+                        unvisited id = not $ elem id visited
+                        getblk b g = fromJust $ M.lookup b g
+                        skewer st f (x:lst) = skewer st' f       lst
+                                        where st' = if unvisited x
+                                                then f st x
+                                                else st
+                        skewer st f [] = st
 

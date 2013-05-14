@@ -347,11 +347,12 @@ varsDefinedInStmt (DFun _ params _) = Set.fromList $ map varToVarMarker params
 varsDefinedInStmt _ = Set.empty
 
 varsUsedInBranchStmt :: BranchingStatement -> Set VarMarker
-varsUsedInBranchStmt (ForBranch _ expr _ _) = everything Set.union (Set.empty `mkQ` getVariables) expr
+-- TODO: See why this needs 2 expression arguments now? What changed?
+varsUsedInBranchStmt (ForBranch _ expr expr' _ _) = everything Set.union (Set.empty `mkQ` getVariables) [expr, expr']
 varsUsedInBranchStmt bStmt = everything Set.union (Set.empty `mkQ` getVariables) bStmt
 
 varsDefinedInBranchStmt :: BranchingStatement -> Set VarMarker
-varsDefinedInBranchStmt (ForBranch var _ _ _) = Set.singleton $ varToVarMarker var
+varsDefinedInBranchStmt (ForBranch var _ _ _ _) = Set.singleton $ varToVarMarker var
 varsDefinedInBranchStmt _ = Set.empty
 
 -- Base case..
