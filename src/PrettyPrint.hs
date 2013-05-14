@@ -18,6 +18,10 @@ instance (PrettyPrint a) => PrettyPrint (Maybe a) where
     ppr Nothing = text "Nothing!"
     ppr (Just x) = ppr x
 
+instance PrettyPrint Bool where
+    ppr True = text "True"
+    ppr False = text "False"
+
 instance PrettyPrint Char where
     ppr a = text [a]
 
@@ -37,7 +41,7 @@ instance (PrettyPrint a) => PrettyPrint [a] where
                            ppr' xs
 
 instance (PrettyPrint a) => PrettyPrint (Set a) where
-    ppr set = let xs = Set.toList set in text "{" <+> ppr' xs <+> text "}"
+    ppr set = let xs = Set.toList set in text "{" <+> ppr' xs <> text "}"
        where ppr' [] = text ""
              ppr' (x:xs) = ppr x <> comma <+>
                            ppr' xs

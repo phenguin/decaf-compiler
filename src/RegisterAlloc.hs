@@ -22,7 +22,7 @@ import Control.Applicative
 import Control.Monad.State
 import Data.Maybe
 import Data.List
-import Data.Set (Set, fromList)
+import Data.Set (Set, fromList, toList)
 import qualified Data.Set as Set
 import DataflowAnalysis
 
@@ -34,74 +34,98 @@ numColors = fromIntegral $ length [CRAX .. CR15]
 
 -- Should be only a set of two elements.. might fix this to make it
 -- required by the type system later if it turns out to matter at all.
-type Edge a = Set a
+type IGEdge a = Set (Set a)
+type IGVertex a = Set a
 
 -- An interference graph is a set of vertices and a set of undirected
 -- edges between vertices here represented by a set of sets of
 -- vertices, all of which should have exactly two elements.  We also
 -- assume in the algorithms that no edge goes from a vertex to itself.
 data InterferenceGraph a = IG {
-    vertices :: (Set a),
-    edges :: (Set (Edge a))
+    vertices :: (Set (IGVertex a)),
+    iEdges :: (Set (IGEdge a)),
+    pEdges :: (Set (IGEdge a))
     } deriving (Eq, Show, Ord, Data, Typeable)
 
 instance (Show a, Ord a) => PrettyPrint (InterferenceGraph a) where
-    ppr (IG vSet eSet) = text "" $$
+    ppr (IG vertices iEdges pEdges) = text "" $$
                          text "Interference Graph ===========================" $$
-                         text "Vertices:" <+> hsep (map (text . show) (Set.toList vSet)) $$ text "" $$
-                         text "Edges:" <+> vcat (map text $ 
-                                                 map (\(v1:v2:vs) -> "(" ++ show v1 ++ ", " ++ show v2 ++ ")") $ 
+                         text "Vertices:" <+> hsep (map showSet (toList vertices)) $$ text "" $$
+                         text "Interference Edges:" <+> vcat (map id $ 
+                                                 map (\(v1:v2:vs) -> lparen <> showSet v1 <> comma <+> showSet v2 <> rparen) $ 
                                                  sort $ 
-                                                 map Set.toList $ 
-                                                 Set.toList eSet) $$
+                                                 map toList $ 
+                                                 toList iEdges) $$
+                         text "Preference Edges:" <+> vcat (map id $ 
+                                                 map (\(v1:v2:vs) -> lparen <> showSet v1 <> comma <+> showSet v2 <> rparen) $ 
+                                                 sort $ 
+                                                 map toList $ 
+                                                 toList pEdges) $$
                          text "==============================================" $$
                          text ""
+       where showSet set = lbrace <> withCommas (toList set) <> rbrace
+             withCommas = foldl (\acc x -> acc <+> (text . show) x <> comma) (text "")
                         
 
-isVertex :: (Ord a) => a -> InterferenceGraph a -> Bool
+isVertex :: (Ord a) => IGVertex a -> InterferenceGraph a -> Bool
 isVertex v ig = Set.member v $ vertices ig
 
+makeVertex :: (Ord a) => a -> IGVertex a
+makeVertex = Set.singleton
+
 emptyIG :: InterferenceGraph a
-emptyIG = IG Set.empty Set.empty
+emptyIG = IG Set.empty Set.empty Set.empty
 
 unionIG :: (Ord a) => InterferenceGraph a -> InterferenceGraph a -> InterferenceGraph a
-unionIG ig ig' = IG vertexSet edgeSet
+unionIG ig ig' = IG vertexSet iEdgeSet pEdgeSet
     where vertexSet = Set.union (vertices ig) (vertices ig')
-          edgeSet = Set.union (edges ig) (edges ig')
+          iEdgeSet = Set.union (iEdges ig) (iEdges ig')
+          pEdgeSet = Set.union (pEdges ig) (pEdges ig')
 
 unionIGs :: (Ord a) => [InterferenceGraph a] -> InterferenceGraph a
 unionIGs = foldl unionIG emptyIG
 
-neighbors :: (Ord a) => a -> InterferenceGraph a -> Set a
-neighbors v ig = Set.filter (\v' -> Set.member (fromList [v, v']) edgeSet) $ vertices ig
-    where edgeSet = edges ig
+makeEdge :: (Ord a) => a -> a -> IGEdge a
+makeEdge v v' = fromList $ map makeVertex [v,v']
 
-degree :: (Ord a) => a -> InterferenceGraph a -> Integer
+neighbors :: (Ord a) => IGVertex a -> InterferenceGraph a -> Set (IGVertex a)
+neighbors v ig = Set.filter (\v' -> Set.member (fromList [v, v']) edgeSet) $ vertices ig
+    where edgeSet = iEdges ig
+
+degree :: (Ord a) => IGVertex a -> InterferenceGraph a -> Integer
 degree v ig = fromIntegral $ Set.size $ neighbors v ig
 
-removeVertex :: (Ord a) => a -> InterferenceGraph a -> InterferenceGraph a
-removeVertex v ig = IG newVertexSet newEdgeSet
-    where newVertexSet = Set.delete v $ vertices ig
-          newEdgeSet = Set.filter (Set.notMember v) $ edges ig
+removeVertex :: (Ord a) => IGVertex a -> InterferenceGraph a -> InterferenceGraph a
+removeVertex v ig = IG vertices' iEdges' pEdges'
+    where vertices' = Set.delete v $ vertices ig
+          iEdges' = Set.filter (Set.notMember v) $ iEdges ig
+          pEdges' = Set.filter (Set.notMember v) $ pEdges ig
 
 -- Adds an edge, adding the neccessary vertices as well if they don't already exist.
-addEdge :: (Ord a) => a -> a -> InterferenceGraph a -> InterferenceGraph a
-addEdge v1 v2 ig = IG vertexSet edgeSet
-    where vertexSet = Set.union (fromList [v1,v2]) $ vertices ig
-          edgeSet = Set.insert (fromList [v1,v2]) $ edges ig
+addIEdge :: (Ord a) => IGVertex a -> IGVertex a -> InterferenceGraph a -> InterferenceGraph a
+addIEdge v1 v2 ig = IG vertices' iEdges' (pEdges ig)
+    where vertices' = Set.union (fromList [v1,v2]) $ vertices ig
+          iEdges' = Set.insert (fromList [v1,v2]) $ iEdges ig
 
-areNeighbors :: (Ord a) => a -> a -> InterferenceGraph a -> Bool
-areNeighbors v e ig = fromList [v,e] `Set.member` edges ig
+-- Adds an edge, adding the neccessary vertices as well if they don't already exist.
+addPEdge :: (Ord a) => IGVertex a -> IGVertex a -> InterferenceGraph a -> InterferenceGraph a
+addPEdge v1 v2 ig = IG vertices' (iEdges ig) pEdges'
+    where vertices' = Set.union (fromList [v1,v2]) $ vertices ig
+          pEdges' = Set.insert (fromList [v1,v2]) $ pEdges ig
+
+areNeighbors :: (Ord a) => IGVertex a -> IGVertex a -> InterferenceGraph a -> Bool
+areNeighbors v e ig = fromList [v,e] `Set.member` iEdges ig
 
 discreteOnVertices :: (Ord a) => Set a -> InterferenceGraph a
-discreteOnVertices vertices = IG vertices Set.empty
+discreteOnVertices vertices = IG (Set.map makeVertex vertices) Set.empty Set.empty
 
 completeOnVertices :: (Ord a) => Set a -> InterferenceGraph a
-completeOnVertices vertices = IG vertices edges
-    where edges = subsetsOfSize 2 vertices
+completeOnVertices vertices = IG vertexSet iEdges Set.empty
+    where iEdges = subsetsOfSize 2 vertexSet
+          vertexSet = Set.map makeVertex vertices
 
-addVertex :: (Ord a) => a -> InterferenceGraph a -> InterferenceGraph a
-addVertex v ig = IG (Set.insert v $ vertices ig) (edges ig)
+addVertex :: (Ord a) => IGVertex a -> InterferenceGraph a -> InterferenceGraph a
+addVertex v ig = IG (Set.insert v $ vertices ig) (iEdges ig) (pEdges ig)
 
 -----------------------------------------------------
 -- Building Interference graph from liveness analysis
@@ -120,22 +144,26 @@ buildInterferenceGraph lgraph = unionIG (discreteOnVertices $ allNonArrayVariabl
           conflictsGraph = unionIGs $ map (interferenceFromBlock blockLivenessMap) $ postorderDFS lgraph
 
 interferenceFromBlock :: M.Map BlockId LiveVarState -> Block Statement BranchingStatement -> InterferenceGraph Var
-interferenceFromBlock blockStates blk@(Block bid _) = fst $ runState results blkOutState
+interferenceFromBlock blockStates blk@(Block bid _) = fst $ runState results blkOutState'
     where blkOutState = case M.lookup bid blockStates of
                     Nothing -> error "Cant find block in results.  liveness analysis must have failed"
                     Just b -> b
+          blkOutState' = case getZLast blk of
+                              LastOther l -> liveVarUpdateL l blkOutState
+                              LastExit -> blkOutState
           foldingF acc stmt = do
               liveVars <- get
               put $ liveVarUpdateM stmt liveVars 
               let relevantLiveVarNames = Set.map varName $ Set.filter (not . isArray) $ liveVars
-              return $ unionIG acc (completeOnVertices relevantLiveVarNames)
+                  resMinusPrefEdges = unionIG acc (completeOnVertices relevantLiveVarNames)
+              case stmt of
+                   Set (Var s) (Loc (Var s')) -> return $ addPEdge (makeVertex s) (makeVertex s') resMinusPrefEdges
+                   _ -> return resMinusPrefEdges
           results = foldM foldingF emptyIG (reverse $ blockMiddles blk)
 
 subsetsOfSize :: (Ord a) => Int -> Set a -> Set (Set a)
 subsetsOfSize k xs = Set.filter (\as -> Set.size as == k) $ Set.fromList $ map Set.fromList powerset
-    where powerset = filterM (const [True, False]) $ Set.toList xs
-
-type VarStack = [VarMarker]
+    where powerset = filterM (const [True, False]) $ toList xs
 
 push :: a -> State [a] ()
 push x = modify (x:)
@@ -147,25 +175,64 @@ pop = do
         [] -> return Nothing
         (x:rest) -> put rest >> return (Just x)
 
-hasSigDegree :: (Ord a) => a -> InterferenceGraph a -> Bool
-hasSigDegree v ig@(IG vertices edges) = degree v ig >= numColors
+hasSigDegree :: (Ord a) => IGVertex a -> InterferenceGraph a -> Bool
+hasSigDegree v ig@(IG vertices iEdges _) = degree v ig >= numColors
 
-simplify :: (Ord a, Ord b) => (a -> b) -> InterferenceGraph a -> State [a] (InterferenceGraph a)
-simplify spillHeuristic ig@(IG vertices edges) = case Set.null vertices of
+-- Tries to coalesce nodes with a preference edge between them and returns the 
+-- coalesced graph along with whether or not anything was changed.
+coalesce :: (Ord a) => InterferenceGraph a -> (InterferenceGraph a, Bool)
+coalesce ig@(IG vertices iEdges pEdges) = case relevantPEdges of
+                                               -- TODO: Should we remove irrelevant pEdges?
+                                               [] -> (IG vertices iEdges (fromList validPEdges), False) -- Cant coalesce anything
+                                               (e:_) -> (fst $ coalesce $ getNewIG e, True)
+    where validPEdges = toList $ Set.filter valid pEdges -- Cant coalesce interfering vertices
+          valid pEdge = not $ any (conflicts pEdge) $ toList iEdges
+          conflicts pEdge iEdge = (i1 `contains` p1 && i2 `contains` p2) || (i1 `contains` p2 && i2 `contains` p1)
+              where (p1:p2:_) = toList pEdge
+                    (i1:i2:_) = toList iEdge
+                    contains = flip Set.isSubsetOf
+          relevantPEdges = filter (\e -> edgeDeg e < numColors) validPEdges
+          edgeDeg edge = foldr (+) 0 $ map ((flip degree) ig) (toList edge)
+          getVerts e = Set.insert (Set.unions (toList e)) $ Set.difference vertices e
+          getIEdges e = Set.map (setReplace e (Set.unions (toList e))) iEdges
+          getPEdges e = Set.delete e pEdges
+          getNewIG e = IG (getVerts e) (getIEdges e) (getPEdges e)
+          
+
+setReplace :: (Ord a) => Set a -> a -> Set a -> Set a
+setReplace olds new set = Set.map replaceFunc set
+    where replaceFunc x = case x `Set.member` olds of
+                              True -> new
+                              False -> x
+
+simplify spillHeuristic ig = runState (simplify' spillHeuristic ig) []
+defSimplify :: (Ord a) => InterferenceGraph a -> (InterferenceGraph a, [IGVertex a])
+defSimplify = simplify (const 1)
+    
+simplify' :: (Ord a, Ord b) => (IGVertex a -> b) -> InterferenceGraph a -> State [IGVertex a] (InterferenceGraph a)
+simplify' spillHeuristic ig@(IG vertices iEdges pEdges) = case Set.null vertices of
     -- If empty.. nothing to do.. proceed to coloring
     True -> return ig
     -- Otherwise.. remove chosen vertex and do it again
-    False -> do
-        push colorNext
-        return (removeVertex colorNext ig) >>= simplify spillHeuristic
-    where canSimplify v = not $ hasSigDegree v ig -- TODO: Also ensure not move related
+    False -> if isSpill then do
+            let (coalescedIG, anyChanges) = coalesce ig
+            if anyChanges then
+                          simplify' spillHeuristic coalescedIG
+                          else do
+                              push colorNext
+                              simplify' spillHeuristic (removeVertex colorNext ig)
+        else do
+            push colorNext
+            simplify' spillHeuristic (removeVertex colorNext ig)
+    where canSimplify v = not $ (hasSigDegree v ig || isMoveRelated v) -- TODO: Also ensure not move related
+          isMoveRelated v = any (Set.member v) $ toList pEdges
           simplifiable = Set.filter canSimplify vertices
-          colorNext = case Set.null simplifiable of -- Any candidates for simplification?
+          (colorNext, isSpill) = case Set.null simplifiable of -- Any candidates for simplification?
               -- Yes? Pick an arbitrary one
-              False -> head $ Set.toList simplifiable 
+              False -> (head $ toList simplifiable, False)
               -- No? Choose the one with the worst spillHeurstic and it is a potential
               -- spill candidate
-              True -> minimumBy (compare `on` spillHeuristic) $ Set.toList simplifiable
+              True -> (minimumBy (compare `on` spillHeuristic) $ toList simplifiable, True)
 
 -- Use this like nesting level, references, etc, as a heuristic
 -- to determinew which nodes to make available for spilling first
