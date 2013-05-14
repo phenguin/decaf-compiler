@@ -58,6 +58,7 @@ selectVariable var = case isArray var of
     True -> Set.empty
     False -> Set.singleton $ symbol var
   where isArray (Varray _ _) = True
+        isArray (Scopedvar _ v) = isArray v
         isArray _ = False
 
 getFunctionParamMap :: LGraph Statement BranchingStatement -> M.Map String [Variable]

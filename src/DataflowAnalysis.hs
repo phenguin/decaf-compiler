@@ -289,16 +289,17 @@ killsExpr var@(Varray s _) e = case e of
 
 data VarMarker = VarMarker {
     varName :: String,
-    varType :: Transforms.FDType
+    varType :: Transforms.FDType,
+    varScope :: Maybe [Scoped]
     } deriving (Show, Eq, Ord, Data, Typeable)
 
 isArray :: VarMarker -> Bool
-isArray (VarMarker _ (Transforms.Array _)) = True
+isArray (VarMarker _ (Transforms.Array _) _) = True
 isArray _ = False
 
 instance PrettyPrint VarMarker where
-    ppr (VarMarker name Transforms.Single) = text name
-    ppr (VarMarker name (Transforms.Array _)) = text name <> lbrack <> rbrack
+    ppr (VarMarker name Transforms.Single scope) = text name
+    ppr (VarMarker name (Transforms.Array _) scope) = text name <> lbrack <> rbrack
 
 -- Needs a better name
 type LiveVarState = Set VarMarker
@@ -353,9 +354,13 @@ getVariables :: Variable -> Set VarMarker
 getVariables var = Set.singleton $ varToVarMarker var
 
 varToVarMarker :: Variable -> VarMarker
-varToVarMarker (Var name) = VarMarker name Transforms.Single
+varToVarMarker (Var name) = VarMarker name Transforms.Single Nothing
 -- TODO: FDType of Array 0 doesn't accurately reflect whats going on here.
-varToVarMarker (Varray name _) = VarMarker name (Transforms.Array 0)
+varToVarMarker (Varray name _) = VarMarker name (Transforms.Array 0) Nothing
+varToVarMarker (Scopedvar s v) = setScope s $ varToVarMarker v
+
+setScope :: [Scoped] -> VarMarker -> VarMarker
+setScope s (VarMarker n t _) = VarMarker n t (Just s)
 
 -- Liveness analysis for LowIR
 
@@ -434,8 +439,9 @@ varsUsedInProtoBranch :: ProtoBranch -> Set VarMarker
 varsUsedInProtoBranch _ = Set.empty
 
 valToVMSet :: Value -> Set VarMarker
-valToVMSet (Symbol s) = Set.singleton $ VarMarker s Transforms.Single
-valToVMSet (Array s _) = Set.singleton $ VarMarker s (Transforms.Array 0)
+valToVMSet (Symbol s) = Set.singleton $ VarMarker s Transforms.Single Nothing
+valToVMSet (Array s _) = Set.singleton $ VarMarker s (Transforms.Array 0) Nothing
+valToVMSet (Scoped scp v) = Set.map (setScope scp) $ valToVMSet v
 valToVMSet _ = Set.empty
 
 valsToVMSet :: [Value] -> Set VarMarker

@@ -52,9 +52,10 @@ testfilepath = "test.dcf"
 
 testMidIr x = fromRight $ midIRFromFile testfilepath
 testGlobals x = scrapeGlobals (testMidIr x)
+testFunmap x = getFunctionParamMap (testCfgMid' x)
 testCfgMid' x = fromRight $ cfgFromFile testfilepath
 -- add scoping
-testCfgMid x = scopeMidir (testCfgMid' x) (testGlobals x)
+testCfgMid x = scopeMidir (testCfgMid' x) (testGlobals x) (testFunmap x)
 
 testCfgLow x = (\(_,x,_) -> x) $ navigate globals funcParamMap $ toLowIRCFG $ (testCfgMid x)
     where midIR = fromRight $ midIRFromFile testfilepath

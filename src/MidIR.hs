@@ -39,9 +39,17 @@ data Statement =  Set Variable Expression
 		| Function {functionName::String, params::[Expression]}
 		deriving (Show,Eq,Ord, Data, Typeable) 
 
-data Variable = Var {symbol::String}
-		| Varray {symbol::String, index::Expression}
-		deriving (Show, Eq, Ord, Data, Typeable) 
+data Scoped = Global | Func String | Loop String 
+		deriving (Show,Eq,Ord, Data, Typeable)
+
+data Variable = Var {getSymbol::String}
+		| Varray {getSymbol::String, index::Expression}
+		| Scopedvar {getScope::[Scoped] , getVar::Variable}
+		deriving (Show,Eq, Ord, Data, Typeable) 
+
+symbol :: Variable -> String
+symbol (Scopedvar _ v) = symbol v
+symbol var = getSymbol var
 
 data Expression = Add {x::Expression, y::Expression}
 		| Sub {x::Expression, y::Expression}
@@ -284,6 +292,7 @@ instance PrettyPrint Variable where
     ppr (Var name) = text name
     ppr (Varray name e) = text name <> lbrack <+>
                           ppr e <+> rbrack
+    ppr (Scopedvar scope v) = text (show scope) <+> ppr v
 
 instance PrettyPrint Statement where
     ppr (If _ _ _) = text "If Statement which shouldnt be here"
