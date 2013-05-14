@@ -209,15 +209,14 @@ spillVertices :: (Ord a, LastNode l) => [IGVertex a] -> LGraph m l -> LGraph m l
 spillVertices = undefined
 
 updateForSpills :: [IGVertex Var] -> LGraph Statement BranchingStatement -> LGraph Statement BranchingStatement
-updateForSpills = undefined
+updateForSpills _ = error "Not yet implemented.. cant handle spills yet.."
 
 defAllocateRegisters = allocateRegisters (const 0)
 
 allocateRegisters :: (Ord b) => (IGVertex Var -> b) -> LGraph Statement BranchingStatement -> Coloring Var
 allocateRegisters spillHeuristic cfg = case coloringOrSpills of
             Right coloring -> coloring
-            Left spills -> error "Giving up!"
-            -- Left spills -> allocateRegisters spillHeuristic (updateForSpills spills cfg)
+            Left spills -> allocateRegisters spillHeuristic (updateForSpills spills cfg)
     where initialIG = buildInterferenceGraph cfg
           (simpleIG, vertexStack) = simplify spillHeuristic initialIG
           coloringOrSpills = select (iEdges simpleIG) vertexStack
@@ -280,5 +279,5 @@ simplify' spillHeuristic ig@(IG vertices iEdges pEdges) = case Set.null vertices
               False -> (head $ toList simplifiable, False)
               -- No? Choose the one with the worst spillHeurstic and it is a potential
               -- spill candidate
-              True -> (minimumBy (compare `on` spillHeuristic) $ toList simplifiable, True)
+              True -> (minimumBy (compare `on` spillHeuristic) $ toList vertices, True)
 
