@@ -39,8 +39,12 @@ data Statement =  Set Variable Expression
 		| Function {functionName::String, params::[Expression]}
 		deriving (Show,Eq,Ord, Data, Typeable) 
 
+data Scoped = Global | Func String | Loop String 
+		deriving (Show,Eq,Ord, Data, Typeable)
+
 data Variable = Var {symbol::String}
 		| Varray {symbol::String, index::Expression}
+		| Scopedvar {getScope::[Scoped] , getVar::Variable}
 		deriving (Show,Eq, Ord, Data, Typeable) 
 
 data Expression = Add {x::Expression, y::Expression}

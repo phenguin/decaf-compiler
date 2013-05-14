@@ -32,8 +32,7 @@ navigate globals funmap cfg = unsafePerformIO $ do
 		let vars = nub vars'
 
 		
-		let appendGlobalLabel (Symbol x) = (Symbol $"global_"++x)
-		    appendGlobalLabel (Array x t) = (Array ("global_"++x) t)
+		let appendGlobalLabel x = Scoped [Global] x
 		let vardata = (concatMap datifyVars (vars ++ map (appendGlobalLabel.var2val) globals) )
 			
 		-- handles strings strings
@@ -89,12 +88,12 @@ navigate globals funmap cfg = unsafePerformIO $ do
 		var2val (Varray str (Const i)) = Array str (Literal i)
 
 
-scopeMidir midir globals = fst $ hemorhage midir scoper lfixBranch globalmap
+scopeMidir midir globals funmap = fst $ hemorhage midir (scoper funmap) (lfixBranch funmap) globalmap
 		where
-			 globalist =  map (\x -> (x ,"global")) $ globals
+			 globalist =  map (\x-> Scopedvar [Global] x)$ globals
 			 standardizeArrays (Varray sym _) = (Varray sym (Const 0))
 		    	 standardizeArrays x = x
-			 globalmap =  insertListMap ( map (\(x,y) -> ((standardizeArrays x) , y)) globalist) $ M.empty
+			 globalmap =  insertListMap ( map (\(x) -> ((standardizeArrays x) , MidIR.getScope x)) globalist) $ M.empty
 		
 
 {-
@@ -295,8 +294,8 @@ replaceBreakContinue last bid scope instrs = do
 
 
 -- scopifies vars
---scoper:: (MonadState (M.Map Value String) m) => BlockId -> [String] -> [ProtoASM] -> m [ProtoASM]
-scoper bid scope instrs =  do
+--scoper:: (MonadState (M.Map Variable [Scoped]) m) => M.Map String [Variable] -> BlockId -> [String] -> [Statement] -> m [Statement]
+scoper funmap bid scope instrs =  do
 	premap <- get
 	varmap <- return $  (updatemap premap) 
 	put  varmap 
@@ -304,9 +303,9 @@ scoper bid scope instrs =  do
 		
 	where
 	--	mapswap:: M.Map Value String -> Value -> Value
-		mapswap vmp v@(Var str) = Var $ prescope prefix ++ "_" ++  str
+		mapswap vmp v@(Var str) = Scopedvar (prescope $scopify $ head scope) v
 			where prefix = fj$ M.lookup v vmp
-		mapswap vmp v@(Varray str va) = Varray (prescope prefix ++ "_" ++ str) va
+		mapswap vmp v@(Varray str va) = Scopedvar (prescope $ scopify $ head scope) v
 			where prefix = fj $ M.lookup (Varray str (Const 0)) vmp -- important convention array always RAX in tables!
 		mapswap vmp v = v
 		params = extractParams instrs
@@ -315,16 +314,21 @@ scoper bid scope instrs =  do
 		decls = (concatMap isDecl instrs) ++ params
 		isDecl (DVar v) =  [v]
 		isDecl _ =  []
-	--	updatemap:: M.Map Value [Char] -> M.Map Value [Char]
+		updatemap:: M.Map Variable [Scoped] -> M.Map Variable [Scoped]
+		updatemap':: [Variable]-> M.Map Variable [Scoped] -> M.Map Variable [Scoped]
 		updatemap mp = updatemap' decls mp
 	--	updatemap':: [Value] -> M.Map Value [Char] -> M.Map Value [Char]
 		updatemap' (x:xs) mp 
-			| (Varray nm _) <-x = M.insert (Varray nm (Const 0)) (head scope) (updatemap' xs mp)
-			| otherwise = M.insert x (head scope) (updatemap' xs mp)
+			| (Varray nm _) <-x = M.insert (Varray nm (Const 0))  (map scopify scope) (updatemap' xs mp)
+			| otherwise = M.insert x (map scopify scope) (updatemap' xs mp)
 		updatemap' [] mp = mp 
-		prescope pre = intercalate "_" $reverse$dropWhile (/=pre) scope 
+		prescope pre = reverse$ dropWhile (/= pre) $ map scopify scope
+		scopify "global" = Global 
+		scopify x 
+			| Just _ <-M.lookup x funmap = Func x
+			| otherwise = Loop x 
 
-lfixBranch lst scope = do 
+lfixBranch funmap lst scope = do 
 		varmap <- get
 		let lv = mapswap varmap
 		let le = fixExpression lv
@@ -335,12 +339,16 @@ lfixBranch lst scope = do
 			(ParaforBranch v s e b1 b2) -> return $ ParaforBranch (lv v) (le s) (le e) b1 b2
 			x -> return x
 		where
-			prescope pre = intercalate "_" $reverse$dropWhile (/=pre) scope 
-			mapswap vmp v@(Var str) = Var $ prescope prefix ++ "_" ++  str
+			mapswap vmp v@(Var str) = Scopedvar (prescope $scopify $ head scope) v
 				where prefix = fj$ M.lookup v vmp
-			mapswap vmp v@(Varray str va) = Varray (prescope prefix ++ "_" ++ str) va
+			mapswap vmp v@(Varray str va) = Scopedvar (prescope $ scopify $ head scope) v
 				where prefix = fj $ M.lookup (Varray str (Const 0)) vmp -- important convention array always RAX in tables!
-	
+			prescope pre = reverse$ dropWhile (/= pre) $ map scopify scope
+			scopify "global" = Global 
+			scopify x 
+				| Just _ <-M.lookup x funmap = Func x
+				| otherwise = Loop x 
+		
 
 fixStatement le lv stmt   
 		| Set v e <-stmt= Set (lv v) (le e)

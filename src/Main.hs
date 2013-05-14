@@ -151,7 +151,7 @@ assembleTree configuration input = do
   let cfg = makeCFG paramidir
   let funmap = getFunctionParamMap $lgraphFromAGraph  cfg
   let midcfg = lgraphSpanningFunctions cfg
-  let	scopedcfg  = scopeMidir midcfg globals
+  let	scopedcfg  = scopeMidir midcfg globals funmap
   let	parallelcfg  = parallelize scopedcfg
 --  Right $ [pprIO parallelcfg]
   let lowIRCFG = toLowIRCFG parallelcfg
