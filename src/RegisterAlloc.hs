@@ -18,7 +18,6 @@ import Data.Generics
 import System.IO.Unsafe
 import PrettyPrint
 import Text.PrettyPrint.HughesPJ hiding (Str)
-import Debug.Trace
 import Control.Monad
 import Control.Applicative
 import Control.Monad.State
@@ -32,7 +31,10 @@ import Data.Char (toLower)
 type Var = String
 data Color = CRAX | CRBX | CRCX | CRDX | CRSP | CRBP | CRSI | CRDI | CR8 | CR9 | CR10 | CR11 | CR12 | CR13 | CR14 | CR15 deriving (Eq, Show, Ord, Enum, Data, Typeable)
 
-data LocationAssignment = Reg Color | BasePtOffset Int | Global String deriving (Eq, Show, Ord, Data, Typeable)
+data MemLoc = BasePtrOffset Int deriving (Eq, Ord, Show, Data, Typeable)
+
+instance PrettyPrint MemLoc where
+    ppr (BasePtrOffset i) = int (i*8) <> lparen <> text "%rbp" <> rparen
 
 instance PrettyPrint Color where
     ppr = text . ('%':) . tail . map toLower . show
@@ -127,8 +129,14 @@ areNeighbors :: (Ord a) => IGVertex a -> IGVertex a -> InterferenceGraph a -> Bo
 areNeighbors v e ig = fromList [v,e] `Set.member` iEdges ig
 
 subsetsOfSize :: (Ord a) => Int -> Set a -> Set (Set a)
-subsetsOfSize k xs = Set.filter (\as -> Set.size as == k) $ Set.fromList $ map Set.fromList powerset
-    where powerset = filterM (const [True, False]) $ toList xs
+subsetsOfSize k xs = fromList $ subsetsOfSize' k (toList xs)
+
+subsetsOfSize' :: (Ord a) => Int -> [a] -> [Set a]
+subsetsOfSize' 0 _ = [Set.empty]
+subsetsOfSize' n xs = nub $ do
+    x <- xs
+    nMinusOneSet <- subsetsOfSize' (n-1) (delete x xs)
+    return $ Set.insert x nMinusOneSet
 
 discreteOnVertices :: (Ord a) => Set a -> InterferenceGraph a
 discreteOnVertices vertices = IG (Set.map makeVertex vertices) Set.empty Set.empty
@@ -149,7 +157,8 @@ addVertex v ig = IG (Set.insert v $ vertices ig) (iEdges ig) (pEdges ig)
 
 -- Uses the liveness analysis of a program to build its interference graph for register allocation
 buildIGFromMidCfg :: LGraph Statement BranchingStatement -> InterferenceGraph Var
-buildIGFromMidCfg = foldWithDFR liveVariableAnalysis computeIGfromMidIRNode unionIG emptyIG
+buildIGFromMidCfg cfg = unionIG (discreteOnVertices (allNonArrayVarsForMidCfg cfg)) conflictsIG
+    where conflictsIG = foldWithDFR liveVariableAnalysis computeIGfromMidIRNode unionIG emptyIG cfg
 
 computeIGfromMidIRNode :: (Either BranchingStatement Statement, LiveVarState) -> InterferenceGraph Var
 computeIGfromMidIRNode (Left l, liveVars) = completeOnVertices $ Set.map varName $ Set.filter (not . isArray) $ liveVars
@@ -160,7 +169,8 @@ computeIGfromMidIRNode (Right m, liveVars) = case m of
           beforePEdges = completeOnVertices relevantVarNames
 
 buildIGFromLowCfg :: LGraph ProtoASM ProtoBranch -> InterferenceGraph Var
-buildIGFromLowCfg = foldWithDFR lowLVAnalysis computeIGfromLowIRNode unionIG emptyIG
+buildIGFromLowCfg cfg = unionIG (discreteOnVertices (allNonArrayVarsForLowCfg cfg)) conflictsIG
+    where conflictsIG = foldWithDFR lowLVAnalysis computeIGfromLowIRNode unionIG emptyIG cfg
 
 computeIGfromLowIRNode :: (Either ProtoBranch ProtoASM, LiveVarState) -> InterferenceGraph Var
 computeIGfromLowIRNode (Left l, liveVars) = completeOnVertices $ Set.map varName $ Set.filter (not . isArray) $ liveVars
@@ -214,7 +224,7 @@ defAllocateRegisters = allocateRegisters (const 0)
 
 class RegisterAllocatable a where
     computeInterferenceGraph :: a -> InterferenceGraph Var
-    updateForSpills :: [IGVertex Var] -> a -> a
+    updateForSpills :: [(IGVertex Var, MemLoc)] -> a -> a
 
 instance RegisterAllocatable (LGraph Statement BranchingStatement) where
     computeInterferenceGraph = buildIGFromMidCfg
@@ -222,7 +232,23 @@ instance RegisterAllocatable (LGraph Statement BranchingStatement) where
 
 instance RegisterAllocatable (LGraph ProtoASM ProtoBranch) where
     computeInterferenceGraph = buildIGFromLowCfg
-    updateForSpills _ = error "not yet implemented"
+    updateForSpills spilled graph =  res
+        where flattener (xs, y) = zip xs (repeat y)
+              spilled' = concatMap (flattener . mapFst toList) spilled
+              res = foldl updateForSpill graph $ spilled'
+
+updateForSpill :: LGraph ProtoASM ProtoBranch -> (Var, MemLoc) -> LGraph ProtoASM ProtoBranch
+updateForSpill graph (spillVar, BasePtrOffset i) = trace ("updateForSpill called with var: " ++ spillVar) $ res
+    where mMap = \_ asm -> case asm `usesVariable` spillVar of
+                True -> [Mov' (Stack i) (Symbol spillVar), asm, Mov' (Symbol spillVar) (Stack i)]
+                False -> [asm]
+          lMap _ LastExit = (([], []), LastExit)
+          lMap _ zl@(LastOther branch) = case branch `usesVariable` spillVar of
+              True -> (([],[Mov' (Stack i) (Symbol spillVar)]), zl) -- Fix me yada yada
+              False -> (([],[]), zl)
+          res = mapLGraphNodes mMap lMap graph
+          
+
 
 allocateRegisters :: (Ord a, RegisterAllocatable b) => (IGVertex Var -> a) -> b -> Coloring Var
 allocateRegisters spillHeuristic cfg = case coloringOrSpills of
@@ -232,11 +258,11 @@ allocateRegisters spillHeuristic cfg = case coloringOrSpills of
           (simpleIG, vertexStack) = simplify spillHeuristic initialIG
           coloringOrSpills = select (iEdges simpleIG) vertexStack
           
-select :: (Ord a, Show a) => Set (IGEdge a) -> [IGVertex a] -> Either [IGVertex a] (Coloring a)
+select :: (Ord a, Show a) => Set (IGEdge a) -> [IGVertex a] -> Either [(IGVertex a, MemLoc)] (Coloring a)
 select iEdges vertexStack = fst $ runState (select' initialGraph M.empty) (vertexStack, [])
     where initialGraph = IG Set.empty iEdges Set.empty
 
-select' :: (Ord a, Show a) => InterferenceGraph a -> Coloring a -> State ([IGVertex a], [IGVertex a]) (Either [IGVertex a] (Coloring a))
+select' :: (Ord a, Show a) => InterferenceGraph a -> Coloring a -> State ([IGVertex a], [(IGVertex a, MemLoc)]) (Either [(IGVertex a, MemLoc)] (Coloring a))
 select' graph colorMap = do
     mbVertex <- popLeft
     spilled <- liftM snd get
@@ -247,10 +273,12 @@ select' graph colorMap = do
                                        concat $ map toList $ toList $
                                        neighbors v graph
                       availColors = allColors \\ neighborColors 
-                      graph' = addVertex v graph
+                      -- TODO: Remove trace
+                      graph' = trace (show (v, availColors, length availColors, degree v graph)) $ addVertex v graph
+                      BasePtrOffset curBPMax = if null spilled then BasePtrOffset 1 else maximum $ map snd spilled
                       in
                   if null availColors then
-                                      pushRight v >> select' graph' colorMap
+                                      pushRight (v, BasePtrOffset (curBPMax+1)) >> select' graph' colorMap
                                       else
                                       select' graph' (insertAllWithKey v (head availColors) colorMap)
 

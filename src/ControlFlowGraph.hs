@@ -50,8 +50,8 @@ instance LastNode BranchingStatement where
         Jump _ -> True
         _ -> False
 
-allNonArrayVariables :: (LastNode l, Data l) => LGraph Statement l -> Set String
-allNonArrayVariables = everything Set.union (Set.empty `mkQ` selectVariable)
+allNonArrayVarsForMidCfg :: (LastNode l, Data l) => LGraph Statement l -> Set String
+allNonArrayVarsForMidCfg = everything Set.union (Set.empty `mkQ` selectVariable)
 
 selectVariable :: Variable -> Set String
 selectVariable var = case isArray var of

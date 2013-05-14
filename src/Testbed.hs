@@ -7,6 +7,7 @@ import Control.Monad
 import qualified Parser
 
 import PrettyPrint
+import ControlFlowGraph
 import Codegen
 import CFGConstruct (lgraphFromAGraphBlocks)
 import CFGConcrete (LGraph, BlockId(..))

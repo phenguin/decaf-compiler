@@ -2,6 +2,7 @@
 module DataflowAnalysis where
 
 import CFGConcrete
+import Util
 import LowIR
 import Data.Typeable
 import Data.Data
@@ -169,9 +170,6 @@ augmentWithDFR dfa@(DFAnalysis updateM updateL _ initState direction) lgraph@(LG
             s <- get
             modify (updateM m)
             return $ AN (m, s)
-
-mapFst :: (a -> b) -> (a,c) -> (b,c)
-mapFst f (x,y) = (f x, y)
 
 foldWithDFR :: (Eq s, LastNode l) => DFAnalysis m l s -> ((Either l m, s) -> a) -> (a -> a -> a) -> a -> LGraph m l -> a
 foldWithDFR dfa convert combine initVal lgraph = case dir of

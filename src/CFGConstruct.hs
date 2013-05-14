@@ -132,16 +132,14 @@ ztailFromMiddles :: [m] -> ZLast l -> ZTail m l
 ztailFromMiddles [] zl = ZLast zl
 ztailFromMiddles (m:ms) zl = ZTail m (ztailFromMiddles ms zl)
 
-ztailCollectMiddles :: (PrettyPrint m, PrettyPrint l, LastNode l) =>
-    ZTail m l -> [m]
+ztailCollectMiddles :: ZTail m l -> [m]
 ztailCollectMiddles (ZLast _) = []
 ztailCollectMiddles (ZTail m zt) = m : ztailCollectMiddles zt
 
-mapZTailMiddles :: (PrettyPrint l, PrettyPrint m1, PrettyPrint m2, LastNode l) =>
-    (m1 -> [m2]) -> ZTail m1 l -> ZTail m2 l
+mapZTailMiddles :: (LastNode l) => (m1 -> [m2]) -> ZTail m1 l -> ZTail m2 l
 mapZTailMiddles f ztail = mapZTail f (\x -> (([],[]), x)) ztail
 
-mapZTail:: (PrettyPrint l1, PrettyPrint l2, PrettyPrint m1, PrettyPrint m2, LastNode l1, LastNode l2) =>
+mapZTail:: (LastNode l1) =>
     (m1 -> [m2]) -> (ZLast l1 -> (([m2],[m2]), ZLast l2)) -> ZTail m1 l1 -> ZTail m2 l2
 
 mapZTail fm fl ztail = let zl = getZLast ztail
@@ -149,11 +147,11 @@ mapZTail fm fl ztail = let zl = getZLast ztail
                               ztailFromMiddles (preMids ++ mappedMiddles ++ endMids) zl'
     where mappedMiddles = concatMap fm $ ztailCollectMiddles ztail
 
-mapBlock:: (PrettyPrint l1, LastNode l1, PrettyPrint l2, LastNode l2, PrettyPrint m1, PrettyPrint m2) =>
+mapBlock:: (LastNode l1) =>
     (BlockId -> m1 -> [m2]) -> (BlockId -> ZLast l1 -> (([m2],[m2]), ZLast l2)) -> Block m1 l1 -> Block m2 l2
 mapBlock mf lf (Block bid ztail) = Block bid (mapZTail (mf bid) (lf bid) ztail)
 
-mapLGraphNodes :: (PrettyPrint l1, LastNode l1, PrettyPrint l2, LastNode l2, PrettyPrint m1, PrettyPrint m2) => 
+mapLGraphNodes :: (LastNode l1) => 
     (BlockId -> m1 -> [m2]) -> (BlockId -> ZLast l1 -> (([m2],[m2]), ZLast l2)) -> LGraph m1 l1 -> LGraph m2 l2
 
 mapLGraphNodes mf lf (LGraph entryId blocks) = LGraph entryId blocks'
@@ -163,11 +161,11 @@ mapLGraphNodes mf lf (LGraph entryId blocks) = LGraph entryId blocks'
 
 
 
-mapWithZLastBlock:: (PrettyPrint l1, LastNode l1, PrettyPrint l2, LastNode l2, PrettyPrint m1, PrettyPrint m2) =>
+mapWithZLastBlock:: (LastNode l1) =>
     (ZLast l1 -> BlockId -> m1 -> [m2]) -> (BlockId -> ZLast l1 -> (([m2],[m2]), ZLast l2)) -> Block m1 l1 -> Block m2 l2
 mapWithZLastBlock mf lf (Block bid ztail) = Block bid (mapZTail (mf (getZLast ztail) bid) (lf bid) ztail)
 
-mapWithZLastLGraphNodes :: (PrettyPrint l1, LastNode l1, PrettyPrint l2, LastNode l2, PrettyPrint m1, PrettyPrint m2) => 
+mapWithZLastLGraphNodes :: (LastNode l1) => 
     (ZLast l1 -> BlockId -> m1 -> [m2]) -> (BlockId -> ZLast l1 -> (([m2],[m2]), ZLast l2)) -> LGraph m1 l1 -> LGraph m2 l2
 
 mapWithZLastLGraphNodes mf lf (LGraph entryId blocks) = LGraph entryId blocks'

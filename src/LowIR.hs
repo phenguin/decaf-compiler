@@ -1,22 +1,23 @@
+{-# LANGUAGE DeriveDataTypeable #-}
 module LowIR where 
-
-
-
-
 
 import MidIR
 import qualified Data.Map 
+import Data.Generics
 import ControlFlowGraph
 import CFGConstruct
 import CFGConcrete
 import PrettyPrint
 import Text.PrettyPrint.HughesPJ hiding (Str)
 import Debug.Trace
+import Data.Set (Set)
+import qualified Data.Set as Set
 
 data Value = Symbol {name::String} | Array {name::String ,index::Value} | Literal Int | EvilSymbol String | EvilString{getString::String} | Label String | Dereference  Value Value | Verbatim String | Stack Int
 		| RAX | RBX | RCX | RDX | RSP | RBP | RSI | RDI | R8 | R9 | R10 | R11 
 		| R12 | R13 | R14 | R15 
-		deriving (Show,Eq,Ord)
+		deriving (Show,Eq,Ord,Data,Typeable)
+
 isRegister x = elem x [RAX ,RBX,RCX,RDX,RSP,RBP,RSI,RDI,R8,R9,R10,R11,R12,R13,R14,R15]	
 data ProtoASM = Dec' Value
 	| DFun' String [Value]
@@ -56,7 +57,7 @@ data ProtoASM = Dec' Value
 	| Ret'
 	| Break'    -- get replaced with jump later... kludgy i know
 	| Continue' -- get replaced with jump later... kludgy i know
-	deriving (Show,Eq,Ord)
+	deriving (Show,Eq,Ord,Data,Typeable)
 
 saveFrame = [RBX, RSP, RBP, R12,R13,R14,R15] 
 save::[ProtoASM]
@@ -71,7 +72,22 @@ data ProtoBranch =  Jump' BlockId
 	| Parafor' Value [ProtoASM] [ProtoASM] [ProtoASM] [BlockId]
 	| InitialBranch' [BlockId]
 	| Nil --for stateful traversion
-	deriving (Show,Eq,Ord)
+	deriving (Show,Eq,Ord,Data,Typeable)
+
+allNonArrayVarsForLowCfg  :: (Data m, Data l) => LGraph m l -> Set String
+allNonArrayVarsForLowCfg = everything Set.union (Set.empty `mkQ` selectLowIRVariable)
+
+selectLowIRVariable :: Value -> Set String
+selectLowIRVariable val = case val of
+    Symbol s -> Set.singleton s
+    _ -> Set.empty
+
+usesVariable :: (Data a) => a -> String -> Bool
+usesVariable x name = everything (||) (False `mkQ` (selectVarByName name)) x
+
+selectVarByName :: String -> Value -> Bool
+selectVarByName name (Symbol s) = s == name
+selectVarByName name _ = False
 
 newtype ProtoASMList = ProtoASMList [ProtoASM]
 
