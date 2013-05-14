@@ -31,6 +31,8 @@ import Data.Char (toLower)
 type Var = String
 data Color = CRAX | CRBX | CRCX | CRDX | CRSP | CRBP | CRSI | CRDI | CR8 | CR9 | CR10 | CR11 | CR12 | CR13 | CR14 | CR15 deriving (Eq, Show, Ord, Enum, Data, Typeable)
 
+data LocationAssignment = Reg Color | BasePtOffset Int | Global String deriving (Eq, Show, Ord, Data, Typeable)
+
 instance PrettyPrint Color where
     ppr = text . ('%':) . tail . map toLower . show
 
@@ -204,9 +206,6 @@ coalesce ig@(IG vertices iEdges pEdges) = case relevantPEdges of
 
 insertAllWithKey :: (Ord k) => Set k -> a -> M.Map k a -> M.Map k a
 insertAllWithKey keys val = compose $ map (\k -> M.insert k val) (toList keys)
-
-spillVertices :: (Ord a, LastNode l) => [IGVertex a] -> LGraph m l -> LGraph m l
-spillVertices = undefined
 
 updateForSpills :: [IGVertex Var] -> LGraph Statement BranchingStatement -> LGraph Statement BranchingStatement
 updateForSpills _ = error "Not yet implemented.. cant handle spills yet.."
