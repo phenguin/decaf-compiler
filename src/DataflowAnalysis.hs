@@ -2,9 +2,10 @@
 module DataflowAnalysis where
 
 import CFGConcrete
+import LowIR
 import Data.Typeable
 import Data.Data
-import Transforms (FDType (..))
+import qualified Transforms
 import Debug.Trace (trace)
 import Data.List (foldl1)
 import Control.Applicative
@@ -286,20 +287,20 @@ killsExpr var@(Varray s _) e = case e of
         Loc (Varray s' _) -> s == s'
         _ -> False
 
--- Liveness analysis
+-- Liveness analysis for MidIR
 
 data VarMarker = VarMarker {
     varName :: String,
-    varType :: FDType
+    varType :: Transforms.FDType
     } deriving (Show, Eq, Ord, Data, Typeable)
 
 isArray :: VarMarker -> Bool
-isArray (VarMarker _ (Array _)) = True
+isArray (VarMarker _ (Transforms.Array _)) = True
 isArray _ = False
 
 instance PrettyPrint VarMarker where
-    ppr (VarMarker name Single) = text name
-    ppr (VarMarker name (Array _)) = text name <> lbrack <> rbrack
+    ppr (VarMarker name Transforms.Single) = text name
+    ppr (VarMarker name (Transforms.Array _)) = text name <> lbrack <> rbrack
 
 -- Needs a better name
 type LiveVarState = Set VarMarker
@@ -308,8 +309,8 @@ liveVariableAnalysis :: DFAnalysis Statement BranchingStatement LiveVarState
 liveVariableAnalysis = DFAnalysis {
     updateStateM = liveVarUpdateM,
     updateStateL = liveVarUpdateL,
-    joinStates = liveVarJoin,
-    initState = liveVarInit,
+    joinStates = Set.union,
+    initState = Set.empty,
     direction = Backward
     }
 
@@ -324,12 +325,6 @@ liveVarUpdateL :: BranchingStatement -> LiveVarState -> LiveVarState
 liveVarUpdateL bStmt prevState = Set.union used prevMinusDef
     where used = varsUsedInBranchStmt bStmt
           prevMinusDef = Set.difference prevState (varsDefinedInBranchStmt bStmt)
-
-liveVarJoin :: LiveVarState -> LiveVarState -> LiveVarState
-liveVarJoin = Set.union
-
-liveVarInit :: LiveVarState
-liveVarInit = Set.empty
 
 -- Again using Data.Generics to simplify this code
 varsUsedInStmt :: Statement -> Set VarMarker
@@ -360,6 +355,88 @@ getVariables :: Variable -> Set VarMarker
 getVariables var = Set.singleton $ varToVarMarker var
 
 varToVarMarker :: Variable -> VarMarker
-varToVarMarker (Var name) = VarMarker name Single
+varToVarMarker (Var name) = VarMarker name Transforms.Single
 -- TODO: FDType of Array 0 doesn't accurately reflect whats going on here.
-varToVarMarker (Varray name _) = VarMarker name (Array 0)
+varToVarMarker (Varray name _) = VarMarker name (Transforms.Array 0)
+
+-- Liveness analysis for LowIR
+
+lowLVAnalysis :: DFAnalysis ProtoASM ProtoBranch LiveVarState
+lowLVAnalysis = DFAnalysis {
+    updateStateM = lowLVUpdateM,
+    updateStateL = lowLVUpdateL,
+    joinStates = Set.union,
+    initState = Set.empty,
+    direction = Backward
+    }
+
+lowLVUpdateM :: ProtoASM -> LiveVarState -> LiveVarState
+lowLVUpdateM stmt prevState = Set.union used prevMinusDef
+    where used = varsUsedInProtoStmt stmt
+          prevMinusDef = Set.difference prevState (varsDefinedInProtoStmt stmt)
+
+lowLVUpdateL :: ProtoBranch -> LiveVarState -> LiveVarState
+lowLVUpdateL bStmt prevState = Set.union used prevMinusDef
+    where used = varsUsedInProtoBranch bStmt
+          prevMinusDef = Set.difference prevState (varsDefinedInProtoBranch bStmt)
+
+varsDefinedInProtoStmt :: ProtoASM -> Set VarMarker
+varsDefinedInProtoStmt stmt = case stmt of
+    Mov' _ v -> valToVMSet v
+    Neg' v -> valToVMSet v
+    And' _ v -> valToVMSet v
+    Or' _ v -> valToVMSet v
+    Add' _ v -> valToVMSet v
+    Sub' _ v -> valToVMSet v -- TODO: Check semantics
+    Mul' _ v -> valToVMSet v
+    Div' _ v -> valToVMSet v -- TODO: Check semantics
+    Not' v -> valToVMSet v
+    Pop' v -> valToVMSet v
+    CMove' _ v -> valToVMSet v
+    CMovne' _ v -> valToVMSet v
+    CMovg' _ v -> valToVMSet v
+    CMovl' _ v -> valToVMSet v
+    CMovge' _ v -> valToVMSet v
+    CMovle' _ v -> valToVMSet v
+    _ -> Set.empty
+
+varsDefinedInProtoBranch :: ProtoBranch -> Set VarMarker
+-- TODO: Wrong!!! For loops define variables.  FIX THIS!!
+varsDefinedInProtoBranch _ = Set.empty
+
+varsUsedInProtoStmt :: ProtoASM -> Set VarMarker
+varsUsedInProtoStmt stmt = case stmt of
+        Mov' v _ -> valToVMSet v
+        Neg' v -> valToVMSet v
+        And' v _ -> valToVMSet v
+        Or'  v _ -> valToVMSet v
+        Add' v _ -> valToVMSet v
+        Sub' v _ -> valToVMSet v -- TODO: Check semantics
+        Mul' v _ -> valToVMSet v
+        Div' v _ -> valToVMSet v -- TODO: Check semantics
+        Lt'   v v' -> valsToVMSet [v,v'] -- TODO: Check semantics
+        Gt'   v v' -> valsToVMSet [v,v'] -- TODO: Check semantics
+        Le'   v v' -> valsToVMSet [v,v'] -- TODO: Check semantics
+        Ge'   v v' -> valsToVMSet [v,v'] -- TODO: Check semantics
+        Eq'   v v' -> valsToVMSet [v,v'] -- TODO: Check semantics
+        Ne'   v v' -> valsToVMSet [v,v'] -- TODO: Check semantics
+        Not'  v  -> valToVMSet v
+        Cmp' v v' -> valsToVMSet [v,v']
+        Push' v -> valToVMSet v
+        CMove' v _ -> valToVMSet v
+        CMovne' v _ -> valToVMSet v
+        CMovg' v _ -> valToVMSet v
+        CMovl' v _ -> valToVMSet v
+        CMovge' v _ -> valToVMSet v
+        CMovle' v _ -> valToVMSet v
+        _ -> Set.empty
+
+varsUsedInProtoBranch :: ProtoBranch -> Set VarMarker
+-- TODO: SO WRONG!! FIX ME!!
+varsUsedInProtoBranch _ = Set.empty
+
+valToVMSet :: Value -> Set VarMarker
+valToVMSet (Symbol s) = Set.singleton $ VarMarker s Transforms.Single
+
+valsToVMSet :: [Value] -> Set VarMarker
+valsToVMSet vals = foldl Set.union Set.empty $ map valToVMSet vals
