@@ -42,7 +42,15 @@ navigate globals funmap cfg = unsafePerformIO $ do
 		
 		-- Data section
 		epilog <- return $ (makeDataSection strings) ++ vardata ++ 
-			"\n.com p1,32\n"
+			"\n.com t0,8\n"
+			++".com t1,8\n"
+			++".com t2,8\n"
+			++".com t3,8\n"
+			++".com t4,8\n"
+			++".com t5,8\n"
+			++".com t6,8\n"
+			++".com t7,8\n"
+			++".com p1,32\n"
 			++".com p2,32\n"
 			++".com p3,32\n"
 			++".com p4,32\n"
