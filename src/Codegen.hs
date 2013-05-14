@@ -360,6 +360,7 @@ fixStatement le lv stmt
 		| While cond b <-stmt= While (le cond) b
 		| ForLoop i s end b <-stmt= ForLoop (lv i) (le s) (le end) b
 		| Parafor i s end b <-stmt= Parafor (lv i) (le s) (le end) b
+		| DFun n params body <-stmt = DFun n (map lv params) body
 		| otherwise = stmt
 
 fixExpression l expr
