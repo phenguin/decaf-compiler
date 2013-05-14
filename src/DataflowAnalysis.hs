@@ -337,7 +337,7 @@ varsDefinedInBranchStmt _ = Set.empty
 
 -- Base case..
 getVariables :: Variable -> Set VarMarker
-getVariables var = Set.singleton $ varToVarMarker var
+getVariables v = Set.filter isScoped $ Set.singleton $ varToVarMarker v
 
 -- Liveness analysis for LowIR
 
@@ -416,8 +416,8 @@ varsUsedInProtoBranch :: ProtoBranch -> Set VarMarker
 varsUsedInProtoBranch _ = Set.empty
 
 valToVMSet :: Value -> Set VarMarker
-valToVMSet (Symbol s) = Set.singleton $ VarMarker s Transforms.Single Nothing
-valToVMSet (Array s _) = Set.singleton $ VarMarker s (Transforms.Array 0) Nothing
+valToVMSet (Symbol s) = Set.singleton $ VarMarker s Transforms.Single []
+valToVMSet (Array s _) = Set.singleton $ VarMarker s (Transforms.Array 0) []
 valToVMSet (Scoped scp v) = Set.map (setScope scp) $ valToVMSet v
 valToVMSet _ = Set.empty
 

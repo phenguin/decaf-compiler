@@ -7,7 +7,7 @@ import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.List (sort, groupBy, isPrefixOf)
 import qualified Data.Map as M
-import Debug.Trace
+import Debug.Trace (trace)
 import Text.PrettyPrint.HughesPJ hiding (Str)
 import PrettyPrint
 import CFGConstruct
@@ -51,15 +51,10 @@ instance LastNode BranchingStatement where
         _ -> False
 
 allNonArrayVarsForMidCfg :: (LastNode l, Data l) => LGraph Statement l -> Set VarMarker
-allNonArrayVarsForMidCfg = everything Set.union (Set.empty `mkQ` selectVarFromStatement)
-
-selectVarFromStatement :: Statement -> Set VarMarker
-selectVarFromStatement (DFun _ _ _) = Set.empty
-selectVarFromStatement (DVar _) = Set.empty
-selectVarFromStatement stmt = everything Set.union (Set.empty `mkQ` selectVariable) stmt
+allNonArrayVarsForMidCfg = everything Set.union (Set.empty `mkQ` selectVariable)
 
 selectVariable :: Variable -> Set VarMarker
-selectVariable var = case isArray varmarker of
+selectVariable var = case isArray varmarker || (not . isScoped) varmarker of
     True -> Set.empty
     False -> Set.singleton $ varmarker
   where varmarker = varToVarMarker var

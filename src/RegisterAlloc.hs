@@ -59,7 +59,7 @@ data InterferenceGraph a = IG {
     pEdges :: (Set (IGEdge a))
     } deriving (Eq, Show, Ord, Data, Typeable)
 
-instance (Show a, Ord a) => PrettyPrint (InterferenceGraph a) where
+instance (Ord a, PrettyPrint a) => PrettyPrint (InterferenceGraph a) where
     ppr (IG vertices iEdges pEdges) = text "" $$
                          text "Interference Graph ===========================" $$
                          text "Vertices:" <+> hsep (map showSet (toList vertices)) $$ text "" $$
@@ -76,7 +76,7 @@ instance (Show a, Ord a) => PrettyPrint (InterferenceGraph a) where
                          text "==============================================" $$
                          text ""
        where showSet set = lbrace <> withCommas (toList set) <> rbrace
-             withCommas = foldl (\acc x -> acc <+> (text . show) x <> comma) (text "")
+             withCommas = foldl (\acc x -> acc <+> ppr x <> comma) (text "")
                         
 
 isVertex :: (Ord a) => IGVertex a -> InterferenceGraph a -> Bool
