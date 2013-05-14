@@ -34,11 +34,8 @@ instance (PrettyPrint a, PrettyPrint b, PrettyPrint c) => PrettyPrint (a,b,c) wh
 instance PrettyPrint Int where
     ppr = int
 
-instance (PrettyPrint a) => PrettyPrint [a] where
-    ppr xs = lbrack $$ ppr' xs $$ rbrack
-       where ppr' [] = text ""
-             ppr' (x:xs) = ppr x <> comma $$
-                           ppr' xs
+instance (Show a, PrettyPrint a) => PrettyPrint [a] where
+    pPrint = show
 
 instance (PrettyPrint a) => PrettyPrint (Set a) where
     ppr set = let xs = Set.toList set in text "{" <+> ppr' xs <> text "}"

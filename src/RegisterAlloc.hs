@@ -2,6 +2,7 @@
 
 module RegisterAlloc where 
 
+import Debug.Trace (trace)
 import MidIR
 import Data.Function (on)
 import Data.List (sort)
@@ -25,12 +26,18 @@ import Data.List
 import Data.Set (Set, fromList, toList)
 import qualified Data.Set as Set
 import DataflowAnalysis
+import Data.Char (toLower)
 
 type Var = String
 data Color = CRAX | CRBX | CRCX | CRDX | CRSP | CRBP | CRSI | CRDI | CR8 | CR9 | CR10 | CR11 | CR12 | CR13 | CR14 | CR15 deriving (Eq, Show, Ord, Enum, Data, Typeable)
 
+instance PrettyPrint Color where
+    ppr = text . ('%':) . tail . map toLower . show
+
+allColors = [CRAX .. CR15]
+
 numColors :: Integer
-numColors = fromIntegral $ length [CRAX .. CR15]
+numColors = fromIntegral $ length allColors
 
 -- Should be only a set of two elements.. might fix this to make it
 -- required by the type system later if it turns out to matter at all.
@@ -116,6 +123,10 @@ addPEdge v1 v2 ig = IG vertices' (iEdges ig) pEdges'
 areNeighbors :: (Ord a) => IGVertex a -> IGVertex a -> InterferenceGraph a -> Bool
 areNeighbors v e ig = fromList [v,e] `Set.member` iEdges ig
 
+subsetsOfSize :: (Ord a) => Int -> Set a -> Set (Set a)
+subsetsOfSize k xs = Set.filter (\as -> Set.size as == k) $ Set.fromList $ map Set.fromList powerset
+    where powerset = filterM (const [True, False]) $ toList xs
+
 discreteOnVertices :: (Ord a) => Set a -> InterferenceGraph a
 discreteOnVertices vertices = IG (Set.map makeVertex vertices) Set.empty Set.empty
 
@@ -161,25 +172,11 @@ interferenceFromBlock blockStates blk@(Block bid _) = fst $ runState results blk
                    _ -> return resMinusPrefEdges
           results = foldM foldingF emptyIG (reverse $ blockMiddles blk)
 
-subsetsOfSize :: (Ord a) => Int -> Set a -> Set (Set a)
-subsetsOfSize k xs = Set.filter (\as -> Set.size as == k) $ Set.fromList $ map Set.fromList powerset
-    where powerset = filterM (const [True, False]) $ toList xs
-
 ------------------------------------------------------------
 -- Implement actual register allocation via graph coloring..
 ------------------------------------------------------------
 
 type Coloring a = M.Map a Color
-
-push :: a -> State [a] ()
-push x = modify (x:)
-
-pop :: State [a] (Maybe a)
-pop = do
-    xs <- get
-    case xs of
-        [] -> return Nothing
-        (x:rest) -> put rest >> return (Just x)
 
 hasSigDegree :: (Ord a) => IGVertex a -> InterferenceGraph a -> Bool
 hasSigDegree v ig@(IG vertices iEdges _) = degree v ig >= numColors
@@ -204,9 +201,48 @@ coalesce ig@(IG vertices iEdges pEdges) = case relevantPEdges of
           getPEdges e = Set.delete e pEdges
           getNewIG e = IG (getVerts e) (getIEdges e) (getPEdges e)
 
-select :: (Ord a) => Set (IGEdge a) -> [IGVertex a] -> Maybe (Coloring a)
-select = undefined
+
+insertAllWithKey :: (Ord k) => Set k -> a -> M.Map k a -> M.Map k a
+insertAllWithKey keys val = compose $ map (\k -> M.insert k val) (toList keys)
+
+spillVertices :: (Ord a, LastNode l) => [IGVertex a] -> LGraph m l -> LGraph m l
+spillVertices = undefined
+
+updateForSpills :: [IGVertex Var] -> LGraph Statement BranchingStatement -> LGraph Statement BranchingStatement
+updateForSpills = undefined
+
+defAllocateRegisters = allocateRegisters (const 0)
+
+allocateRegisters :: (Ord b) => (IGVertex Var -> b) -> LGraph Statement BranchingStatement -> Coloring Var
+allocateRegisters spillHeuristic cfg = case coloringOrSpills of
+            Right coloring -> coloring
+            Left spills -> error "Giving up!"
+            -- Left spills -> allocateRegisters spillHeuristic (updateForSpills spills cfg)
+    where initialIG = buildInterferenceGraph cfg
+          (simpleIG, vertexStack) = simplify spillHeuristic initialIG
+          coloringOrSpills = select (iEdges simpleIG) vertexStack
           
+select :: (Ord a, Show a) => Set (IGEdge a) -> [IGVertex a] -> Either [IGVertex a] (Coloring a)
+select iEdges vertexStack = fst $ runState (select' initialGraph M.empty) (vertexStack, [])
+    where initialGraph = IG Set.empty iEdges Set.empty
+
+select' :: (Ord a, Show a) => InterferenceGraph a -> Coloring a -> State ([IGVertex a], [IGVertex a]) (Either [IGVertex a] (Coloring a))
+select' graph colorMap = do
+    mbVertex <- popLeft
+    spilled <- liftM snd get
+    case mbVertex of
+        Nothing -> return $ if null spilled then Right colorMap else Left spilled
+        Just v -> let neighborColors = catMaybes $ 
+                                       map ((flip M.lookup) colorMap) $
+                                       concat $ map toList $ toList $
+                                       neighbors v graph
+                      availColors = allColors \\ neighborColors 
+                      graph' = addVertex v graph
+                      in
+                  if null availColors then
+                                      pushRight v >> select' graph' colorMap
+                                      else
+                                      select' graph' (insertAllWithKey v (head availColors) colorMap)
 
 setReplace :: (Ord a) => Set a -> a -> Set a -> Set a
 setReplace olds new set = Set.map replaceFunc set
@@ -214,10 +250,11 @@ setReplace olds new set = Set.map replaceFunc set
                               True -> new
                               False -> x
 
-simplify spillHeuristic ig = runState (simplify' spillHeuristic ig) []
 defSimplify :: (Ord a) => InterferenceGraph a -> (InterferenceGraph a, [IGVertex a])
 defSimplify = simplify (const 1)
     
+simplify spillHeuristic ig = runState (simplify' spillHeuristic ig) []
+
 -- TODO: Optimize this later if you have time..
 simplify' :: (Ord a, Ord b) => (IGVertex a -> b) -> InterferenceGraph a -> State [IGVertex a] (InterferenceGraph a)
 simplify' spillHeuristic ig@(IG vertices iEdges pEdges) = case Set.null vertices of
@@ -230,11 +267,12 @@ simplify' spillHeuristic ig@(IG vertices iEdges pEdges) = case Set.null vertices
                           simplify' spillHeuristic coalescedIG
                           else do
                               push colorNext
-                              simplify' spillHeuristic (removeVertex colorNext ig)
+                              simplify' spillHeuristic (removeFromVertexSet colorNext ig)
         else do
             push colorNext
-            simplify' spillHeuristic (removeVertex colorNext ig)
+            simplify' spillHeuristic (removeFromVertexSet colorNext ig)
     where canSimplify v = not $ (hasSigDegree v ig || isMoveRelated v) -- TODO: Also ensure not move related
+          removeFromVertexSet v (IG vs ies pes) = IG (Set.delete v vs) ies pes
           isMoveRelated v = any (Set.member v) $ toList pEdges
           simplifiable = Set.filter canSimplify vertices
           (colorNext, isSpill) = case Set.null simplifiable of -- Any candidates for simplification?

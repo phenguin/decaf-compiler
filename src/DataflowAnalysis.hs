@@ -25,44 +25,6 @@ import Data.Generics
 import ControlFlowGraph
 
 data DataflowResults m l s = DFR (LGraph m l) (M.Map BlockId s) deriving (Eq)
-newtype AugmentedNode a s = AN { extractTuple :: (a,s) } deriving (Show, Eq, Ord)
-
-instance (HavingSuccessors l) => HavingSuccessors (AugmentedNode l s) where
-    succs (AN (l, _)) = succs l
-
-instance (PrettyPrint a, PrettyPrint s) => PrettyPrint (AugmentedNode a s) where
-    ppr (AN (x,s)) = ppr x <+> text "::    " <+> ppr s
-
-instance (Eq s, Show s) => Show (DataflowResults m l s) where
-    show (DFR _ mp) = show mp
-
-augmentWithDFR :: (Eq s, LastNode l) => 
-    DFAnalysis m l s -> LGraph m l -> LGraph (AugmentedNode m s) (AugmentedNode l s)
-
-augmentWithDFR dfa@(DFAnalysis updateM updateL _ initState direction) lgraph@(LGraph lgentry blocks) = 
-    LGraph lgentry $ mapBlocks (augmentBlock direction) blocks
-  where augmentBlock Forward blk@(Block bid zt) = Block bid ztail'
-           where (mids', lastState) = runState (mapM augment $ blockMiddles blk) bInState
-                 bInState = blkToStates ! bid 
-                 ztail' = ztailFromMiddles mids' zlast'
-                 zlast' = case getZLast blk of
-                     LastExit -> LastExit
-                     LastOther l -> LastOther $ AN (l, lastState)
-
-        augmentBlock Backward blk@(Block bid zt) = Block bid ztail'
-           where (mids', _) = runState (mapM augment $ (reverse . blockMiddles) blk) bInState'
-                 bInState = blkToStates ! bid 
-                 (zlast', bInState') = case getZLast blk of
-                     LastExit -> (LastExit, bInState)
-                     LastOther l -> (LastOther $ AN (l, bInState), updateL l bInState)
-                 ztail' = ztailFromMiddles (reverse mids') zlast'
-                 
-        (DFR _ blkToStates) = runAnalysis dfa lgraph
-        augment m = do
-            s <- get
-            modify (updateM m)
-            return $ AN (m, s)
-
 
 instance (PrettyPrint s, PrettyPrint m, PrettyPrint l, LastNode l) => PrettyPrint (DataflowResults m l s) where
     ppr (DFR lgraph resMap) = foldl f (text "") dfsBlocks
@@ -168,7 +130,69 @@ runAnalysis analysis lgraph@(LGraph entryId bLookup) =
    where blockList = case direction analysis of
             Forward -> postorderDFS lgraph
             Backward -> reverse $ postorderDFS lgraph
-        
+
+newtype AugmentedNode a s = AN { extractTuple :: (a,s) } deriving (Show, Eq, Ord)
+
+instance (HavingSuccessors l) => HavingSuccessors (AugmentedNode l s) where
+    succs (AN (l, _)) = succs l
+
+instance (PrettyPrint a, PrettyPrint s) => PrettyPrint (AugmentedNode a s) where
+    ppr (AN (x,s)) = ppr x <+> text "::    " <+> ppr s
+
+instance (Eq s, Show s) => Show (DataflowResults m l s) where
+    show (DFR _ mp) = show mp
+
+augmentWithDFR :: (Eq s, LastNode l) => 
+    DFAnalysis m l s -> LGraph m l -> LGraph (AugmentedNode m s) (AugmentedNode l s)
+
+augmentWithDFR dfa@(DFAnalysis updateM updateL _ initState direction) lgraph@(LGraph lgentry blocks) = 
+    LGraph lgentry $ mapBlocks (augmentBlock direction) blocks
+  where augmentBlock Forward blk@(Block bid zt) = Block bid ztail'
+           where (mids', lastState) = runState (mapM augment $ blockMiddles blk) bInState
+                 bInState = blkToStates ! bid 
+                 ztail' = ztailFromMiddles mids' zlast'
+                 zlast' = case getZLast blk of
+                     LastExit -> LastExit
+                     LastOther l -> LastOther $ AN (l, lastState)
+
+        augmentBlock Backward blk@(Block bid zt) = Block bid ztail'
+           where (mids', _) = runState (mapM augment $ (reverse . blockMiddles) blk) bInState'
+                 bInState = blkToStates ! bid 
+                 (zlast', bInState') = case getZLast blk of
+                     LastExit -> (LastExit, bInState)
+                     LastOther l -> (LastOther $ AN (l, bInState), updateL l bInState)
+                 ztail' = ztailFromMiddles (reverse mids') zlast'
+                 
+        (DFR _ blkToStates) = runAnalysis dfa lgraph
+        augment m = do
+            s <- get
+            modify (updateM m)
+            return $ AN (m, s)
+
+mapFst :: (a -> b) -> (a,c) -> (b,c)
+mapFst f (x,y) = (f x, y)
+
+foldWithDFR :: (Eq s, LastNode l) => DFAnalysis m l s -> ((Either l m, s) -> a) -> (a -> a -> a) -> a -> LGraph m l -> a
+foldWithDFR dfa convert combine initVal lgraph = case dir of
+        Forward -> foldl combine initVal foldedBlocks
+        Backward -> foldr (flip combine) initVal foldedBlocks
+    where augBlocks = postorderDFS $ augmentWithDFR dfa lgraph
+          dir = direction dfa
+          foldedBlocks = map (foldAugBlockWithDFR dir convert combine initVal) augBlocks
+
+foldAugBlockWithDFR :: (Eq s, LastNode l) => 
+    DFDirection -> ((Either l m, s) -> a) -> (a -> a -> a) -> a -> Block (AugmentedNode m s) (AugmentedNode l s) -> a
+
+foldAugBlockWithDFR Forward convert combine initVal block = foldl combine initVal blockNodes
+    where blockNodes = map convert $ map (mapFst Right . extractTuple) (blockMiddles block) ++ getLast (getZLast block)
+          getLast (LastOther (AN (x, s))) = [(Left x, s)]
+          getLast LastExit = []
+
+foldAugBlockWithDFR Backward convert combine initVal block = foldr (flip combine) initVal blockNodes
+    where blockNodes = map convert $ map (mapFst Right . extractTuple) (blockMiddles block) ++ getLast (getZLast block)
+          getLast (LastOther (AN (x, s))) = [(Left x, s)]
+          getLast LastExit = []
+
 -- ============================
 --- Analysis implementations
 -- ============================

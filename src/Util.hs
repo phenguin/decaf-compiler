@@ -4,6 +4,8 @@ import System.IO.Unsafe (unsafePerformIO)
 
 import Transforms (SemanticTree, convert)
 import Data.Hashable (Hashable, hash)
+import Control.Monad
+import Control.Monad.State
 import MultiTree (pPrintTabbed)
 import PrettyPrint
 import qualified Parser
@@ -56,3 +58,46 @@ getHashStr x = case h < 0 of
     False -> 'P' : show h
     where h = hash x
 
+mapFst f (a,b) = (f a,b)
+mapSnd f (a,b) = (a, f b)
+
+-- Having a stack for a state..
+push :: a -> State [a] ()
+push x = modify (x:)
+
+pop :: State [a] (Maybe a)
+pop = do
+    xs <- get
+    case xs of
+        [] -> return Nothing
+        (x:rest) -> put rest >> return (Just x)
+
+pushLeft :: a -> State ([a], b) ()
+pushLeft x = do
+    modify $ mapFst (x:)
+
+popLeft :: State ([a],b) (Maybe a)
+popLeft = do
+    (xs, y) <- get
+    case xs of
+        [] -> return Nothing
+        (x:rest) -> do
+            put (rest, y)
+            return $ Just x
+
+pushRight :: b -> State (a, [b]) ()
+pushRight x = do
+    modify $ mapSnd (x:)
+
+popRight :: State (a,[b]) (Maybe b)
+popRight = do
+    (x, ys) <- get
+    case ys of
+        [] -> return Nothing
+        (y:rest) -> do
+            put (x, rest)
+            return $ Just y
+
+compose :: [a -> a] -> a -> a
+compose [] = id
+compose (f:fs) = f . compose fs
