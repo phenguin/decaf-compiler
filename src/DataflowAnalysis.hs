@@ -437,6 +437,8 @@ varsUsedInProtoBranch _ = Set.empty
 
 valToVMSet :: Value -> Set VarMarker
 valToVMSet (Symbol s) = Set.singleton $ VarMarker s Transforms.Single
+valToVMSet (Array s _) = Set.singleton $ VarMarker s (Transforms.Array 0)
+valToVMSet _ = Set.empty
 
 valsToVMSet :: [Value] -> Set VarMarker
 valsToVMSet vals = foldl Set.union Set.empty $ map valToVMSet vals

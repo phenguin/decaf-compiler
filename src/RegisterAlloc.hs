@@ -1,8 +1,9 @@
-{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveDataTypeable, FlexibleInstances #-}
 
 module RegisterAlloc where 
 
 import Debug.Trace (trace)
+import LowIR
 import MidIR
 import Data.Function (on)
 import Data.List (sort)
@@ -147,32 +148,33 @@ addVertex v ig = IG (Set.insert v $ vertices ig) (iEdges ig) (pEdges ig)
 -----------------------------------------------------
 
 -- Uses the liveness analysis of a program to build its interference graph for register allocation
-buildInterferenceGraph :: LGraph Statement BranchingStatement -> InterferenceGraph Var
+buildIGFromMidCfg :: LGraph Statement BranchingStatement -> InterferenceGraph Var
+buildIGFromMidCfg = foldWithDFR liveVariableAnalysis computeIGfromMidIRNode unionIG emptyIG
 
-buildInterferenceGraph lgraph = unionIG (discreteOnVertices $ allNonArrayVariables lgraph) conflictsGraph
-    where DFR _ blockLivenessMap = runAnalysis liveVariableAnalysis lgraph
-          -- conflictsGraph only includes those variables who conflicted with some other variable at some point
-          -- we union this with "discreteOnVertices $ allNonArrayVariables lgraph" to ensure that non-conflicting
-          -- variables are assigned registers too.
-          conflictsGraph = unionIGs $ map (interferenceFromBlock blockLivenessMap) $ postorderDFS lgraph
+computeIGfromMidIRNode :: (Either BranchingStatement Statement, LiveVarState) -> InterferenceGraph Var
+computeIGfromMidIRNode (Left l, liveVars) = completeOnVertices $ Set.map varName $ Set.filter (not . isArray) $ liveVars
+computeIGfromMidIRNode (Right m, liveVars) = case m of
+                Set (Var s) (Loc (Var s')) -> addPEdge (makeVertex s) (makeVertex s') beforePEdges
+                _ -> beforePEdges
+    where relevantVarNames = Set.map varName $ Set.filter (not . isArray) $ liveVars
+          beforePEdges = completeOnVertices relevantVarNames
 
-interferenceFromBlock :: M.Map BlockId LiveVarState -> Block Statement BranchingStatement -> InterferenceGraph Var
-interferenceFromBlock blockStates blk@(Block bid _) = fst $ runState results blkOutState'
-    where blkOutState = case M.lookup bid blockStates of
-                    Nothing -> error "Cant find block in results.  liveness analysis must have failed"
-                    Just b -> b
-          blkOutState' = case getZLast blk of
-                              LastOther l -> liveVarUpdateL l blkOutState
-                              LastExit -> blkOutState
-          foldingF acc stmt = do
-              liveVars <- get
-              put $ liveVarUpdateM stmt liveVars 
-              let relevantLiveVarNames = Set.map varName $ Set.filter (not . isArray) $ liveVars
-                  resMinusPrefEdges = unionIG acc (completeOnVertices relevantLiveVarNames)
-              case stmt of
-                   Set (Var s) (Loc (Var s')) -> return $ addPEdge (makeVertex s) (makeVertex s') resMinusPrefEdges
-                   _ -> return resMinusPrefEdges
-          results = foldM foldingF emptyIG (reverse $ blockMiddles blk)
+buildIGFromLowCfg :: LGraph ProtoASM ProtoBranch -> InterferenceGraph Var
+buildIGFromLowCfg = foldWithDFR lowLVAnalysis computeIGfromLowIRNode unionIG emptyIG
+
+computeIGfromLowIRNode :: (Either ProtoBranch ProtoASM, LiveVarState) -> InterferenceGraph Var
+computeIGfromLowIRNode (Left l, liveVars) = completeOnVertices $ Set.map varName $ Set.filter (not . isArray) $ liveVars
+computeIGfromLowIRNode (Right m, liveVars) = case m of
+                Mov' (Symbol s) (Symbol s') -> addPEdge (makeVertex s) (makeVertex s') beforePEdges
+                CMove' (Symbol s) (Symbol s') -> addPEdge (makeVertex s) (makeVertex s') beforePEdges
+                CMovne' (Symbol s) (Symbol s') -> addPEdge (makeVertex s) (makeVertex s') beforePEdges
+                CMovg' (Symbol s) (Symbol s') -> addPEdge (makeVertex s) (makeVertex s') beforePEdges
+                CMovl' (Symbol s) (Symbol s') -> addPEdge (makeVertex s) (makeVertex s') beforePEdges
+                CMovge' (Symbol s) (Symbol s') -> addPEdge (makeVertex s) (makeVertex s') beforePEdges
+                CMovle' (Symbol s) (Symbol s') -> addPEdge (makeVertex s) (makeVertex s') beforePEdges
+                _ -> beforePEdges
+    where relevantVarNames = Set.map varName $ Set.filter (not . isArray) $ liveVars
+          beforePEdges = completeOnVertices relevantVarNames
 
 ------------------------------------------------------------
 -- Implement actual register allocation via graph coloring..
@@ -207,16 +209,26 @@ coalesce ig@(IG vertices iEdges pEdges) = case relevantPEdges of
 insertAllWithKey :: (Ord k) => Set k -> a -> M.Map k a -> M.Map k a
 insertAllWithKey keys val = compose $ map (\k -> M.insert k val) (toList keys)
 
-updateForSpills :: [IGVertex Var] -> LGraph Statement BranchingStatement -> LGraph Statement BranchingStatement
-updateForSpills _ = error "Not yet implemented.. cant handle spills yet.."
-
+defAllocateRegisters :: (RegisterAllocatable b) => b -> Coloring Var
 defAllocateRegisters = allocateRegisters (const 0)
 
-allocateRegisters :: (Ord b) => (IGVertex Var -> b) -> LGraph Statement BranchingStatement -> Coloring Var
+class RegisterAllocatable a where
+    computeInterferenceGraph :: a -> InterferenceGraph Var
+    updateForSpills :: [IGVertex Var] -> a -> a
+
+instance RegisterAllocatable (LGraph Statement BranchingStatement) where
+    computeInterferenceGraph = buildIGFromMidCfg
+    updateForSpills _ = error "not yet implemented"
+
+instance RegisterAllocatable (LGraph ProtoASM ProtoBranch) where
+    computeInterferenceGraph = buildIGFromLowCfg
+    updateForSpills _ = error "not yet implemented"
+
+allocateRegisters :: (Ord a, RegisterAllocatable b) => (IGVertex Var -> a) -> b -> Coloring Var
 allocateRegisters spillHeuristic cfg = case coloringOrSpills of
             Right coloring -> coloring
             Left spills -> allocateRegisters spillHeuristic (updateForSpills spills cfg)
-    where initialIG = buildInterferenceGraph cfg
+    where initialIG = computeInterferenceGraph cfg
           (simpleIG, vertexStack) = simplify spillHeuristic initialIG
           coloringOrSpills = select (iEdges simpleIG) vertexStack
           
