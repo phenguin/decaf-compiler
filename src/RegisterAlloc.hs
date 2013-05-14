@@ -165,6 +165,12 @@ subsetsOfSize :: (Ord a) => Int -> Set a -> Set (Set a)
 subsetsOfSize k xs = Set.filter (\as -> Set.size as == k) $ Set.fromList $ map Set.fromList powerset
     where powerset = filterM (const [True, False]) $ toList xs
 
+------------------------------------------------------------
+-- Implement actual register allocation via graph coloring..
+------------------------------------------------------------
+
+type Coloring a = M.Map a Color
+
 push :: a -> State [a] ()
 push x = modify (x:)
 
@@ -197,6 +203,9 @@ coalesce ig@(IG vertices iEdges pEdges) = case relevantPEdges of
           getIEdges e = Set.map (setReplace e (Set.unions (toList e))) iEdges
           getPEdges e = Set.delete e pEdges
           getNewIG e = IG (getVerts e) (getIEdges e) (getPEdges e)
+
+select :: (Ord a) => Set (IGEdge a) -> [IGVertex a] -> Maybe (Coloring a)
+select = undefined
           
 
 setReplace :: (Ord a) => Set a -> a -> Set a -> Set a
@@ -209,6 +218,7 @@ simplify spillHeuristic ig = runState (simplify' spillHeuristic ig) []
 defSimplify :: (Ord a) => InterferenceGraph a -> (InterferenceGraph a, [IGVertex a])
 defSimplify = simplify (const 1)
     
+-- TODO: Optimize this later if you have time..
 simplify' :: (Ord a, Ord b) => (IGVertex a -> b) -> InterferenceGraph a -> State [IGVertex a] (InterferenceGraph a)
 simplify' spillHeuristic ig@(IG vertices iEdges pEdges) = case Set.null vertices of
     -- If empty.. nothing to do.. proceed to coloring
@@ -233,16 +243,4 @@ simplify' spillHeuristic ig@(IG vertices iEdges pEdges) = case Set.null vertices
               -- No? Choose the one with the worst spillHeurstic and it is a potential
               -- spill candidate
               True -> (minimumBy (compare `on` spillHeuristic) $ toList simplifiable, True)
-
--- Use this like nesting level, references, etc, as a heuristic
--- to determinew which nodes to make available for spilling first
--- Smaller spillHeuristic means we should spill that node __sooner__
--- TODO: Implement this heuristic
--- spillHeuristic :: VarMarker -> LGraph m l -> Int
--- spillHeuristic _ _ = 0
-
-
-
-
-
 
