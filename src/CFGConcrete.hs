@@ -341,6 +341,9 @@ pprLGraph lgraph = vcat $ map ppr (postorderDFS lgraph)
 
 pprDetailLGraph lgraph = vcat $ map pprDetailBlock (postorderDFS lgraph)
 
+pDetail :: (Show m, Show l, HavingSuccessors l) => LGraph m l -> String
+pDetail = render . pprDetailLGraph
+
 -- Test data
 testBlock :: Block Int SuccBlocks
 testBlock = listToBlock (BID "Heyo") [1..10] Nothing

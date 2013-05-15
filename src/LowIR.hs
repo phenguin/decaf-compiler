@@ -2,6 +2,9 @@
 module LowIR where 
 
 import MidIR
+import MonadUniqueEnv
+import Control.Monad
+import Control.Monad.State
 import qualified Data.Map as M
 import Data.Generics
 import qualified Transforms 
@@ -173,28 +176,47 @@ instance LastNode ProtoBranch where
 mkTemp :: Int -> Value
 mkTemp i = (Scoped [Temp] (Symbol $ "t" ++ show i))
 
+freshTemp :: UniqStringEnv Value
+freshTemp = do
+    temp <- getUniqString "t"
+    return (Scoped [Temp] (Symbol $ temp ))
+
+lastTemp :: UniqStringEnv Value
+lastTemp = do
+    uMap <- get
+    let i = M.findWithDefault 0 "t" uMap
+    return i
+
 type LowCFG = LGraph ProtoASM ProtoBranch
 
 --toLowIRCFG :: ControlFlowGraph -> LowCFG
-toLowIRCFG cfg = mapLGraphNodes (mapStmtToAsm) (mapBranchToAsm) cfg
+toLowIRCFG cfg = removeUniqEnv $ mapLGraphNodesM mapStmtToAsm mapBranchToAsm cfg
 
 -- Converts regular statements to the pseudo-asm code
-mapStmtToAsm ::BlockId -> Statement -> [ProtoASM]
+mapStmtToAsm ::BlockId -> Statement -> UniqStringEnv [ProtoASM]
 mapStmtToAsm bid x = case x of
-        (Set var expr) -> (mapExprToAsm expr) ++ [Mov' (mkTemp 0) (mkTemp 3)] ++ (mapVarToValue var) 
-        (DVar (Var str))-> [Dec' (Symbol str)]
-        (DVar (Scopedvar scp (Var str)))-> [Dec' $ Scoped scp (Symbol str)]
-        (DVar (Varray str (Const i)))-> [Dec' (Array str (Literal i))]
-        (DVar (Scopedvar scp (Varray str (Const i))))-> [Dec' $ Scoped scp (Array str (Literal i))]
-        (DFun name ps body)-> [DFun' name $ map (Symbol . symbol) ps] ++
-				(map (\(x,y) ->(Mov' y x))(zip (map vartoval (take 6 ps)) (reverse [R9, R8, RCX, RDX, RSI, RDI]))) ++ (concatMap (\(i,x) -> [(Mov' (Stack i) (mkTemp 1)),(Mov' (mkTemp 1) x)]) $ zip [16,24..] $ map vartoval (drop 6 ps))
+        (Set var expr) -> do
+            exprAsm <- mapExprToAsm expr
+            assign <- mapVarToValue var
+            return $ exprAsm ++ assign
+        (DVar (Var str))-> return [Dec' (Symbol str)]
+        (DVar (Scopedvar scp (Var str)))-> return [Dec' $ Scoped scp (Symbol str)]
+        (DVar (Varray str (Const i)))-> return [Dec' (Array str (Literal i))]
+        (DVar (Scopedvar scp (Varray str (Const i))))-> return [Dec' $ Scoped scp (Array str (Literal i))]
+
+        (DFun name ps body)-> freshTemp >>= (\temp -> return $ [DFun' name $ map (Symbol . symbol) ps] ++
+				(map (\(x,y) ->(Mov' y x))(zip (map vartoval (take 6 ps)) (reverse [R9, R8, RCX, RDX, RSI, RDI]))) ++ 
+                (concatMap (\(i,x) -> [(Mov' (Stack i) temp),(Mov' temp x)]) $ zip [16,24..] $ map vartoval (drop 6 ps)))
 
         (Callout str param)-> protoMethodCall (FuncCall str param)
-	(Function name param) -> protoMethodCall (FuncCall name param)
-	(Break) -> [Break']-- santiago is a fucking idiot handleBreak branch 
-	(Continue) -> [Continue'] -- santiago is a fucking idiot handleContinue branch  
-	(Return expr) -> (mapExprToAsm expr)++ [Mov' (mkTemp 0) RAX] ++ [Ret']
-	_ 	-> Debug.Trace.trace ("!!STMT!" ++ (show x)) []
+        (Function name param) -> protoMethodCall (FuncCall name param)
+        Break -> return [Break']-- santiago is a fucking idiot handleBreak branch 
+        Continue -> return [Continue'] -- santiago is a fucking idiot handleContinue branch  
+        (Return expr) -> do
+            exprAsm <- mapExprToAsm expr
+            res <- lastTemp
+            return $ [Mov' res RAX, Ret']
+        _ -> Debug.Trace.trace ("!!STMT!" ++ (show x)) []
    where vartoval (Var str) = (Symbol str)
          vartoval (Scopedvar scp (Var str)) = (Scoped scp (Symbol str))
 -- failure here indicates a lastexit is thrown meaning that a break and continue
@@ -205,13 +227,26 @@ mapStmtToAsm bid x = case x of
 --	 handleBreak x = Debug.Trace.trace ("ODD!" ++ (show x)) []
 --	 handleContinue (LastOther (WhileBranch _ b1 b2)) = [(Jmp' b2)]
 --	 handleContinue (LastOther (Jump b1)) = [(Jmp' b1)]
-mapVarToValue (Var str) = [Mov' (mkTemp 3) (Symbol str)]
-mapVarToValue (Varray str expr) =   (mapExprToAsm expr) ++ [Mov' (mkTemp 3) (Array str (mkTemp 0))]
-mapVarToValue (Scopedvar scp (Var str)) = [Mov' (mkTemp 3) (Scoped scp $Symbol str)]
-mapVarToValue (Scopedvar scp (Varray str expr)) =   (mapExprToAsm expr) ++ [Mov' (mkTemp 3) (Scoped scp $Array str (mkTemp 0))]
+
+mapVarToValue :: Variable -> UniqStringEnv [ProtoASM]
+mapVarToValue (Var str) = lastTemp >>= (\res -> return [Mov' res (Symbol str)])
+mapVarToValue (Varray str expr) = do  
+        exprAsms <- mapExprToAsm expr
+        res <- lastTemp
+        ret <- freshTemp
+        return $ exprAsms ++ [Mov' res ret]
+
+mapVarToValue (Scopedvar scp (Var str)) = lastTemp >>= (\res -> return [Mov' res (Scoped scp $Symbol str)])
+
+mapVarToValue (Scopedvar scp (Varray str expr)) = do
+    exprAsm <- mapExprToAsm expr
+    res <- lastTemp
+    ret <- freshTemp
+    return $ [Mov' res (Scoped scp $ Array str ret)]
+
 mapVarToValue x = Debug.Trace.trace ("!!VAR!" ++ (show x)) [Mov' (Symbol "OHFUCK") (Symbol "ERROR")]
 
-mapExprToAsm::Expression -> [ProtoASM]
+mapExprToAsm::Expression -> UniqStringEnv [ProtoASM]
 mapExprToAsm xet = case xet of
                 (Sub x y)       -> binop (Sub') y x
                 (Add x y)       -> binop (Add') x y
@@ -227,125 +262,103 @@ mapExprToAsm xet = case xet of
                 (Eq x y)        -> comparison (CMove') x y
                 (Not x )        -> uniop (Not') x
                 (Neg x)         -> uniop (Neg') x
-                (Const i)       -> [Mov' (Literal i) (mkTemp 0)]
-                (Loc (Var x))   -> [Mov' (Symbol x) (mkTemp 0)]
-                (Loc (Scopedvar scp (Var x)))   -> [Mov' (Scoped scp (Symbol x)) (mkTemp 0)]
-                (Loc (Varray x i))-> let pi = process i in 
-					pi ++ [(Mov' (mkTemp 0) (mkTemp 1)),(Mov' (Array x (mkTemp 1)) (mkTemp 0))]
-                (Loc (Scopedvar scp (Varray x i)))-> let pi = process i in 
-					pi ++ [(Mov' (mkTemp 0) (mkTemp 1)),(Mov' (Scoped scp (Array x (mkTemp 1))) (mkTemp 0))]
-                (Str str)       -> [Mov' (EvilString str) (mkTemp 0)]
-		(FuncCall n p )	-> protoMethodCall xet ++ [Mov' RAX (mkTemp 0)]
-		_ 	-> Debug.Trace.trace ( "!EXPR!!" ++ (show xet)) []
+                (Const i)       -> freshTemp >>= (\t -> return [Mov' (Literal i) t])
+                (Loc (Var x))   -> freshTemp >>= (\t -> return [Mov' (Symbol x) t])
+                (Loc (Scopedvar scp (Var x)))   -> freshTemp >>= (\t -> return [Mov' (Scoped scp (Symbol x)) t])
+
+                (Loc (Varray x i))-> do
+                    pi <- process i
+                    res <- lastTemp
+                    ret <- freshTemp
+                    return $ pi ++ [Mov' (Array x res) ret]
+
+                (Loc (Scopedvar scp (Varray x i)))-> do
+                    pi <- process i
+                    res <- lastTemp
+                    ret <- freshTemp
+                    return $ pi ++ [Mov' (Scoped scp (Array x res)) ret]
+
+                (Str str)       -> freshTemp >>= (\t -> return [Mov' (EvilString str) t])
+
+                (FuncCall n p )	-> freshTemp >>= (\t -> return $ protoMethodCall xet ++ [Mov' RAX t])
+
+                _ 	-> Debug.Trace.trace ( "!EXPR!!" ++ (show xet)) []
                 where
-                        binop t x y = let px = process x
-                                          py = process' y in
-                                        (px
-                                         ++[Mov' (mkTemp 0) (mkTemp 1)]
-                                         ++ py
-                                         ++ [t (mkTemp 1) (mkTemp 0)])
-                        uniop t x  = let px = process x in
-                                        (px
-                                         ++ [t (mkTemp 0)])
+                        binop op x y = do
+                            px <- process x
+                            res1 <- lastTemp
+                            py <- process y
+                            res2 <- lastTemp
+                            t1 <- freshTemp
+                            t2 <- freshTemp
+                            return $ px ++ py ++ [Mov' res1 t1, 
+                                                  Mov' res2 t2, 
+                                                  op t1 t2] 
+                        uniop op x = do
+                            px <- process x
+                            res <- lastTemp
+                            ret <- freshTemp
+                            return $ px ++ [Mov' res ret, op ret]
+
                         process = mapExprToAsm
-                        process' = mapExprToAsm'
-			comparison op x y =  process x ++ [Mov' (mkTemp 0) (mkTemp 1)] ++ process' y ++  [ Cmp' (mkTemp 1)  (mkTemp 0),
-                                              Mov' (Literal 0) (mkTemp 0),
-                                              Mov' (Literal 1) (mkTemp 10),
-                                              op (mkTemp 10) (mkTemp 0) ]
-  	   		idiv y x = process x ++ [Mov' (mkTemp 0) (mkTemp 1)] ++ process' y ++ [ Mov' RAX (mkTemp 5),
-                                      Mov' RDX (mkTemp 6),
-                                      Mov' (Literal 0) RDX,
-                                      Mov' (mkTemp 0) RAX,
-				      Div' (mkTemp 1) ,
-				      Mov' RAX (mkTemp 0),
-                                      Mov' (mkTemp 5) RAX,
-                                      Mov' (mkTemp 6) RDX ]
 
+                        comparison op x y = do
+                            px <- process x
+                            res1 <- lastTemp
+                            py <- process y
+                            res2 <- lastTemp
+                            tmp <- freshTemp
+                            ret <- freshTemp
+                            return $ px ++ py ++ [Cmp' res1 res2,
+                                                  Mov' (Literal 0) ret,
+                                                  Mov' (Literal 1) tmp,
+                                                  op tmp ret]
 
-mapExprToAsm' x = case x of
-                (Sub x y)       -> binop (Sub') y x
-                (Add x y)       -> binop (Add') x y
-                (Mul x y)       -> binop (Mul') x y
-                (Div x y)       -> idiv x y
-                (And x y)       -> binop (And') x y
-                (Or x y)        -> binop (Or') x y
-                (Lt x y)        -> comparison (CMovl') x y
-                (Gt x y)        -> comparison (CMovg') x y
-                (Le x y)        -> comparison (CMovle') x y
-                (Ge x y)        -> comparison (CMovge') x y
-                (Ne x y)        -> comparison (CMovne') x y
-                (Eq x y)        -> comparison (CMove') x y
-                (Not x )        -> uniop (Not') x
-                (Neg x)         -> uniop (Neg') x
-                (Const i)       -> [Mov' (Literal i) (mkTemp 0)]
-                (Loc (Var x))   -> [Mov' (Symbol x) (mkTemp 0)]
-                (Loc (Scopedvar scp (Var x)))   -> [Mov' (Scoped scp (Symbol x)) (mkTemp 0)]
-                (Loc (Varray x i))-> let pi = process i in 
-					pi ++ [(Mov' (mkTemp 0) (mkTemp 1)),(Mov' (Array x (mkTemp 1)) (mkTemp 0))]
-                (Loc (Scopedvar scp (Varray x i)))-> let pi = process i in 
-					pi ++ [(Mov' (mkTemp 0) (mkTemp 1)),(Mov' (Scoped scp (Array x (mkTemp 1))) (mkTemp 0))]
-                (Str str)       -> [Mov' (EvilString str) (mkTemp 0)]
-		(FuncCall n p )	-> protoMethodCall x ++ [Mov' RAX (mkTemp 0)]
-		_ 	-> Debug.Trace.trace ( "!EXPR!!" ++ (show x)) []
-                where
-                        binop t x y = let px = process x
-                                          py = process' y in
-                                        (px
-                                         ++ [Mov' (mkTemp 0) (mkTemp 4)]
-                                         ++ py
-                                         ++ [t (mkTemp 4) (mkTemp 0)])
-                        uniop t x  = let px = process x in
-                                        (px
-                                         ++ [t (mkTemp 0)])
-                        process = mapExprToAsm
-                        process' = mapExprToAsm'
-			comparison op x y =  process x ++ [Mov' (mkTemp 0) (mkTemp 4)] ++ process' y ++  [ Cmp' (mkTemp 4)  (mkTemp 0),
-                                              Mov' (Literal 0) (mkTemp 0),
-                                              Mov' (Literal 1) (mkTemp 10),
-                                              op (mkTemp 10) (mkTemp 0) ]
-			idiv y x = process x ++ [Mov' (mkTemp 0) (mkTemp 4)] ++ process' y ++ [ Mov' RAX (mkTemp 5),
-                                      Mov' RDX (mkTemp 6),
-                                      Mov' (Literal 0) RDX,
-                                      Mov' (mkTemp 0) RAX,
-				      Div' (Literal 4) ,
-				      Mov' RAX (mkTemp 0),
-                                      Mov' (mkTemp 5) RAX,
-                                      Mov' (mkTemp 6) RDX ]
+                        idiv y x = do
+                                 px <- process x
+                                 res1 <- lastTemp
+                                 py <- process y
+                                 res2 <- lastTemp
+                                 tmp1 <- freshTemp
+                                 tmp2 <- freshTemp
+                                 ret <- freshTemp
+                                 return $ px ++ py ++ [ Mov' RAX tmp1,
+                                                        Mov' RDX tmp2,
+                                                        Mov' (Literal 0) RDX,
+                                                        Mov' res2 RAX,
+                                                        Div' res1,
+                                                        Mov' RAX ret,
+                                                        Mov' tmp1 RAX,
+                                                        Mov' tmp2 RDX ]
 
-
-
-
-
-
-protoMethodCall:: Expression -> [ProtoASM]
-protoMethodCall (FuncCall name midParam) =
+protoMethodCall:: Expression -> UniqStringEnv [ProtoASM]
+protoMethodCall (FuncCall name midParam) = freshTemp >>= (\tmp -> return $
     	save
-        ++ params
+        ++ makeparam tmp midParam 0
         ++ (if name == "printf" then [Mov' (Literal 0) RAX] else [])
 --	++ reverse ( take (minimum [6,(length midParam)]) ( reverse [(Pop' R9),(Pop' R8),(Pop' RCX),(Pop' RDX),(Pop' RSI),(Pop' RDI)]))
         ++ [Call' name]
         ++ [(Pop' RBX) | x<- [1..((length midParam) - 6)]]
-    	++ restore
-                where   params =  makeparam midParam 0
-                        makeparam ((Str str):xs) i =
-                                flipAfter5 i [param i $ (EvilString str) ] (makeparam xs (i+1))
-                        makeparam ((Const n):xs) i =
-                                flipAfter5 i [param i $ (Literal n)] (makeparam xs (i+1))
-                        makeparam ys i = case ys of
-                                  (x:xs) -> (mapExprToAsm x) ++ [param i (mkTemp 0)] ++ makeparam xs (i+1)
-                                  [] -> []
-                        flipAfter5 i a b
-                                | i > 5      = (b ++ a)
-                                | otherwise  = (a ++ b)
-                        param i dtsrc = case i of
-                                0 -> (Mov' dtsrc RDI)
-                                1 -> (Mov' dtsrc RSI)
-                                2 -> (Mov' dtsrc RDX)
-                                3 -> (Mov' dtsrc RCX)
-                                4 -> (Mov' dtsrc R8)
-                                5 -> (Mov' dtsrc R9)
-                                otherwise -> (Push' dtsrc)
+    	++ restore)
+    where params =  makeparam midParam 0
+          makeparam ((Str str):xs) i =
+                  flipAfter5 i [param i $ (EvilString str) ] (makeparam xs (i+1))
+          makeparam ((Const n):xs) i =
+                  flipAfter5 i [param i $ (Literal n)] (makeparam xs (i+1))
+          makeparam t ys i = case ys of
+                    (x:xs) -> (mapExprToAsm x) ++ [param i t] ++ makeparam xs (i+1)
+                    [] -> []
+          flipAfter5 i a b
+                  | i > 5      = (b ++ a)
+                  | otherwise  = (a ++ b)
+          param i dtsrc = case i of
+                  0 -> (Mov' dtsrc RDI)
+                  1 -> (Mov' dtsrc RSI)
+                  2 -> (Mov' dtsrc RDX)
+                  3 -> (Mov' dtsrc RCX)
+                  4 -> (Mov' dtsrc R8)
+                  5 -> (Mov' dtsrc R9)
+                  otherwise -> (Push' dtsrc)
 
 
 
@@ -358,33 +371,44 @@ protoMethodCall (FuncCall name midParam) =
 -- -- converts branching statements to a branch seq of asm ops and
 -- -- possibly some additional preamble.  probably will want to return
 -- -- ([], BranchSeq <stuff>)
+
 mapBranchToAsm :: BlockId-> ZLast BranchingStatement -> (([ProtoASM],[ProtoASM]), ZLast ProtoBranch)
 mapBranchToAsm bid (LastOther (IfBranch expr bid1 bid2))  
-	= (([],(expressed++[(Cmp' (Literal 0) (mkTemp 0)),(Je' bid2)])), LastOther $ If' [] [bid1, bid2])
---	= (([],[]), LastOther $ If' (expressed++[(Cmp' (Literal 0) R12),(Je' bid2)]) [bid1, bid2])
-	where expressed = mapExprToAsm expr
+	= do
+        expressed <- mapExprToAsm expr
+        tmp <- lastTemp
+        return $ (([],(expressed++[(Cmp' (Literal 0) tmp),(Je' bid2)])), LastOther $ If' [] [bid1, bid2])
 
 mapBranchToAsm bid (LastOther (Jump bid1))  = (([],[Jmp' bid1]), LastOther $ Jump' bid1)
 mapBranchToAsm bid (LastOther (WhileBranch expr bid1 bid2))  
-	= (([],expressed++[(Cmp' (Literal 0) (mkTemp 0)),(Je' bid2)]), LastOther $ While' [] [bid1, bid2])
---	= (([],expressed++[(Cmp' (Literal 0) R12),(Je' bid2)]), LastOther $ While' (expressed++[(Cmp' (Literal 0) R12 ),(Je' bid2)]) [bid1, bid2])
-	where expressed = mapExprToAsm expr
+	= do
+        expressed <- mapExprToAsm expr
+        tmp <- lastTemp
+        return $ (([],expressed++[(Cmp' (Literal 0) tmp),(Je' bid2)]), LastOther $ While' [] [bid1, bid2])
 
 mapBranchToAsm bid (LastOther (ForBranch (Var str) startexpr expr bid1 bid2))  
-	= (([], expressed++[(Cmp' (Symbol str) (mkTemp 0)),(Je' bid2)]), LastOther $ For' (Literal 0) (mapExprToAsm expr) expressed [] [bid1, bid2])
-	where expressed = mapExprToAsm expr
+	= do
+        expressed <- mapExprToAsm expr
+        tmp <- lastTemp
+        (([], expressed++[(Cmp' (Symbol str) tmp),(Je' bid2)]), LastOther $ For' (Literal 0) (mapExprToAsm expr) expressed [] [bid1, bid2])
 
 mapBranchToAsm bid (LastOther (ParaforBranch (Var str) startexpr expr bid1 bid2))  
-	= (([], expressed ++[(Cmp' (Symbol str) (mkTemp 0)),(Je' bid2)]), LastOther $ Parafor' (Literal 0) (mapExprToAsm expr)  expressed [] [bid1, bid2])
-    	 where expressed = mapExprToAsm expr
+	= do
+        expressed <- mapExprToAsm expr
+        tmp <- lastTemp
+        (([], expressed ++[(Cmp' (Symbol str) tmp),(Je' bid2)]), LastOther $ Parafor' (Literal 0) (mapExprToAsm expr)  expressed [] [bid1, bid2])
 
 mapBranchToAsm bid (LastOther (ForBranch  (Scopedvar scp (Var str)) startexpr expr bid1 bid2))  
-	= (([],(mapExprToAsm startexpr)++ expressed++[(Cmp' (Scoped scp (Symbol str)) (mkTemp 0)),(Je' bid2)] ++  (mapExprToAsm startexpr)), LastOther $ For' (Literal 0) []  expressed [] [bid1, bid2])
-   	where expressed = mapExprToAsm expr
+	= do
+        expressed <- mapExprToAsm expr
+        tmp <- LastTemp 
+        return $ (([],(mapExprToAsm startexpr)++ expressed++[(Cmp' (Scoped scp (Symbol str)) (mkTemp 0)),(Je' bid2)] ++  (mapExprToAsm startexpr)), LastOther $ For' (Literal 0) []  expressed [] [bid1, bid2])
 
 mapBranchToAsm bid (LastOther (ParaforBranch (Scopedvar scp (Var str)) startexpr expr bid1 bid2))  
-	= (([], expressed ++[(Cmp' (Scoped scp (Symbol str)) (mkTemp 0)),(Je' bid2)]), LastOther $ Parafor' (Literal 0) (mapExprToAsm startexpr)  expressed [] [bid1, bid2])
-    where expressed = mapExprToAsm expr
+	= do
+        expressed <- mapExprToAsm expr
+        tmp <- lastTemp
+        (([], expressed ++[(Cmp' (Scoped scp (Symbol str)) tmp),(Je' bid2)]), LastOther $ Parafor' (Literal 0) (mapExprToAsm startexpr)  expressed [] [bid1, bid2])
 
 
 
@@ -392,6 +416,7 @@ mapBranchToAsm bid (LastOther (ParaforBranch (Scopedvar scp (Var str)) startexpr
 mapBranchToAsm bid (LastOther (InitialBranch bids)) = (([],[]), (LastOther (InitialBranch' bids)))
 
 mapBranchToAsm bid (LastExit) = (([],[]),LastExit)
+
 
 -- Pretty Printing
 instance PrettyPrint ProtoASM where
@@ -465,17 +490,3 @@ instance PrettyPrint ProtoBranch where
     ppr (Parafor' _  _ _ stmts _) = text ""--vcat $ map ppr stmts
     ppr (InitialBranch' bids) = text "# Methods Defined:" <+> hsep (map ppr bids)
 
-{--toLowIR = lowIRProg
-
-
-lowIRPrg a statements = Prg' (lowIRGlobals DVars):(map lowIRFun DFuns)
-	where
-	  DVars = filter isDVar statements
-	  isDVar (DVar _ _) = True
-	  isDVar _ = False
-	  DFuns = filter isDFun statements
-	  isDFun (DFun _ _ _) = True
-	  isDFun _ = False 
-
-lowIRGlobals (DVar (Variable) Expression):dvars =  () 
---}

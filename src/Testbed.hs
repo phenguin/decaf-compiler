@@ -13,7 +13,7 @@ import PrettyPrint
 import ControlFlowGraph
 import Codegen
 import CFGConstruct 
-import CFGConcrete (LGraph, BlockId(..),pprDetailLGraph)
+import CFGConcrete (LGraph, BlockId(..),pprDetailLGraph, pDetail)
 import Semantics (SemanticTreeWithSymbols, addSymbolTables)
 import Transforms
 import Optimization

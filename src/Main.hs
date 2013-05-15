@@ -185,7 +185,8 @@ assembleTree configuration input = do
   -- Output goes here..
   let output = Right $ zipWith ($) ioFuncSeq $ intersperse "\n" [prolog, pPrint asm, epilog]
       -- Strings you want to output in debug mode go here.
-      debugStrings = [pPrint globals] 
+      debugStrings = [pPrint globals,
+                      pDetail optimizedLowCfg] 
   if debug configuration
 	then compose (map prependOutput debugStrings) output
  	else output
