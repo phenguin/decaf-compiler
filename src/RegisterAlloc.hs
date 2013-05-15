@@ -30,7 +30,12 @@ import DataflowAnalysis
 import Data.Char (toLower)
 
 type Var = String
-data Color = CRAX | CRBX | CRCX | CRDX | CRSP | CRBP | CRSI | CRDI | CR8 | CR9 | CR10 | CR11 | CR12 | CR13 | CR14 | CR15 deriving (Eq, Show, Ord, Enum, Data, Typeable)
+data Color = CRCX | CRDX | CRSI | CRDI | CR8 | CR9 | CRSP | CRBP | CRAX | CRBX | CR10 | CR11 | CR12 | CR13 | CR14 | CR15 deriving (Eq, Show, Ord, Enum, Data, Typeable)
+
+allColors = [CRBX .. CR15]
+
+numColors :: Integer
+numColors = fromIntegral $ length allColors
 
 colorToValue :: Color -> Value
 colorToValue CRAX = RAX
@@ -57,11 +62,6 @@ instance PrettyPrint MemLoc where
 
 instance PrettyPrint Color where
     ppr = text . ('%':) . tail . map toLower . show
-
-allColors = [CRAX .. CR15]
-
-numColors :: Integer
-numColors = fromIntegral $ length allColors
 
 -- Should be only a set of two elements.. might fix this to make it
 -- required by the type system later if it turns out to matter at all.
@@ -282,7 +282,7 @@ mkSpillTemp (VarMarker name _ scp) i = Scoped [Temp] (Symbol $ vmStr ++ "_" ++ s
           vmStr = scpStr scp ++ name
 
 updateForSpill :: LGraph ProtoASM ProtoBranch -> (VarMarker, MemLoc) -> State Int (LGraph ProtoASM ProtoBranch)
-updateForSpill graph (spillVM, BasePtrOffset i) = trace ("updateForSpill called with var: " ++ pPrint spillVM) $ res
+updateForSpill graph (spillVM, BasePtrOffset i) = res
     where mMapM = \_ asm -> case asm `usesVariable` spillVM of
                 True -> do
                     i <- get
@@ -315,7 +315,7 @@ removeRedundantMoves coloring graph = mapLGraphNodes mMap lMap graph
           isSymbol (Scoped _ (Symbol _)) = True
           isSymbol _ = False
           mMap bid stmt = case stmt of
-              Mov' v v' -> if redundant v v' then trace ("redundant" ++ pPrint (v,v')) $ [] else [stmt]
+              Mov' v v' -> if redundant v v' then [] else [stmt]
               CMove' v v' -> if redundant v v' then [] else [stmt]
               CMovne' v v' -> if redundant v v' then [] else [stmt]
               CMovl' v v' -> if redundant v v' then [] else [stmt]
@@ -348,12 +348,11 @@ select' graph colorMap = do
                                        concat $ map toList $ toList $
                                        neighbors v graph
                       availColors = allColors \\ neighborColors 
-                      -- TODO: Remove trace
-                      graph' = trace (show (v, degree v graph)) $ addVertex v graph
+                      graph' = addVertex v graph
                       BasePtrOffset curBPMax = if null spilled then BasePtrOffset 1 else maximum $ map snd spilled
                       in
                   if null availColors then
-                                      trace ("spill:" ++ pPrint v) $ pushRight (v, BasePtrOffset (curBPMax+1)) >> select' graph' colorMap
+                                      pushRight (v, BasePtrOffset (curBPMax+1)) >> select' graph' colorMap
                                       else
                                       select' graph' (insertAllWithKey v (head availColors) colorMap)
 
