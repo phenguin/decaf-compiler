@@ -239,7 +239,14 @@ coalesce ig@(IG vertices iEdges pEdges) = case relevantPEdges of
           edgeDeg edge = foldr (+) 0 $ map ((flip degree) ig) (toList edge)
           getVerts e = Set.insert (Set.unions (toList e)) $ Set.difference vertices e
           getIEdges e = Set.map (setReplace e (Set.unions (toList e))) iEdges
-          getPEdges e = Set.delete e pEdges
+          getPEdges e = Set.union inheritedPEdges $ Set.delete e pEdges
+            where inheritedEdgesFor v = if all (\v' -> (fromList [v, v']) `Set.member` pEdges) endpts
+                                          then
+                                          Set.singleton $ fromList [v, (Set.unions (toList e))]
+                                          else
+                                          Set.empty
+                  inheritedPEdges = Set.unions $ map inheritedEdgesFor $ toList (getVerts e)
+                  endpts = toList e
           getNewIG e = IG (getVerts e) (getIEdges e) (getPEdges e)
 
 
@@ -254,7 +261,7 @@ vmSpillHeuristic ig vmSet = (maxNesting, totalNesting, -1 * totalDegree)
           totalDegree = sum $ map ((flip degree) ig) $ map makeVertex vms
 
 
-defAllocateRegisters :: (RegisterAllocatable b) => b -> Coloring VarMarker
+defAllocateRegisters :: (PrettyPrint b, RegisterAllocatable b) => b -> Coloring VarMarker
 defAllocateRegisters = allocateRegisters vmSpillHeuristic
 
 class RegisterAllocatable a where
@@ -267,7 +274,7 @@ instance RegisterAllocatable (LGraph Statement BranchingStatement) where
 
 instance RegisterAllocatable (LGraph ProtoASM ProtoBranch) where
     computeInterferenceGraph = buildIGFromLowCfg
-    updateForSpills spilled graph = fst $ runState resM 0
+    updateForSpills spilled graph = trace (pPrint $ augmentWithDFR lowLVAnalysis graph) $ fst $ runState resM 0
         where flattener (xs, y) = zip xs (repeat y)
               spilled' = concatMap (flattener . mapFst toList) spilled
               resM = foldM updateForSpill graph $ spilled'
@@ -282,7 +289,7 @@ mkSpillTemp (VarMarker name _ scp) i = Scoped [Temp] (Symbol $ vmStr ++ "_" ++ s
           vmStr = scpStr scp ++ name
 
 updateForSpill :: LGraph ProtoASM ProtoBranch -> (VarMarker, MemLoc) -> State Int (LGraph ProtoASM ProtoBranch)
-updateForSpill graph (spillVM, BasePtrOffset i) = res
+updateForSpill graph (spillVM, BasePtrOffset i) = trace ("Spilled: " ++ pPrint spillVM) $ res
     where mMapM = \_ asm -> case asm `usesVariable` spillVM of
                 True -> do
                     i <- get
@@ -325,7 +332,7 @@ removeRedundantMoves coloring graph = mapLGraphNodes mMap lMap graph
               _ -> [stmt]
           lMap bid zl = (([],[]), zl)
 
-allocateRegisters :: (Ord a, RegisterAllocatable b) => (InterferenceGraph VarMarker -> IGVertex VarMarker -> a) -> b -> Coloring VarMarker
+allocateRegisters :: (Ord a, RegisterAllocatable b, PrettyPrint b) => (InterferenceGraph VarMarker -> IGVertex VarMarker -> a) -> b -> Coloring VarMarker
 allocateRegisters spillHeuristic cfg = case coloringOrSpills of
             Right coloring -> coloring
             Left spills -> allocateRegisters spillHeuristic (updateForSpills spills cfg)

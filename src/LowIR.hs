@@ -96,7 +96,7 @@ usesVariable :: (Data a) => a -> VarMarker -> Bool
 usesVariable x vm = everything (||) (False `mkQ` (selectVarByName vm)) x
 
 replaceValinStmt :: (Data a) => VarMarker -> Value -> a -> a
-replaceValinStmt vm repVal = everywhere (mkT (replaceValWithVal vm repVal))
+replaceValinStmt vm repVal = everywhere' (mkT (replaceValWithVal vm repVal))
 
 replaceValWithVal :: VarMarker -> Value -> Value -> Value
 replaceValWithVal vm repVal val = case val == vmToVal vm of

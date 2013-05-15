@@ -72,10 +72,10 @@ isScoped (VarMarker _ _ []) = False
 isScoped _ = True
 
 instance PrettyPrint VarMarker where
-    ppr (VarMarker name Transforms.Single []) = text name
-    ppr (VarMarker name Transforms.Single scope) = (text . show) scope <+> text name
-    ppr (VarMarker name (Transforms.Array _) []) = text name <> lbrack <> rbrack
-    ppr (VarMarker name (Transforms.Array _) scope) = (text . show) scope <+> text name <> lbrack <> rbrack
+    ppr (VarMarker name Transforms.Single _) = text name
+    -- ppr (VarMarker name Transforms.Single scope) = (text . show) scope <+> text name
+    ppr (VarMarker name (Transforms.Array _) _) = text name <> lbrack <> rbrack
+    -- ppr (VarMarker name (Transforms.Array _) scope) = (text . show) scope <+> text name <> lbrack <> rbrack
 
 symbol :: Variable -> String
 symbol (Scopedvar _ v) = symbol v
