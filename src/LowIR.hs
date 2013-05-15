@@ -2,7 +2,7 @@
 module LowIR where 
 
 import MidIR
-import qualified Data.Map 
+import qualified Data.Map as M
 import Data.Generics
 import qualified Transforms 
 import ControlFlowGraph
@@ -108,9 +108,41 @@ vmToVal (VarMarker s Transforms.Single scp) = Scoped scp (Symbol s)
 -- TODO: Is this correct behavior? Dont have enough info to reconstruct
 vmToVal (VarMarker s (Transforms.Array _) scp) = Scoped scp (Array s (Literal 0))
 
-
 selectVarByName :: VarMarker -> Value -> Bool
 selectVarByName vm val = val == vmToVal vm
+
+maxStackOffsetForFunction :: (Data a) => String -> a -> Int
+maxStackOffsetForFunction fName struct = ((-1)*) $ (maximum $ functionStackOffsets struct) `div` 8
+    where functionStackOffsets = everything (++) ([] `mkQ` (selectStackOffset fName))
+
+selectStackOffset :: String -> Value -> [Int] 
+selectStackOffset fName (Scoped scope (Stack i)) = case (Func fName) `elem` scope of
+    True -> [i]
+    False -> []
+selectStackOffset _ _ = []
+
+setStacksizeForFunction :: (LastNode l, Data l) => String -> LGraph ProtoASM l -> LGraph ProtoASM l
+setStacksizeForFunction fName lgraph = mapLGraphNodes mMap lMap lgraph
+    where mMap (BID fName) (Enter' _) = [Enter' correctSize]
+          mMap bid other = [other]
+          lMap _ zl = (([],[]), zl)
+          correctSize = maxStackOffsetForFunction fName lgraph
+
+autoSetFunctionStackSpace :: LGraph ProtoASM ProtoBranch -> LGraph ProtoASM ProtoBranch
+autoSetFunctionStackSpace lgraph = foldr setStacksizeForFunction lgraph (allFunctionNames lgraph)
+
+-- Soooo type safe...
+allFunctionNames :: LGraph ProtoASM ProtoBranch -> [String]
+allFunctionNames lgraph = res
+    where bid = lgEntry lgraph
+          block = case M.lookup bid (lgBlocks lgraph) of
+              Nothing -> error "Malformed Control Flow Graph"
+              Just b -> b
+          blockList = case getZLast block of
+                (LastOther (InitialBranch' bList)) -> bList
+                _ -> error "Malformed CFG entry block"
+          res = map getStr blockList
+
 
 newtype ProtoASMList = ProtoASMList [ProtoASM]
 
@@ -421,7 +453,7 @@ instance PrettyPrint Value where
             R13 -> text "%r13"
             R14 -> text "%r14"
             R15 -> text "%r15"
-            Scoped scope v -> (text.show) scope <+> ppr v
+            Scoped scope v -> ppr v
             _ 			-> text (show x)
 
 

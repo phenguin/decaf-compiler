@@ -372,10 +372,18 @@ lowLVUpdateM stmt prevState = Set.union used prevMinusDef
     where used = varsUsedInProtoStmt stmt
           prevMinusDef = Set.difference prevState (varsDefinedInProtoStmt stmt)
 
+-- TODO: Talk with santiago and make sure this is actually the semantics of these things..
 lowLVUpdateL :: ProtoBranch -> LiveVarState -> LiveVarState
-lowLVUpdateL bStmt prevState = Set.union used prevMinusDef
-    where used = varsUsedInProtoBranch bStmt
-          prevMinusDef = Set.difference prevState (varsDefinedInProtoBranch bStmt)
+lowLVUpdateL bStmt prevState = case bStmt of
+        If' asms bids -> foldAsms asms
+        While' asms bids -> foldAsms asms
+        -- TODO: Check on how structure relates to for loop semantics
+        For' v asms1 asms2 asms3 bids -> Set.unions $ map foldAsms [asms1, asms2, asms3]
+        Parafor' v asms1 asms2 asms3 bids -> Set.unions $ map foldAsms [asms1, asms2, asms3]
+        InitialBranch' bids -> prevState
+        Jump' _ -> prevState
+        Nil -> prevState
+    where foldAsms = foldr lowLVUpdateM prevState
 
 varsDefinedInProtoStmt :: ProtoASM -> Set VarMarker
 varsDefinedInProtoStmt stmt = case stmt of
@@ -430,5 +438,5 @@ varsUsedInProtoStmt stmt = case stmt of
 
 varsUsedInProtoBranch :: ProtoBranch -> Set VarMarker
 -- TODO: SO WRONG!! FIX ME!!
-varsUsedInProtoBranch _ = Set.empty
+varsUsedInProtoBranch bStmt = Set.empty
 
