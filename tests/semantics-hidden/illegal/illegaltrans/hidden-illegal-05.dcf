@@ -1,9 +1,0 @@
-// 5. The types of arguments must match those in the method signature
-void foo ( int i ) {
-}
-void main ( ) {
-  boolean b;
-  int i;
-  i = 0;
-  foo ( ( i + 5 ) < 3 );
-}

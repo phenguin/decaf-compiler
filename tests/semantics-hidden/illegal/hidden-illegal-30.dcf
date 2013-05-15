@@ -1,4 +1,3 @@
-// Must return value from a non-void method.
 // 9. An <id> used as a <location> must name a declared local/global variable
 // or formal parameter.
 int foo ( ) {

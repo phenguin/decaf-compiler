@@ -1,4 +1,0 @@
-// 2. No identifier can be used before it is declared 
-void main ( ) {
-  x = 3;
-}

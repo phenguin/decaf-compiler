@@ -1,6 +1,7 @@
 callout printf;
 void main ( ) {
   int x;
+  int j,k;
   for ( j = 0, 15 ) {
     if ( j == 2 ) {
       continue;

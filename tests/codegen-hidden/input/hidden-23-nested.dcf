@@ -10,7 +10,6 @@ void func1 ( ) {
       printf("Fail");
     }
     A[i] = a + i;
-    printf("%d\n", A[i]);
   }
 
   for ( i = 0, 10) {

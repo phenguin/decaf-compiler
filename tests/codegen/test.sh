@@ -1,7 +1,7 @@
-#!/bin/sh
+#!/bin/bash
 
 runcompiler() {
-   ./run.sh -target=assembly -opt=all -o $2 $1
+    $(git rev-parse --show-toplevel)/run.sh --opt=all --target=assembly -o $2 $1
 }
 
 fail=0
@@ -12,19 +12,25 @@ if ! gcc -v 2>&1 |grep -q '^Target: x86_64-linux-gnu'; then
 fi
 
 for file in `dirname $0`/input/*.dcf; do
+  echo "Running file $file"
   asm=`tempfile --suffix=.s`
   msg=""
-  if runcompiler $file $asm; then
+  if runcompiler $file $asm 2>&1 >/dev/null; then
     binary=`tempfile`
-    if gcc -o $binary -L `dirname $0`/lib -l6035 $asm; then
+    if gcc -o $binary -L `dirname $0`/lib -l6035 $asm 2>&1 >/dev/null; then
       output=`tempfile`
-      if $binary > $output; then
-        diffout=`tempfile`
-        if ! diff -u $output `dirname $0`/output/`basename $file`.out > $diffout; then
-          msg="File $file output mismatch.";
+      $binary > $output
+      exitcode=$?
+      diffout=`tempfile`
+      if [ -f `dirname $0`/error/`basename $file`.err ]; then
+        val=$(<`dirname $0`/error/`basename $file`.err)
+        if [ "$val" != "$exitcode" ]; then
+          msg="Program did not exit with exit status $val"
         fi
       else
-        msg="Program failed to run.";
+        if ! diff -u $output `dirname $0`/output/`basename $file`.out > $diffout 2>/dev/null; then
+          msg="File $file output mismatch.";
+        fi
       fi
     else
       msg="Program failed to assemble.";
@@ -34,12 +40,6 @@ for file in `dirname $0`/input/*.dcf; do
   fi
   if [ ! -z "$msg" ]; then
     fail=1
-    echo $file
-    if [ ! -z "$diffout" ]; then
-      cat $diffout
-    elif [ ! -z "$output" ]; then
-      cat $output
-    fi
     echo $msg
   fi
   rm -f $diffout $output $binary $asm;
