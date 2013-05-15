@@ -179,12 +179,12 @@ hungryLogic instr = case instr of   -- [(ADD) (EVICT)]
 		(Add' v1 v2)	->	[[v1,v2],[]]
 		(Sub' v1 v2)	->	[[v1,v2],[]]
 		(Mul' v1 v2)	->	[[v1,v2],[]]
-		(Div' v1 v2)	->	[[v1,v2],[]]
-		(Lt'   v1 v2)	->	[[v1,v2],[]]
-		(Gt'   v1 v2)	->	[[v1,v2],[]]
-		(Le'   v1 v2)	->	[[v1,v2],[]]
-		(Ge'   v1 v2)	->	[[v1,v2],[]]
-		(Eq'   v1 v2)	->	[[v1,v2],[]]
+		(Div' v1)	->	[[v1],[]]
+		(CMovl'   v1 v2)	->	[[v1,v2],[]]
+		(CMovg'   v1 v2)	->	[[v1,v2],[]]
+		(CMovle'   v1 v2)	->	[[v1,v2],[]]
+		(CMovge'   v1 v2)	->	[[v1,v2],[]]
+		(CMove'   v1 v2)	->	[[v1,v2],[]]
 		(Ne'   v1 v2)	->	[[v1,v2],[]]
 		(DFun' _ vs)	->	[[],[]]
 		(Not'  v)	-> 	[[v],[]] 
@@ -241,12 +241,12 @@ valuesNoStack instr = case instr of
 		(Add' v1 v2)	->	[v1,v2]
 		(Sub' v1 v2)	->	[v1,v2]
 		(Mul' v1 v2)	->	[v1,v2]
-		(Div' v1 v2)	->	[v1,v2]
-		(Lt'   v1 v2)	->	[v1,v2]
-		(Gt'   v1 v2)	->	[v1,v2]
-		(Le'   v1 v2)	->	[v1,v2]
-		(Ge'   v1 v2)	->	[v1,v2]
-		(Eq'   v1 v2)	->	[v1,v2]
+		(Div' v1)	->	[v1]
+		(CMovl'   v1 v2)	->	[v1,v2]
+		(CMovg'   v1 v2)	->	[v1,v2]
+		(CMovle'   v1 v2)	->	[v1,v2]
+		(CMovge'   v1 v2)	->	[v1,v2]
+		(CMove'   v1 v2)	->	[v1,v2]
 		(Ne'   v1 v2)	->	[v1,v2]
 		(DFun' _ vs)	->	vs
 		(Not'  v)	-> 	[v] 
@@ -465,12 +465,12 @@ fixInstructionInputs fix instr = [output]
 					(Add' v1 v2)	->	(Add' (fix v1) (fix v2))
 					(Sub' v1 v2)	->	(Sub' (fix v1) (fix v2))
 					(Mul' v1 v2)	->	(Mul' (fix v1) (fix v2))
-					(Div' v1 v2)	->	(Div' (fix v1) (fix v2))
-					(Lt'   v1 v2)	->	(Lt'   (fix v1) (fix v2))
-					(Gt'   v1 v2)	->	(Gt'   (fix v1) (fix v2))
-					(Le'   v1 v2)	->	(Le'   (fix v1) (fix v2))
-					(Ge'   v1 v2)	->	(Ge'   (fix v1) (fix v2))
-					(Eq'   v1 v2)	->	(Eq'   (fix v1) (fix v2))
+					(Div' v1)	->	(Div' (fix v1) )
+					(CMovl'   v1 v2)	->	(CMovl'   (fix v1) (fix v2))
+					(CMovg'   v1 v2)	->	(CMovg'   (fix v1) (fix v2))
+					(CMovle'   v1 v2)	->	(CMovle'   (fix v1) (fix v2))
+					(CMovge'   v1 v2)	->	(CMovge'   (fix v1) (fix v2))
+					(CMove'   v1 v2)	->	(CMove'   (fix v1) (fix v2))
 					(DFun'   name vs)	->	DFun' name $ map fix vs
 					(Ne'   v1 v2)	->	(Ne'   (fix v1) (fix v2))
 					(Not'  v)	->	(Not'  (fix v))
@@ -498,12 +498,12 @@ values instr = case instr of
 		(Add' v1 v2)	->	[v1,v2]
 		(Sub' v1 v2)	->	[v1,v2]
 		(Mul' v1 v2)	->	[v1,v2]
-		(Div' v1 v2)	->	[v1,v2]
-		(Lt'   v1 v2)	->	[v1,v2]
-		(Gt'   v1 v2)	->	[v1,v2]
-		(Le'   v1 v2)	->	[v1,v2]
-		(Ge'   v1 v2)	->	[v1,v2]
-		(Eq'   v1 v2)	->	[v1,v2]
+		(Div' v1)	->	[v1]
+		(CMovl'   v1 v2)	->	[v1,v2]
+		(CMovg'   v1 v2)	->	[v1,v2]
+		(CMovle'   v1 v2)	->	[v1,v2]
+		(CMovge'   v1 v2)	->	[v1,v2]
+		(CMove'   v1 v2)	->	[v1,v2]
 		(Ne'   v1 v2)	->	[v1,v2]
 		(DFun' _ vs)	->	vs
 		(Not'  v)	-> 	[v] 
@@ -561,12 +561,12 @@ graftBlocks cfg = mapLGraphNodes ( values ) (\ _ x -> (([],[]),x)) cfg
 					(Add' v1 v2)	->	(Add' (fix v1) (fix v2))
 					(Sub' v1 v2)	->	(Sub' (fix v1) (fix v2))
 					(Mul' v1 v2)	->	(Mul' (fix v1) (fix v2))
-					(Div' v1 v2)	->	(Div' (fix v1) (fix v2))
-					(Lt'   v1 v2)	->	(Lt'   (fix v1) (fix v2))
-					(Gt'   v1 v2)	->	(Gt'   (fix v1) (fix v2))
-					(Le'   v1 v2)	->	(Le'   (fix v1) (fix v2))
-					(Ge'   v1 v2)	->	(Ge'   (fix v1) (fix v2))
-					(Eq'   v1 v2)	->	(Eq'   (fix v1) (fix v2))
+					(Div' v1)	->	(Div' (fix v1))
+					(CMovl'   v1 v2)	->	(CMovl'   (fix v1) (fix v2))
+					(CMovg'   v1 v2)	->	(CMovg'   (fix v1) (fix v2))
+					(CMovle'   v1 v2)	->	(CMovle'   (fix v1) (fix v2))
+					(CMovge'   v1 v2)	->	(CMovge'   (fix v1) (fix v2))
+					(CMove'   v1 v2)	->	(CMove'   (fix v1) (fix v2))
 					(Ne'   v1 v2)	->	(Ne'   (fix v1) (fix v2))
 					(Not'  v)	->	(Not'  (fix v))
 					(Call' _)   	->	instr

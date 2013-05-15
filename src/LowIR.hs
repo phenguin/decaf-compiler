@@ -29,7 +29,7 @@ data ProtoASM = Dec' Value
 	| Add' Value Value
 	| Sub' Value Value
 	| Mul' Value Value
-	| Div' Value Value
+	| Div' Value
 	| Lt'   Value Value
 	| Gt'   Value Value
 	| Le'   Value Value
@@ -183,7 +183,7 @@ mapExprToAsm xet = case xet of
                 (Sub x y)       -> binop (Sub') y x
                 (Add x y)       -> binop (Add') x y
                 (Mul x y)       -> binop (Mul') x y
-                (Div x y)       -> binop (Div') x y
+                (Div x y)       -> idiv x y
                 (And x y)       -> binop (And') x y
                 (Or x y)        -> binop (Or') x y
                 (Lt x y)        -> binop (Lt') x y
@@ -216,20 +216,33 @@ mapExprToAsm xet = case xet of
                                          ++ [t (mkTemp 0)])
                         process = mapExprToAsm
                         process' = mapExprToAsm'
+			comparison op x y =  process x ++ [Mov' (mkTemp 0) (mkTemp 1)] ++ process' y ++  [ Cmp' (mkTemp 1)  (mkTemp 0),
+                                              Mov' (Literal 0) (mkTemp 0),
+                                              Mov' (Literal 1) RBX,
+                                              op RBX (mkTemp 0) ]
+  	   		idiv x y = process x ++ [Mov' (mkTemp 0) (mkTemp 1)] ++ process' y ++ [ Mov' RAX (mkTemp 5),
+                                      Mov' RDX (mkTemp 6),
+                                      Mov' (Literal 0) RDX,
+                                      Mov' (mkTemp 0) RAX,
+				      Div' (Literal 3) ,
+				      Mov' RAX (mkTemp 0),
+                                      Mov' (mkTemp 5) RAX,
+                                      Mov' (mkTemp 6) RDX ]
+
 
 mapExprToAsm' x = case x of
                 (Sub x y)       -> binop (Sub') y x
                 (Add x y)       -> binop (Add') x y
                 (Mul x y)       -> binop (Mul') x y
-                (Div x y)       -> binop (Div') x y
+                (Div x y)       -> idiv x y
                 (And x y)       -> binop (And') x y
                 (Or x y)        -> binop (Or') x y
-                (Lt x y)        -> binop (Lt') x y
-                (Gt x y)        -> binop (Gt') x y
-                (Le x y)        -> binop (Le') x y
-                (Ge x y)        -> binop (Ge') x y
-                (Ne x y)        -> binop (Ne') x y
-                (Eq x y)        -> binop (Eq') x y
+                (Lt x y)        -> comparison (Lt') x y
+                (Gt x y)        -> comparison (Gt') x y
+                (Le x y)        -> comparison (Le') x y
+                (Ge x y)        -> comparison (Ge') x y
+                (Ne x y)        -> comparison (Ne') x y
+                (Eq x y)        -> comparison (Eq') x y
                 (Not x )        -> uniop (Not') x
                 (Neg x)         -> uniop (Neg') x
                 (Const i)       -> [Mov' (Literal i) (mkTemp 0)]
@@ -254,6 +267,22 @@ mapExprToAsm' x = case x of
                                          ++ [t (mkTemp 0)])
                         process = mapExprToAsm
                         process' = mapExprToAsm'
+			comparison op x y =  process x ++ [Mov' (mkTemp 0) (mkTemp 4)] ++ process' y ++  [ Cmp' (mkTemp 4)  (mkTemp 0),
+                                              Mov' (Literal 0) (mkTemp 0),
+                                              Mov' (Literal 1) RBX,
+                                              op RBX (mkTemp 0) ]
+			idiv x y = process x ++ [Mov' (mkTemp 0) (mkTemp 4)] ++ process' y ++ [ Mov' RAX (mkTemp 5),
+                                      Mov' RDX (mkTemp 6),
+                                      Mov' (Literal 0) RDX,
+                                      Mov' (mkTemp 0) RAX,
+				      Div' (Literal 3) ,
+				      Mov' RAX (mkTemp 0),
+                                      Mov' (mkTemp 5) RAX,
+                                      Mov' (mkTemp 6) RDX ]
+
+
+
+
 
 
 protoMethodCall:: Expression -> [ProtoASM]
@@ -337,15 +366,9 @@ instance PrettyPrint ProtoASM where
                 (Sub' x y)       -> binop "sub" x y
                 (Add' x y)       -> binop "add" x y
                 (Mul' x y)       -> binop "imul" x y
-                (Div' x y)       -> idiv x y
+                (Div' x)         -> uniop "idiv" x 
                 (And' x y)       -> binop "and" x y
                 (Or' x y)        -> binop "or" x y
-                (Lt' x y)        -> comparison CMovl' x y
-                (Gt' x y)        -> comparison CMovg' x y
-                (Le' x y)        -> comparison CMovle' x y
-                (Ge' x y)        -> comparison CMovge' x y
-                (Ne' x y)        -> comparison CMovne' x y
-                (Eq' x y)        -> comparison CMove' x y
                 (DFun' name params)        -> text "# Function Declaration: " <> text name
                 (Not' x )        -> uniop "not" x
                 (Neg' x)         -> uniop "neg" x
@@ -368,19 +391,8 @@ instance PrettyPrint ProtoASM where
                 (Enter' x) 	 -> text ("enter $(8*"++(show x)++") , $0 ")
 		_ 		 -> Debug.Trace.trace ("!ppr!!!" ++ (show asm)) (text "@@")
 	  where 
-  	    binop name x y = text (name++" ") <+> (ppr x) <+> text"," <+> (ppr y) 
-  	    comparison op x y = vcat $ map ppr $ [ Cmp' x y,
-                                              Mov' (Literal 0) (mkTemp 0),
-                                              Mov' (Literal 1) RBX,
-                                              op RBX (mkTemp 0) ]
 	    uniop name x  = text name <+> (ppr x)  
-  	    idiv x y = (vcat $ map ppr $ [ Mov' RAX (mkTemp 5),
-                                      Mov' RDX (mkTemp 6),
-                                      Mov' (Literal 0) RDX,
-                                      Mov' x RAX ]) $$ text "idiv" <+> ppr y $$ 
-                   (vcat $ map ppr $ [ Mov' RAX (mkTemp 0),
-                                      Mov' (mkTemp 5) RAX,
-                                      Mov' (mkTemp 6) RDX ])
+  	    binop name x y = text (name++" ") <+> (ppr x) <+> text"," <+> (ppr y) 
 
 instance PrettyPrint Value where
 	ppr x = case x of 
