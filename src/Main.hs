@@ -160,15 +160,15 @@ assembleTree configuration input = do
   let irTree = convert parseTree 
   let irTreeWithST = addSymbolTables irTree 
   let midir = MidIR.toMidIR irTreeWithST
-  let paramidir = treeParallelize midir
-  let globals = MidIR.scrapeGlobals paramidir
-  let cfg = makeCFG paramidir
+  --let paramidir = treeParallelize midir
+  let globals = MidIR.scrapeGlobals midir ---paramidir
+  let cfg = makeCFG midir
   let funmap = getFunctionParamMap $lgraphFromAGraph  cfg
   let midcfg = lgraphSpanningFunctions cfg
   let	scopedcfg  = scopeMidir midcfg globals funmap
   -- Should make interface to parallelize as just a regular 
   -- optimization if possible
-  let	parallelcfg  = parallelize scopedcfg
+--  let	parallelcfg  = parallelize scopedcfg
   let (runChosenLowIROpts,runChosenMidIROpts) = if opt configuration == Some [] 
                               then
                               (id,id)
@@ -187,8 +187,8 @@ assembleTree configuration input = do
   -- Output goes here..
   let output = trace (show $ opt configuration) $ Right $ zipWith ($) ioFuncSeq $ intersperse "\n" [prolog, pPrint asm, epilog]
       -- Strings you want to output in debug mode go here.
-      debugStrings = [pPrint $ defAllocateRegisters optimizedLowCfg,
-                      pPrint $ computeInterferenceGraph optimizedLowCfg]
+      debugStrings = [] --pPrint $ defAllocateRegisters optimizedLowCfg,
+        ---              pPrint $ computeInterferenceGraph optimizedLowCfg]
   if debug configuration
 	then compose (map prependOutput debugStrings) output
  	else output
