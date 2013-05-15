@@ -14,6 +14,7 @@ module Main where
 import Prelude hiding (readFile)
 import qualified Prelude
 
+import Debug.Trace (trace)
 import Util (compose)
 import Codegen
 import ControlFlowGraph (BranchingStatement,makeCFG,getFunctionParamMap,lgraphSpanningFunctions)
@@ -141,16 +142,15 @@ checkSemantics configuration input = do
           True -> prependOutput (pPrint irTree) output
 
 
-type Opt m l = LGraph m l -> LGraph m l
 -- List all optimizations you want to run in the specified order here
 
 midIROpts :: [Opt Statement BranchingStatement]
-midIROpts = [optGlobalCSE]
+midIROpts = [optGlobalCSE, untilStable optMidIrDeadCodeElim]
 
 runChosenMidIROpts = compose midIROpts
 
 lowIROpts :: [Opt ProtoASM ProtoBranch]
-lowIROpts = []
+lowIROpts = [untilStable optLowIrDeadCodeElim]
 
 runChosenLowIROpts = compose lowIROpts
 
@@ -177,7 +177,16 @@ assembleTree configuration input = do
   let optimizedLowCfg = runChosenLowIROpts lowIRCfg
   let lowCfgRegAllocated = doRegisterAllocation optimizedLowCfg
   let (prolog, asm, epilog) = navigate globals funmap lowCfgRegAllocated
+
+  let ioFuncSeq = case outputFileName configuration of
+                    Nothing -> repeat putStrLn
+                    Just fp -> (writeFile fp):(repeat $ appendFile fp)
+
+  -- Output goes here..
+  let output = Right $ zipWith ($) ioFuncSeq [prolog, pPrint asm, epilog]
+      -- Strings you want to output in debug mode go here.
+      debugStrings = [pPrint $ defAllocateRegisters optimizedLowCfg]
   if debug configuration
-	then Right $ [putStrLn prolog,pprIO asm, putStrLn epilog]
- 	else Right [return ()]
+	then compose (map prependOutput debugStrings) output
+ 	else output
       

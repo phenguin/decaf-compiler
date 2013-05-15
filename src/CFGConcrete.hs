@@ -50,6 +50,34 @@ data ZTail m l = ZLast (ZLast l)
 data Block m l = Block { bId :: BlockId,
                          bTail :: ZTail m l } deriving (Show, Data, Typeable)
 
+class DeepEq a where
+    deepEq :: a -> a -> Bool
+    deepNeq :: a -> a -> Bool
+    deepNeq x = not . (deepEq x)
+    deepEq x = not . (deepNeq x)
+
+instance (Eq m, Eq l) => DeepEq (Block m l) where
+    (Block bid zt) `deepEq` (Block bid' zt') = (bid == bid') && (zt == zt')
+
+instance DeepEq (BlockId) where
+    (BID s) `deepEq` (BID s') = s == s'
+
+instance (DeepEq a, DeepEq b) => DeepEq (a,b) where
+    (x,y) `deepEq` (x', y') = (x `deepEq` x') && (y `deepEq` y')
+
+instance (DeepEq k, DeepEq a) => DeepEq (M.Map k a) where
+    map1 `deepEq` map2 = M.size map1 == M.size map2 && M.toAscList map1 `deepEq` M.toAscList map2
+
+instance (DeepEq a) => DeepEq [a] where
+    [] `deepEq` [] = True
+    (x:xs) `deepEq` [] = False
+    [] `deepEq` (y:ys) = False
+    (x:xs) `deepEq` (y:ys) = (x `deepEq` y) && (xs `deepEq` ys)
+
+instance (Eq m, Eq l) => DeepEq (LGraph m l) where
+    (LGraph e blocks) `deepEq` (LGraph e' blocks') = e == e' && blocks `deepEq` blocks'
+
+
 instance Eq (Block m l) where
     (Block bid1 _) == (Block bid2 _) = bid1 == bid2
 

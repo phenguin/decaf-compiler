@@ -31,10 +31,17 @@ data Optimization m l s = Opt {
     lTransform :: s -> s -> ZLast l -> ([m], ZLast l)
     }
 
+type Opt m l = LGraph m l -> LGraph m l
+
+-- Cause an optimization to keep running until it reaches a fixed point on the CFG in question
+untilStable :: (Eq m, Eq l) => Opt m l -> Opt m l
+untilStable opt lgraph = if lgraph' `deepEq` lgraph then lgraph' else (untilStable opt) lgraph'
+    where lgraph' = opt lgraph
+
 runOpt :: (Eq s, PrettyPrint s, PrettyPrint l, PrettyPrint m, LastNode l) => 
     Optimization m l s -> LGraph m l -> LGraph m l
 
-runOpt (Opt dfa@(DFAnalysis updateM updateL _ _ dir) mTrans lTrans) lg@(LGraph entryId bLookup) = LGraph entryId bLookup'
+runOpt (Opt dfa@(DFAnalysis updateM updateL _ _ Forward) mTrans lTrans) lg@(LGraph entryId bLookup) = LGraph entryId bLookup'
     where DFR _ sLookup = runAnalysis dfa lg
           bLookup' = M.map mapping_f bLookup
 
@@ -43,7 +50,7 @@ runOpt (Opt dfa@(DFAnalysis updateM updateL _ _ dir) mTrans lTrans) lg@(LGraph e
                                       Just s -> Block bid $ ztailFromMiddles (mids ++ mids') zlast
             where maybeInS = M.lookup bid sLookup
                   -- Dont use fromJust here.. temporary for now
-                  blkMids = if dir == Forward then blockMiddles blk else reverse (blockMiddles blk)
+                  blkMids = blockMiddles blk
                   (mids, outS) = runState (foldM foldF [] blkMids) (fromJust maybeInS)
                   outS' = case getZLast blk of
                       LastExit -> outS
@@ -55,6 +62,27 @@ runOpt (Opt dfa@(DFAnalysis updateM updateL _ _ dir) mTrans lTrans) lg@(LGraph e
                       put s'
                       return $ acc ++ (mTrans s s' m)
 
+runOpt (Opt dfa@(DFAnalysis updateM updateL _ _ Backward) mTrans lTrans) lg@(LGraph entryId bLookup) = LGraph entryId bLookup'
+    where DFR _ sLookup = runAnalysis dfa lg
+          bLookup' = M.map mapping_f bLookup
+
+          mapping_f blk@(Block bid zt) = case maybeOutS of
+                                      Nothing -> blk
+                                      Just s -> Block bid $ ztailFromMiddles (mids ++ mids') zlast
+            where maybeOutS = M.lookup bid sLookup
+                  -- Dont use fromJust here.. temporary for now
+                  blkMids = reverse (blockMiddles blk)
+                  (mids, _) = runState (foldM foldF [] blkMids) outS'
+                  outS = fromJust maybeOutS
+                  outS' = case getZLast blk of
+                      LastExit -> outS
+                      LastOther l -> updateL l outS
+                  (mids', zlast) = lTrans outS outS' $ getZLast blk
+                  foldF acc m = do
+                      s <- get
+                      let s' = updateM m s
+                      put s'
+                      return $ (mTrans s s' m) ++ acc
 -- Global Common Subexpression Elimination
 
 globalCSE :: Optimization Statement BranchingStatement AvailExprState
@@ -98,4 +126,62 @@ tryExprSub exprs expr
    where canSub expr = Set.member expr exprs
          doSub expr = Loc $ mkExprTemp expr
 
+---------------------------------
+-- Dead Code Elimination         
+---------------------------------
 
+-- for MidIR
+
+midIrDeadCodeElimination :: Optimization Statement BranchingStatement LiveVarState
+midIrDeadCodeElimination = Opt liveVariableAnalysis deadcodeMTransMid deadcodeLTransMid
+
+optMidIrDeadCodeElim :: LGraph Statement BranchingStatement -> LGraph Statement BranchingStatement
+optMidIrDeadCodeElim = runOpt midIrDeadCodeElimination
+
+deadcodeMTransMid :: LiveVarState -> LiveVarState -> Statement -> [Statement]
+-- in / out flipped because analysis runs backwards
+deadcodeMTransMid outState inState stmt@(Set var expr) = case (vm `Set.member` outState) || isFuncCall expr of
+        True -> [stmt]
+        False -> []
+    where vm = varToVarMarker var
+          isFuncCall (FuncCall _ _) = True
+          isFuncCall _ = False
+deadcodeMTransMid _ _ stmt = [stmt]
+
+deadcodeLTransMid :: LiveVarState -> LiveVarState -> ZLast BranchingStatement -> ([Statement], ZLast BranchingStatement)
+deadcodeLTransMid outState inState zl = ([], zl)
+
+-- for LowIR
+--
+lowIrDeadCodeElimination :: Optimization ProtoASM ProtoBranch LiveVarState
+lowIrDeadCodeElimination = Opt lowLVAnalysis deadcodeMTransLow deadcodeLTransLow
+
+optLowIrDeadCodeElim :: LGraph ProtoASM ProtoBranch -> LGraph ProtoASM ProtoBranch
+optLowIrDeadCodeElim = runOpt lowIrDeadCodeElimination
+
+deadcodeMTransLow :: LiveVarState -> LiveVarState -> ProtoASM -> [ProtoASM]
+-- in / out flipped because analysis runs backwards
+deadcodeMTransLow outState inState asm = case asm of
+        Mov' _ v -> answer v
+        Neg' v   -> answer v
+        And' _ v -> answer v
+        Or' _ v  -> answer v
+        Add' _ v -> answer v
+        Sub' v _ -> answer v
+        Mul' _ v -> answer v
+        Div' _ v -> answer v
+        Not' v   -> answer v
+        Pop' v   -> answer v
+        _ -> [asm]
+    where maybeVM v = case Set.toList $ valToVMSet v of
+              [x] -> Just x
+              _ -> Nothing
+          output vm = case vm `Set.member` outState of
+                True -> [asm]
+                False -> []
+          answer v = case liftM output $ maybeVM v of
+                Just ans -> ans
+                Nothing -> [asm]
+
+deadcodeLTransLow :: LiveVarState -> LiveVarState -> ZLast ProtoBranch -> ([ProtoASM], ZLast ProtoBranch)
+deadcodeLTransLow outState inState zl = ([], zl)

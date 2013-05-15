@@ -37,4 +37,4 @@ import Configuration.Types ( Configuration(..)
 
 target :: Configuration -> CompilerStage
 target conf = fromMaybe defaultTarget $ explicitTarget conf
-  where defaultTarget = Parse   -- this will change as the course proceeds
+  where defaultTarget = Assembly   -- this will change as the course proceeds
