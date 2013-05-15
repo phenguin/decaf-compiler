@@ -179,13 +179,11 @@ assembleTree configuration input = do
   let optimizedLowCfg = runChosenLowIROpts lowIRCfg
   let lowCfgRegAllocated = doRegisterAllocation optimizedLowCfg
   let (prolog, asm, epilog) = navigate globals funmap lowCfgRegAllocated
-
   let ioFuncSeq = case outputFileName configuration of
                     Nothing -> repeat putStrLn
                     Just fp -> (writeFile fp):(repeat $ appendFile fp)
-
   -- Output goes here..
-  let output = trace (show $ opt configuration) $ Right $ zipWith ($) ioFuncSeq $ intersperse "\n" [prolog, pPrint lowCfgRegAllocated, epilog]
+  let output = opt configuration) $ Right $ zipWith ($) ioFuncSeq $ intersperse "\n" [prolog, pPrint asm, epilog]
       -- Strings you want to output in debug mode go here.
       debugStrings = [pPrint $ fst $ defAllocateRegisters optimizedLowCfg]
   if debug configuration
