@@ -251,8 +251,8 @@ mapExprToAsm xet = case xet of
                         process' = mapExprToAsm'
 			comparison op x y =  process x ++ [Mov' (mkTemp 0) (mkTemp 1)] ++ process' y ++  [ Cmp' (mkTemp 1)  (mkTemp 0),
                                               Mov' (Literal 0) (mkTemp 0),
-                                              Mov' (Literal 1) RBX,
-                                              op RBX (mkTemp 0) ]
+                                              Mov' (Literal 1) (mkTemp 10),
+                                              op (mkTemp 10) (mkTemp 0) ]
   	   		idiv y x = process x ++ [Mov' (mkTemp 0) (mkTemp 1)] ++ process' y ++ [ Mov' RAX (mkTemp 5),
                                       Mov' RDX (mkTemp 6),
                                       Mov' (Literal 0) RDX,
@@ -302,8 +302,8 @@ mapExprToAsm' x = case x of
                         process' = mapExprToAsm'
 			comparison op x y =  process x ++ [Mov' (mkTemp 0) (mkTemp 4)] ++ process' y ++  [ Cmp' (mkTemp 4)  (mkTemp 0),
                                               Mov' (Literal 0) (mkTemp 0),
-                                              Mov' (Literal 1) RBX,
-                                              op RBX (mkTemp 0) ]
+                                              Mov' (Literal 1) (mkTemp 10),
+                                              op (mkTemp 10) (mkTemp 0) ]
 			idiv y x = process x ++ [Mov' (mkTemp 0) (mkTemp 4)] ++ process' y ++ [ Mov' RAX (mkTemp 5),
                                       Mov' RDX (mkTemp 6),
                                       Mov' (Literal 0) RDX,
@@ -379,7 +379,7 @@ mapBranchToAsm bid (LastOther (ParaforBranch (Var str) startexpr expr bid1 bid2)
     	 where expressed = mapExprToAsm expr
 
 mapBranchToAsm bid (LastOther (ForBranch  (Scopedvar scp (Var str)) startexpr expr bid1 bid2))  
-	= (([],expressed++ (mapExprToAsm startexpr)++[(Cmp' (Scoped scp (Symbol str)) (mkTemp 0)),(Je' bid2)] ++  (mapExprToAsm startexpr)), LastOther $ For' (Literal 0) []  expressed [] [bid1, bid2])
+	= (([],(mapExprToAsm startexpr)++ expressed++[(Cmp' (Scoped scp (Symbol str)) (mkTemp 0)),(Je' bid2)] ++  (mapExprToAsm startexpr)), LastOther $ For' (Literal 0) []  expressed [] [bid1, bid2])
    	where expressed = mapExprToAsm expr
 
 mapBranchToAsm bid (LastOther (ParaforBranch (Scopedvar scp (Var str)) startexpr expr bid1 bid2))  
