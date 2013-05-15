@@ -72,10 +72,10 @@ navigate globals funmap cfg = unsafePerformIO $ do
 		zigcfg <- return $ apptilfalse (\gg -> kruise gg regZigZag False) entercfg
 		
 		-- Peephoel optimaztion : gets rid of useless push and pops	
-		poppushcfg <- return $ fst $ esiurk zigcfg popAlot M.empty
+--		poppushcfg <- return $ fst $ esiurk zigcfg popAlot M.empty
 				
 		-- replaces breaks and continues with jumps to labels
-		outcfg <-return$ fst $ trickleLast poppushcfg replaceBreakContinue Nil 
+		outcfg <-return$ fst $ trickleLast zigcfg replaceBreakContinue Nil 
 		-- output to be printed
 		return (prolog, outcfg,epilog)
 	where 	mappify:: (Ord a, Ord k) => (M.Map a [k]) -> [(a,k)]-> (M.Map a [k])

@@ -60,7 +60,7 @@ data ProtoASM = Dec' Value
 	| Continue' -- get replaced with jump later... kludgy i know
 	deriving (Show,Eq,Ord,Data,Typeable)
 
-saveFrame = [RBX, RSP, RBP, R12,R13,R14,R15] 
+saveFrame = [RBX, RSP, RBP, R11,R10,R12,R13,R14,R15] 
 save::[ProtoASM]
 save	= map Push' saveFrame
 restore::[ProtoASM]
@@ -164,6 +164,7 @@ mapStmtToAsm bid x = case x of
 	(Return expr) -> (mapExprToAsm expr)++ [Mov' (mkTemp 0) RAX] ++ [Ret']
 	_ 	-> Debug.Trace.trace ("!!STMT!" ++ (show x)) []
    where vartoval (Var str) = (Symbol str)
+         vartoval (Scopedvar scp (Var str)) = (Scoped scp (Symbol str))
 -- failure here indicates a lastexit is thrown meaning that a break and continue
 -- are not in kosher locations. Should have not passed semantic check!
 --	 handleBreak:: ZLast BranchingStatement -> [ProtoASM]
@@ -186,12 +187,12 @@ mapExprToAsm xet = case xet of
                 (Div x y)       -> idiv x y
                 (And x y)       -> binop (And') x y
                 (Or x y)        -> binop (Or') x y
-                (Lt x y)        -> binop (Lt') x y
-                (Gt x y)        -> binop (Gt') x y
-                (Le x y)        -> binop (Le') x y
-                (Ge x y)        -> binop (Ge') x y
-                (Ne x y)        -> binop (Ne') x y
-                (Eq x y)        -> binop (Eq') x y
+                (Lt x y)        -> comparison (CMovl') x y
+                (Gt x y)        -> comparison (CMovg') x y
+                (Le x y)        -> comparison (CMovle') x y
+                (Ge x y)        -> comparison (CMovge') x y
+                (Ne x y)        -> comparison (CMovne') x y
+                (Eq x y)        -> comparison (CMove') x y
                 (Not x )        -> uniop (Not') x
                 (Neg x)         -> uniop (Neg') x
                 (Const i)       -> [Mov' (Literal i) (mkTemp 0)]
@@ -220,11 +221,11 @@ mapExprToAsm xet = case xet of
                                               Mov' (Literal 0) (mkTemp 0),
                                               Mov' (Literal 1) RBX,
                                               op RBX (mkTemp 0) ]
-  	   		idiv x y = process x ++ [Mov' (mkTemp 0) (mkTemp 1)] ++ process' y ++ [ Mov' RAX (mkTemp 5),
+  	   		idiv y x = process x ++ [Mov' (mkTemp 0) (mkTemp 1)] ++ process' y ++ [ Mov' RAX (mkTemp 5),
                                       Mov' RDX (mkTemp 6),
                                       Mov' (Literal 0) RDX,
                                       Mov' (mkTemp 0) RAX,
-				      Div' (Literal 3) ,
+				      Div' (mkTemp 1) ,
 				      Mov' RAX (mkTemp 0),
                                       Mov' (mkTemp 5) RAX,
                                       Mov' (mkTemp 6) RDX ]
@@ -237,12 +238,12 @@ mapExprToAsm' x = case x of
                 (Div x y)       -> idiv x y
                 (And x y)       -> binop (And') x y
                 (Or x y)        -> binop (Or') x y
-                (Lt x y)        -> comparison (Lt') x y
-                (Gt x y)        -> comparison (Gt') x y
-                (Le x y)        -> comparison (Le') x y
-                (Ge x y)        -> comparison (Ge') x y
-                (Ne x y)        -> comparison (Ne') x y
-                (Eq x y)        -> comparison (Eq') x y
+                (Lt x y)        -> comparison (CMovl') x y
+                (Gt x y)        -> comparison (CMovg') x y
+                (Le x y)        -> comparison (CMovle') x y
+                (Ge x y)        -> comparison (CMovge') x y
+                (Ne x y)        -> comparison (CMovne') x y
+                (Eq x y)        -> comparison (CMove') x y
                 (Not x )        -> uniop (Not') x
                 (Neg x)         -> uniop (Neg') x
                 (Const i)       -> [Mov' (Literal i) (mkTemp 0)]
@@ -271,11 +272,11 @@ mapExprToAsm' x = case x of
                                               Mov' (Literal 0) (mkTemp 0),
                                               Mov' (Literal 1) RBX,
                                               op RBX (mkTemp 0) ]
-			idiv x y = process x ++ [Mov' (mkTemp 0) (mkTemp 4)] ++ process' y ++ [ Mov' RAX (mkTemp 5),
+			idiv y x = process x ++ [Mov' (mkTemp 0) (mkTemp 4)] ++ process' y ++ [ Mov' RAX (mkTemp 5),
                                       Mov' RDX (mkTemp 6),
                                       Mov' (Literal 0) RDX,
                                       Mov' (mkTemp 0) RAX,
-				      Div' (Literal 3) ,
+				      Div' (Literal 4) ,
 				      Mov' RAX (mkTemp 0),
                                       Mov' (mkTemp 5) RAX,
                                       Mov' (mkTemp 6) RDX ]
@@ -345,12 +346,12 @@ mapBranchToAsm bid (LastOther (ParaforBranch (Var str) startexpr expr bid1 bid2)
 	= (([], expressed ++[(Cmp' (Symbol str) (mkTemp 0)),(Je' bid2)]), LastOther $ Parafor' (Literal 0) (mapExprToAsm expr)  expressed [] [bid1, bid2])
 	where expressed = mapExprToAsm expr
 
-mapBranchToAsm bid (LastOther (ForBranch (Scopedvar scp (Var str)) startexpr expr bid1 bid2))  
-	= (([], expressed++[(Cmp' (Scoped scp (Symbol str)) (mkTemp 0)),(Je' bid2)]), LastOther $ For' (Literal 0) (mapExprToAsm expr) expressed [] [bid1, bid2])
+mapBranchToAsm bid (LastOther (ForBranch  (Scopedvar scp (Var str)) startexpr expr bid1 bid2))  
+	= (([], expressed++ (mapExprToAsm startexpr)++[(Cmp' (Scoped scp (Symbol str)) (mkTemp 0)),(Je' bid2)]), LastOther $ For' (Literal 0) []  expressed [] [bid1, bid2])
 	where expressed = mapExprToAsm expr
 
 mapBranchToAsm bid (LastOther (ParaforBranch (Scopedvar scp (Var str)) startexpr expr bid1 bid2))  
-	= (([], expressed ++[(Cmp' (Scoped scp (Symbol str)) (mkTemp 0)),(Je' bid2)]), LastOther $ Parafor' (Literal 0) (mapExprToAsm expr)  expressed [] [bid1, bid2])
+	= (([], expressed ++[(Cmp' (Scoped scp (Symbol str)) (mkTemp 0)),(Je' bid2)]), LastOther $ Parafor' (Literal 0) (mapExprToAsm startexpr)  expressed [] [bid1, bid2])
 	where expressed = mapExprToAsm expr
 
 
