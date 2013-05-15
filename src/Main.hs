@@ -14,6 +14,7 @@ module Main where
 import Prelude hiding (readFile)
 import qualified Prelude
 
+import Data.List (intersperse)
 import Debug.Trace (trace)
 import Util (compose)
 import Codegen
@@ -34,7 +35,7 @@ import MidIR
 import Util (mungeErrorMessage,putIRTree)
 
 import qualified CLI
-import Configuration (Configuration(outputFileName), CompilerStage(..), OptimizationSpecification(..))
+import Configuration (Configuration(outputFileName,opt), CompilerStage(..), OptimizationSpecification(..))
 import Configuration.Types (debug)
 import qualified Configuration
 import qualified Parser
@@ -147,12 +148,8 @@ checkSemantics configuration input = do
 midIROpts :: [Opt Statement BranchingStatement]
 midIROpts = [optGlobalCSE, untilStable optMidIrDeadCodeElim]
 
-runChosenMidIROpts = compose midIROpts
-
 lowIROpts :: [Opt ProtoASM ProtoBranch]
 lowIROpts = [untilStable optLowIrDeadCodeElim]
-
-runChosenLowIROpts = compose lowIROpts
 
 assembleTree :: Configuration -> String -> Either String [IO ()]
 assembleTree configuration input = do
@@ -172,6 +169,11 @@ assembleTree configuration input = do
   -- Should make interface to parallelize as just a regular 
   -- optimization if possible
   let	parallelcfg  = parallelize scopedcfg
+  let (runChosenLowIROpts,runChosenMidIROpts) = if opt configuration == Some [] 
+                              then
+                              (id,id)
+                              else
+                              (compose lowIROpts, compose midIROpts)
   let optimizedMidCfg = runChosenMidIROpts scopedcfg
   let lowIRCfg = toLowIRCFG optimizedMidCfg
   let optimizedLowCfg = runChosenLowIROpts lowIRCfg
@@ -183,9 +185,10 @@ assembleTree configuration input = do
                     Just fp -> (writeFile fp):(repeat $ appendFile fp)
 
   -- Output goes here..
-  let output = Right $ zipWith ($) ioFuncSeq [prolog, pPrint asm, epilog]
+  let output = trace (show $ opt configuration) $ Right $ zipWith ($) ioFuncSeq $ intersperse "\n" [prolog, pPrint asm, epilog]
       -- Strings you want to output in debug mode go here.
-      debugStrings = [pPrint $ defAllocateRegisters optimizedLowCfg]
+      debugStrings = [pPrint $ defAllocateRegisters optimizedLowCfg,
+                      pPrint $ computeInterferenceGraph optimizedLowCfg]
   if debug configuration
 	then compose (map prependOutput debugStrings) output
  	else output

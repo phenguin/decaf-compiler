@@ -62,9 +62,9 @@ instance Read CompilerStage where
 
 data OptimizationSpecification = All
                                | Some [OptimizationName]
-                               deriving (Eq)
+                               deriving (Eq,Show)
 
 -- String might be the wrong type to use here, but whatever.
 data OptimizationName = Enable String
                       | Disable String
-                      deriving (Eq)
+                      deriving (Eq,Show)

@@ -386,7 +386,7 @@ varsDefinedInProtoStmt stmt = case stmt of
     Add' _ v -> valToVMSet v
     Sub' _ v -> valToVMSet v -- TODO: Check semantics
     Mul' _ v -> valToVMSet v
-    Div' _ v -> valToVMSet v -- TODO: Check semantics
+    Div' v -> valToVMSet v -- TODO: Check semantics
     Not' v -> valToVMSet v
     Pop' v -> valToVMSet v
     CMove' _ v -> valToVMSet v
@@ -410,7 +410,7 @@ varsUsedInProtoStmt stmt = case stmt of
         Add' v v' -> valsToVMSet [v,v']
         Sub' v v' -> valsToVMSet [v,v'] -- TODO: Check semantics
         Mul' v v' -> valsToVMSet [v,v']
-        Div' v v' -> valsToVMSet [v,v'] -- TODO: Check semantics
+        Div' v    -> valsToVMSet [v] -- TODO: Check semantics
         Lt'   v v' -> valsToVMSet [v,v'] -- TODO: Check semantics
         Gt'   v v' -> valsToVMSet [v,v'] -- TODO: Check semantics
         Le'   v v' -> valsToVMSet [v,v'] -- TODO: Check semantics

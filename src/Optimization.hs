@@ -169,7 +169,7 @@ deadcodeMTransLow outState inState asm = case asm of
         Add' _ v -> answer v
         Sub' v _ -> answer v
         Mul' _ v -> answer v
-        Div' _ v -> answer v
+        Div' v   -> [asm] -- TODO: Come back
         Not' v   -> answer v
         Pop' v   -> answer v
         _ -> [asm]
