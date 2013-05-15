@@ -340,17 +340,23 @@ instance PrettyPrint ProtoASM where
                 (Div' x y)       -> idiv x y
                 (And' x y)       -> binop "and" x y
                 (Or' x y)        -> binop "or" x y
-                (Lt' x y)        -> comparison "cmovl" x y
-                (Gt' x y)        -> comparison "cmovg" x y
-                (Le' x y)        -> comparison "cmovle" x y
-                (Ge' x y)        -> comparison "cmovge" x y
-                (Ne' x y)        -> comparison "cmovne" x y
-                (Eq' x y)        -> comparison "cmove" x y
+                (Lt' x y)        -> comparison CMovl' x y
+                (Gt' x y)        -> comparison CMovg' x y
+                (Le' x y)        -> comparison CMovle' x y
+                (Ge' x y)        -> comparison CMovge' x y
+                (Ne' x y)        -> comparison CMovne' x y
+                (Eq' x y)        -> comparison CMove' x y
                 (DFun' name params)        -> text "# Function Declaration: " <> text name
                 (Not' x )        -> uniop "not" x
                 (Neg' x)         -> uniop "neg" x
                 (Mov' x y)	 -> binop "movq" x y
                 (Cmp' x y)	 -> binop "cmp" x y
+                (CMove' x y)	 -> binop "cmove" x y
+                (CMovne' x y)	 -> binop "cmovne" x y
+                (CMovg' x y)	 -> binop "cmovg" x y
+                (CMovge' x y)	 -> binop "cmovge" x y
+                (CMovl' x y)	 -> binop "cmovl" x y
+                (CMovle' x y)	 -> binop "cmovle" x y
                 (Je' x)	 	 -> uniop "je" x 
                 (Jne' x)	 -> uniop "jne" x 
                 (Push' x) 	 -> uniop "push" x 
@@ -363,19 +369,19 @@ instance PrettyPrint ProtoASM where
 		_ 		 -> Debug.Trace.trace ("!ppr!!!" ++ (show asm)) (text "@@")
 	  where 
   	    binop name x y = text (name++" ") <+> (ppr x) <+> text"," <+> (ppr y) 
-  	    comparison name x y = text ("cmp"++" ") <+> (ppr y) <+> text"," <+> (ppr x) 
-				$$ text ("movq" ++ " $0 , t0")
-				$$ text ("movq" ++ " $1 , %rbx")
-				$$ text (name ++ " %rbx , t0")
-	    uniop name x  = text (name++" " )<+> (ppr x)  
-  	    idiv x y =    text "mov %rax , t5"
-			$$ text "mov %rdx , t6" 
-			$$ text ("mov $0, %rdx") 
-			$$ text "mov "<+> (ppr x) <+> text", %rax"
-			$$ text "idiv " <+> (ppr y) 
-			$$ text "mov %rax, t0 "
-			$$ text "mov t5 , %rax"
-			$$ text "mov t6 , %rdx"
+  	    comparison op x y = vcat $ map ppr $ [ Cmp' x y,
+                                              Mov' (Literal 0) (mkTemp 0),
+                                              Mov' (Literal 1) RBX,
+                                              op RBX (mkTemp 0) ]
+	    uniop name x  = text name <+> (ppr x)  
+  	    idiv x y = (vcat $ map ppr $ [ Mov' RAX (mkTemp 5),
+                                      Mov' RDX (mkTemp 6),
+                                      Mov' (Literal 0) RDX,
+                                      Mov' x RAX ]) $$ text "idiv" <+> ppr y $$ 
+                   (vcat $ map ppr $ [ Mov' RAX (mkTemp 0),
+                                      Mov' (mkTemp 5) RAX,
+                                      Mov' (mkTemp 6) RDX ])
+
 instance PrettyPrint Value where
 	ppr x = case x of 
             (Symbol str) 		-> text $  str   
