@@ -185,10 +185,9 @@ assembleTree configuration input = do
                     Just fp -> (writeFile fp):(repeat $ appendFile fp)
 
   -- Output goes here..
-  let output = trace (show $ opt configuration) $ Right $ zipWith ($) ioFuncSeq $ intersperse "\n" [prolog, pPrint asm, epilog]
+  let output = trace (show $ opt configuration) $ Right $ zipWith ($) ioFuncSeq $ intersperse "\n" [prolog, pPrint lowCfgRegAllocated, epilog]
       -- Strings you want to output in debug mode go here.
-      debugStrings = [pPrint $ defAllocateRegisters optimizedLowCfg,
-                      pPrint $ computeInterferenceGraph optimizedLowCfg]
+      debugStrings = [pPrint $ fst $ defAllocateRegisters optimizedLowCfg]
   if debug configuration
 	then compose (map prependOutput debugStrings) output
  	else output

@@ -253,7 +253,7 @@ coalesce ig@(IG vertices iEdges pEdges) = case relevantPEdges of
 insertAllWithKey :: (Ord k) => Set k -> a -> M.Map k a -> M.Map k a
 insertAllWithKey keys val = compose $ map (\k -> M.insert k val) (toList keys)
 
-vmSpillHeuristic ig vmSet = (maxNesting, totalNesting, -1 * totalDegree)
+vmSpillHeuristic ig vmSet = (-1 * totalDegree, maxNesting, totalNesting )
     where vms = toList vmSet
           vmNesting = length . varScope
           maxNesting = maximum $ map vmNesting vms
@@ -261,7 +261,7 @@ vmSpillHeuristic ig vmSet = (maxNesting, totalNesting, -1 * totalDegree)
           totalDegree = sum $ map ((flip degree) ig) $ map makeVertex vms
 
 
-defAllocateRegisters :: (PrettyPrint b, RegisterAllocatable b) => b -> Coloring VarMarker
+defAllocateRegisters :: (PrettyPrint b, RegisterAllocatable b) => b -> (Coloring VarMarker, b)
 defAllocateRegisters = allocateRegisters vmSpillHeuristic
 
 class RegisterAllocatable a where
@@ -274,10 +274,13 @@ instance RegisterAllocatable (LGraph Statement BranchingStatement) where
 
 instance RegisterAllocatable (LGraph ProtoASM ProtoBranch) where
     computeInterferenceGraph = buildIGFromLowCfg
-    updateForSpills spilled graph = trace (pPrint $ augmentWithDFR lowLVAnalysis graph) $ fst $ runState resM 0
+    updateForSpills spilled graph = fst $ runState resM (0,0)
         where flattener (xs, y) = zip xs (repeat y)
               spilled' = concatMap (flattener . mapFst toList) spilled
-              resM = foldM updateForSpill graph $ spilled'
+              foldF graph spillMemPair = do
+                  modify $ mapFst (subtract 1)
+                  updateForSpill graph spillMemPair
+              resM = foldM foldF graph $ spilled'
 
 mkSpillTemp :: VarMarker -> Int -> Value
 mkSpillTemp (VarMarker name _ scp) i = Scoped [Temp] (Symbol $ vmStr ++ "_" ++ show i)
@@ -288,25 +291,29 @@ mkSpillTemp (VarMarker name _ scp) i = Scoped [Temp] (Symbol $ vmStr ++ "_" ++ s
           scpStr [] = ""
           vmStr = scpStr scp ++ name
 
-updateForSpill :: LGraph ProtoASM ProtoBranch -> (VarMarker, MemLoc) -> State Int (LGraph ProtoASM ProtoBranch)
-updateForSpill graph (spillVM, BasePtrOffset i) = trace ("Spilled: " ++ pPrint spillVM) $ res
-    where mMapM = \_ asm -> case asm `usesVariable` spillVM of
+updateForSpill :: LGraph ProtoASM ProtoBranch -> (VarMarker, MemLoc) -> State (Int,Int) (LGraph ProtoASM ProtoBranch)
+updateForSpill graph (spillVM, BasePtrOffset i) = res
+    where isDec (Dec' _) = True
+          isDec _ = False
+          mMapM = \_ asm -> case asm `usesVariable` spillVM && (not . isDec) asm of
                 True -> do
-                    i <- get
-                    modify (+1)
-                    let newTempVar = mkSpillTemp spillVM i
+                    (i,j) <- get
+                    modify $ mapSnd (+1)
+                    let newTempVar = mkSpillTemp spillVM j
+                        memLocation = Stack (8*i)
                         asm' = replaceValinStmt spillVM newTempVar asm
-                    return [Mov' (Stack i) newTempVar, asm', Mov' newTempVar (Stack i)]
-                False -> return [asm]
+                    return [Mov' memLocation newTempVar, asm', Mov' newTempVar memLocation]
+                False -> if isDec asm then return [] else return [asm]
           lMapM _ LastExit = return (([], []), LastExit)
           -- TODO: Fix me.. this is wrong, need to reload after branch
           lMapM _ zl@(LastOther branch) = case branch `usesVariable` spillVM of
               True -> do
-                  i <- get
-                  modify (+1)
-                  let newTempVar = mkSpillTemp spillVM i
+                  (i,j) <- get
+                  modify $ mapSnd (+1)
+                  let newTempVar = mkSpillTemp spillVM j
+                      memLocation = Stack (8*i)
                       branch' = replaceValinStmt spillVM newTempVar branch
-                  return (([],[Mov' (Stack i) newTempVar]), LastOther branch')
+                  return (([],[Mov' memLocation newTempVar]), LastOther branch')
               False -> return (([],[]), zl)
           res = mapLGraphNodesM mMapM lMapM graph
 
@@ -322,19 +329,20 @@ removeRedundantMoves coloring graph = mapLGraphNodes mMap lMap graph
           isSymbol (Scoped _ (Symbol _)) = True
           isSymbol _ = False
           mMap bid stmt = case stmt of
-              Mov' v v' -> if redundant v v' then [] else [stmt]
-              CMove' v v' -> if redundant v v' then [] else [stmt]
-              CMovne' v v' -> if redundant v v' then [] else [stmt]
-              CMovl' v v' -> if redundant v v' then [] else [stmt]
-              CMovg' v v' -> if redundant v v' then [] else [stmt]
-              CMovle' v v' -> if redundant v v' then [] else [stmt]
-              CMovge' v v' -> if redundant v v' then [] else [stmt]
+              Mov' v v' -> if redundant v v' then trace ("redundant!:" ++ pPrint stmt) $ [] else  [stmt]
+              CMove' v v' -> if redundant v v' then trace ("redundant!:" ++ pPrint stmt) $  [] else  [stmt]
+              CMovne' v v' -> if redundant v v' then trace ("redundant!:" ++ pPrint stmt) $ [] else [stmt]
+              CMovl' v v' -> if redundant v v' then trace ("redundant!:" ++ pPrint stmt) $ [] else [stmt]
+              CMovg' v v' -> if redundant v v' then trace ("redundant!:" ++ pPrint stmt) $ [] else [stmt]
+              CMovle' v v' -> if redundant v v' then trace ("redundant!:" ++ pPrint stmt) $ [] else [stmt]
+              CMovge' v v' -> if redundant v v' then trace ("redundant!:" ++ pPrint stmt) $ [] else [stmt]
               _ -> [stmt]
           lMap bid zl = (([],[]), zl)
 
-allocateRegisters :: (Ord a, RegisterAllocatable b, PrettyPrint b) => (InterferenceGraph VarMarker -> IGVertex VarMarker -> a) -> b -> Coloring VarMarker
+allocateRegisters :: (Ord a, RegisterAllocatable b, PrettyPrint b) => 
+    (InterferenceGraph VarMarker -> IGVertex VarMarker -> a) -> b -> (Coloring VarMarker, b)
 allocateRegisters spillHeuristic cfg = case coloringOrSpills of
-            Right coloring -> coloring
+            Right coloring -> (coloring, cfg)
             Left spills -> allocateRegisters spillHeuristic (updateForSpills spills cfg)
     where initialIG = computeInterferenceGraph cfg
           (simpleIG, vertexStack) = simplify spillHeuristic initialIG
@@ -412,15 +420,14 @@ applyNodeColor coloring val = result
                 [vm] -> Just vm
                 _ -> Nothing
           color vm = case M.lookup vm coloring of
-                       Nothing -> error $ "Uncolored node:" ++ pPrint vm
+                       Nothing -> Nothing
                        Just c -> Just c
           result = case maybeVarMarker >>= color of
                      Nothing -> val
                      Just c -> colorToValue c
 
 doRegisterAllocation :: LGraph ProtoASM ProtoBranch -> LGraph ProtoASM ProtoBranch
-doRegisterAllocation lgraph = lgraph''
-    where coloring = allocateRegisters vmSpillHeuristic lgraph
-          -- lgraph' = removeRedundantMoves coloring lgraph
-          lgraph'' = applyColoring coloring lgraph
+doRegisterAllocation lgraph = trace (pPrint finalGraph) $ applyColoring coloring finalGraph
+    where (coloring, finalGraph) = allocateRegisters vmSpillHeuristic lgraph
+          lgraph' = trace (pPrint finalGraph ++ "\n" ++ pPrint coloring) $ removeRedundantMoves coloring finalGraph
 

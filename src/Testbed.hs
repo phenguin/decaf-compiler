@@ -61,7 +61,7 @@ testCfgMid' x = fromRight $ cfgFromFile testfilepath
 testCfgMid x = scopeMidir (testCfgMid' x) (testGlobals x) (testFunmap x)
 
 spillTemp :: Int -> LGraph ProtoASM ProtoBranch -> LGraph ProtoASM ProtoBranch
-spillTemp i graph = fst $ runState (flip updateForSpill (VarMarker ("t" ++ show i) Transforms.Single [Temp], BasePtrOffset 1) graph) 0
+spillTemp i graph = fst $ runState (flip updateForSpill (VarMarker ("t" ++ show i) Transforms.Single [Temp], BasePtrOffset 1) graph) (0,0)
 
 testCfgLow x = (\(_,x,_) -> x) $ navigate globals funcParamMap $ toLowIRCFG $ (testCfgMid x)
     where midIR = fromRight $ midIRFromFile testfilepath
