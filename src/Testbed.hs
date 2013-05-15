@@ -1,6 +1,8 @@
 module Testbed where
 
 import Data.Either
+import Control.Monad
+import Control.Monad.State
 import System.IO.Unsafe (unsafePerformIO)
 import Scanner
 import Control.Monad
@@ -9,7 +11,7 @@ import qualified Parser
 import PrettyPrint
 import ControlFlowGraph
 import Codegen
-import CFGConstruct (lgraphFromAGraphBlocks)
+import CFGConstruct 
 import CFGConcrete (LGraph, BlockId(..),pprDetailLGraph)
 import Semantics (SemanticTreeWithSymbols, addSymbolTables)
 import Transforms
@@ -56,6 +58,9 @@ testFunmap x = getFunctionParamMap (testCfgMid' x)
 testCfgMid' x = fromRight $ cfgFromFile testfilepath
 -- add scoping
 testCfgMid x = scopeMidir (testCfgMid' x) (testGlobals x) (testFunmap x)
+
+spillTemp :: Int -> LGraph ProtoASM ProtoBranch -> LGraph ProtoASM ProtoBranch
+spillTemp i graph = fst $ runState (flip updateForSpill (VarMarker ("t" ++ show i) Transforms.Single [Temp], BasePtrOffset 1) graph) 0
 
 testCfgLow x = (\(_,x,_) -> x) $ navigate globals funcParamMap $ toLowIRCFG $ (testCfgMid x)
     where midIR = fromRight $ midIRFromFile testfilepath

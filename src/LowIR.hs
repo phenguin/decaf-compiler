@@ -92,12 +92,25 @@ valToVMSet' _ = Set.empty
 valsToVMSet :: [Value] -> Set VarMarker
 valsToVMSet vals = foldl Set.union Set.empty $ map valToVMSet vals
 
-usesVariable :: (Data a) => a -> String -> Bool
-usesVariable x name = everything (||) (False `mkQ` (selectVarByName name)) x
+usesVariable :: (Data a) => a -> VarMarker -> Bool
+usesVariable x vm = everything (||) (False `mkQ` (selectVarByName vm)) x
 
-selectVarByName :: String -> Value -> Bool
-selectVarByName name (Symbol s) = s == name
-selectVarByName name _ = False
+replaceValinStmt :: (Data a) => VarMarker -> Value -> a -> a
+replaceValinStmt vm repVal = everywhere (mkT (replaceValWithVal vm repVal))
+
+replaceValWithVal :: VarMarker -> Value -> Value -> Value
+replaceValWithVal vm repVal val = case val == vmToVal vm of
+    True -> repVal
+    False -> val
+
+vmToVal :: VarMarker -> Value
+vmToVal (VarMarker s Transforms.Single scp) = Scoped scp (Symbol s)
+-- TODO: Is this correct behavior? Dont have enough info to reconstruct
+vmToVal (VarMarker s (Transforms.Array _) scp) = Scoped scp (Array s (Literal 0))
+
+
+selectVarByName :: VarMarker -> Value -> Bool
+selectVarByName vm val = val == vmToVal vm
 
 newtype ProtoASMList = ProtoASMList [ProtoASM]
 

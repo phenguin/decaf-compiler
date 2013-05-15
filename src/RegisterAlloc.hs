@@ -228,8 +228,16 @@ coalesce ig@(IG vertices iEdges pEdges) = case relevantPEdges of
 insertAllWithKey :: (Ord k) => Set k -> a -> M.Map k a -> M.Map k a
 insertAllWithKey keys val = compose $ map (\k -> M.insert k val) (toList keys)
 
+vmSpillHeuristic ig vmSet = (maxNesting, totalNesting, -1 * totalDegree)
+    where vms = toList vmSet
+          vmNesting = length . varScope
+          maxNesting = maximum $ map vmNesting vms
+          totalNesting = sum $ map vmNesting vms
+          totalDegree = sum $ map ((flip degree) ig) $ map makeVertex vms
+
+
 defAllocateRegisters :: (RegisterAllocatable b) => b -> Coloring VarMarker
-defAllocateRegisters = allocateRegisters (const 0)
+defAllocateRegisters = allocateRegisters vmSpillHeuristic
 
 class RegisterAllocatable a where
     computeInterferenceGraph :: a -> InterferenceGraph VarMarker
@@ -241,26 +249,45 @@ instance RegisterAllocatable (LGraph Statement BranchingStatement) where
 
 instance RegisterAllocatable (LGraph ProtoASM ProtoBranch) where
     computeInterferenceGraph = buildIGFromLowCfg
-    updateForSpills = error "not yet implemented"
-    -- updateForSpills spilled graph =  res
-    --     where flattener (xs, y) = zip xs (repeat y)
-    --           spilled' = concatMap (flattener . mapFst toList) spilled
-    --           res = foldl updateForSpill graph $ spilled'
+    updateForSpills spilled graph = fst $ runState resM 0
+        where flattener (xs, y) = zip xs (repeat y)
+              spilled' = concatMap (flattener . mapFst toList) spilled
+              resM = foldM updateForSpill graph $ spilled'
 
--- updateForSpill :: LGraph ProtoASM ProtoBranch -> (Var, MemLoc) -> LGraph ProtoASM ProtoBranch
--- updateForSpill graph (spillVar, BasePtrOffset i) = trace ("updateForSpill called with var: " ++ spillVar) $ res
---     where mMap = \_ asm -> case asm `usesVariable` spillVar of
---                 True -> [Mov' (Stack i) (Symbol spillVar), asm, Mov' (Symbol spillVar) (Stack i)]
---                 False -> [asm]
---           lMap _ LastExit = (([], []), LastExit)
---           lMap _ zl@(LastOther branch) = case branch `usesVariable` spillVar of
---               True -> (([],[Mov' (Stack i) (Symbol spillVar)]), zl) -- Fix me yada yada
---               False -> (([],[]), zl)
---           res = mapLGraphNodes mMap lMap graph
+mkSpillTemp :: VarMarker -> Int -> Value
+mkSpillTemp (VarMarker name _ scp) i = Scoped [Temp] (Symbol $ vmStr ++ "_" ++ show i)
+    where scpStr (Global:scps) = "global_" ++ scpStr scps
+          scpStr (Temp:scps) = "temp_" ++ scpStr scps
+          scpStr ((Func s):scps) = "func[" ++ s ++ "]_" ++ scpStr scps
+          scpStr ((Loop s):scps) = "loop[" ++ s ++ "]_" ++ scpStr scps
+          scpStr [] = ""
+          vmStr = scpStr scp ++ name
+
+updateForSpill :: LGraph ProtoASM ProtoBranch -> (VarMarker, MemLoc) -> State Int (LGraph ProtoASM ProtoBranch)
+updateForSpill graph (spillVM, BasePtrOffset i) = trace ("updateForSpill called with var: " ++ pPrint spillVM) $ res
+    where mMapM = \_ asm -> case asm `usesVariable` spillVM of
+                True -> do
+                    i <- get
+                    modify (+1)
+                    let newTempVar = mkSpillTemp spillVM i
+                        asm' = replaceValinStmt spillVM newTempVar asm
+                    return [Mov' (Stack i) newTempVar, asm', Mov' newTempVar (Stack i)]
+                False -> return [asm]
+          lMapM _ LastExit = return (([], []), LastExit)
+          -- TODO: Fix me.. this is wrong, need to reload after branch
+          lMapM _ zl@(LastOther branch) = case branch `usesVariable` spillVM of
+              True -> do
+                  i <- get
+                  modify (+1)
+                  let newTempVar = mkSpillTemp spillVM i
+                      branch' = replaceValinStmt spillVM newTempVar branch
+                  return (([],[Mov' (Stack i) newTempVar]), LastOther branch')
+              False -> return (([],[]), zl)
+          res = mapLGraphNodesM mMapM lMapM graph
           
 
 
-allocateRegisters :: (Ord a, RegisterAllocatable b) => (IGVertex VarMarker -> a) -> b -> Coloring VarMarker
+allocateRegisters :: (Ord a, RegisterAllocatable b) => (InterferenceGraph VarMarker -> IGVertex VarMarker -> a) -> b -> Coloring VarMarker
 allocateRegisters spillHeuristic cfg = case coloringOrSpills of
             Right coloring -> coloring
             Left spills -> allocateRegisters spillHeuristic (updateForSpills spills cfg)
@@ -268,11 +295,11 @@ allocateRegisters spillHeuristic cfg = case coloringOrSpills of
           (simpleIG, vertexStack) = simplify spillHeuristic initialIG
           coloringOrSpills = select (iEdges simpleIG) vertexStack
           
-select :: (Ord a, Show a) => Set (IGEdge a) -> [IGVertex a] -> Either [(IGVertex a, MemLoc)] (Coloring a)
+select :: (Ord a, PrettyPrint a) => Set (IGEdge a) -> [IGVertex a] -> Either [(IGVertex a, MemLoc)] (Coloring a)
 select iEdges vertexStack = fst $ runState (select' initialGraph M.empty) (vertexStack, [])
     where initialGraph = IG Set.empty iEdges Set.empty
 
-select' :: (Ord a, Show a) => InterferenceGraph a -> Coloring a -> State ([IGVertex a], [(IGVertex a, MemLoc)]) (Either [(IGVertex a, MemLoc)] (Coloring a))
+select' :: (Ord a, PrettyPrint a) => InterferenceGraph a -> Coloring a -> State ([IGVertex a], [(IGVertex a, MemLoc)]) (Either [(IGVertex a, MemLoc)] (Coloring a))
 select' graph colorMap = do
     mbVertex <- popLeft
     spilled <- liftM snd get
@@ -284,11 +311,11 @@ select' graph colorMap = do
                                        neighbors v graph
                       availColors = allColors \\ neighborColors 
                       -- TODO: Remove trace
-                      graph' = trace (show (v, availColors, length availColors, degree v graph)) $ addVertex v graph
+                      graph' = trace (pPrint (v, degree v graph)) $ addVertex v graph
                       BasePtrOffset curBPMax = if null spilled then BasePtrOffset 1 else maximum $ map snd spilled
                       in
                   if null availColors then
-                                      pushRight (v, BasePtrOffset (curBPMax+1)) >> select' graph' colorMap
+                                      trace ("spill:" ++ pPrint v) $ pushRight (v, BasePtrOffset (curBPMax+1)) >> select' graph' colorMap
                                       else
                                       select' graph' (insertAllWithKey v (head availColors) colorMap)
 
@@ -299,12 +326,12 @@ setReplace olds new set = Set.map replaceFunc set
                               False -> x
 
 defSimplify :: (Ord a) => InterferenceGraph a -> (InterferenceGraph a, [IGVertex a])
-defSimplify = simplify (const 1)
+defSimplify = simplify ((const . const) 1)
     
 simplify spillHeuristic ig = runState (simplify' spillHeuristic ig) []
 
 -- TODO: Optimize this later if you have time..
-simplify' :: (Ord a, Ord b) => (IGVertex a -> b) -> InterferenceGraph a -> State [IGVertex a] (InterferenceGraph a)
+simplify' :: (Ord a, Ord b) => (InterferenceGraph a -> IGVertex a -> b) -> InterferenceGraph a -> State [IGVertex a] (InterferenceGraph a)
 simplify' spillHeuristic ig@(IG vertices iEdges pEdges) = case Set.null vertices of
     -- If empty.. nothing to do.. proceed to coloring
     True -> return ig
@@ -328,5 +355,5 @@ simplify' spillHeuristic ig@(IG vertices iEdges pEdges) = case Set.null vertices
               False -> (head $ toList simplifiable, False)
               -- No? Choose the one with the worst spillHeurstic and it is a potential
               -- spill candidate
-              True -> (minimumBy (compare `on` spillHeuristic) $ toList vertices, True)
+              True -> (minimumBy (compare `on` (spillHeuristic ig)) $ toList vertices, True)
 

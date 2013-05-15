@@ -5,6 +5,7 @@ import PrettyPrint
 import Data.Char
 import CFGConcrete
 import MonadUniqueEnv
+import qualified Data.Traversable as T
 
 newtype AGraph m l = AGraph (Graph m l -> UniqStringEnv (Graph m l))
 
@@ -156,6 +157,26 @@ mapLGraphNodes :: (LastNode l1) =>
 
 mapLGraphNodes mf lf (LGraph entryId blocks) = LGraph entryId blocks'
     where blocks' = mapBlocks (mapBlock mf lf) blocks
+
+mapZTailM:: (Monad m, LastNode l1) =>
+    (m1 -> m [m2]) -> (ZLast l1 -> m (([m2],[m2]), ZLast l2)) -> ZTail m1 l1 -> m (ZTail m2 l2)
+
+mapZTailM mfm mfl ztail = do
+    let zl = getZLast ztail
+    ((preMids, endMids), zl') <- mfl zl
+    mappedMiddles <- liftM concat $ mapM mfm $ ztailCollectMiddles ztail
+    return $ ztailFromMiddles (preMids ++ mappedMiddles ++ endMids) zl'
+
+mapBlockM:: (Monad m, LastNode l1) =>
+    (BlockId -> m1 -> m [m2]) -> (BlockId -> ZLast l1 -> m (([m2],[m2]), ZLast l2)) -> Block m1 l1 -> m (Block m2 l2)
+mapBlockM mfm mfl (Block bid ztail) = liftM (Block bid) $ (mapZTailM (mfm bid) (mfl bid) ztail)
+
+mapLGraphNodesM :: (Monad m, LastNode l1) => 
+    (BlockId -> m1 -> m [m2]) -> (BlockId -> ZLast l1 -> m (([m2],[m2]), ZLast l2)) -> LGraph m1 l1 -> m (LGraph m2 l2)
+
+mapLGraphNodesM mfm mfl (LGraph entryId blocks) = liftM (LGraph entryId) blocksM
+    where blocksM = T.sequence $ mapBlocks (mapBlockM mfm mfl) blocks
+
 
 ----------------------AUGMENTED WITH ZLAST TO DO BREAKS
 
