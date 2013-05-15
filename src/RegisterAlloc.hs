@@ -174,7 +174,7 @@ addVertex v ig = IG (Set.insert v $ vertices ig) (iEdges ig) (pEdges ig)
 -- a general fold across any dataflow analysis results.. TODO
 -----------------------------------------------------
 
--- Uses the liveness analysis of a program to build its interference graph for register allocation
+-- Note: These is currently computing the inference graph in the wrong way so it shouldn't be used...
 buildIGFromMidCfg :: LGraph Statement BranchingStatement -> InterferenceGraph VarMarker
 buildIGFromMidCfg cfg = unionIG (discreteOnVertices (allNonArrayVarsForMidCfg cfg)) conflictsIG
     where conflictsIG = foldWithDFR liveVariableAnalysis computeIGfromMidIRNode unionIG emptyIG cfg
@@ -197,7 +197,17 @@ buildIGFromLowCfg cfg = unionIG (discreteOnVertices (allNonArrayVarsForLowCfg cf
     where conflictsIG = foldWithDFR lowLVAnalysis computeIGfromLowIRNode unionIG emptyIG cfg
 
 computeIGfromLowIRNode :: (Either ProtoBranch ProtoASM, LiveVarState) -> InterferenceGraph VarMarker
-computeIGfromLowIRNode (Left l, liveVars) = completeOnVertices $ Set.filter (not . isArray) $ liveVars
+computeIGfromLowIRNode (Left l, liveVars) = case l of
+        If' asms bids -> unionIGs $ map middlesMapF asms
+        While' asms bids -> unionIGs $ map middlesMapF asms
+        -- TODO: Check on how structure relates to for loop semantics
+        For' v asms1 asms2 asms3 bids -> unionIGs $ map middlesMapF (concat [asms1, asms2, asms3])
+        Parafor' v asms1 asms2 asms3 bids -> unionIGs $ map middlesMapF (concat [asms1, asms2, asms3])
+        InitialBranch' bids -> emptyIG
+        Jump' _ -> emptyIG
+        Nil -> emptyIG
+    where middlesMapF = \m -> computeIGfromLowIRNode (Right m, liveVars)
+
 computeIGfromLowIRNode (Right m, liveVars) = case m of
                 Mov' v v' -> addPEdgeOrId v v' $ beforePEdges v' (Just v)
                 CMove' v v' -> addPEdgeOrId v v' $ beforePEdges v' (Just v)

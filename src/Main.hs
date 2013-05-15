@@ -183,7 +183,7 @@ assembleTree configuration input = do
                     Nothing -> repeat putStrLn
                     Just fp -> (writeFile fp):(repeat $ appendFile fp)
   -- Output goes here..
-  let output = opt configuration) $ Right $ zipWith ($) ioFuncSeq $ intersperse "\n" [prolog, pPrint asm, epilog]
+  let output = Right $ zipWith ($) ioFuncSeq $ intersperse "\n" [prolog, pPrint asm, epilog]
       -- Strings you want to output in debug mode go here.
       debugStrings = [pPrint $ fst $ defAllocateRegisters optimizedLowCfg]
   if debug configuration
