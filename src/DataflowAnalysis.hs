@@ -251,6 +251,23 @@ subexpressions e = case e of
     _ -> []
 
 killsExpr :: Variable -> Expression -> Bool
+killsExpr var@(Scopedvar scp v) e = case e of
+        Add e1 e2 -> killsExpr var e1 || killsExpr var e2
+        Sub e1 e2 -> killsExpr var e1 || killsExpr var e2
+        Mul e1 e2 -> killsExpr var e1 || killsExpr var e2
+        Div e1 e2 -> killsExpr var e1 || killsExpr var e2
+        Mod e1 e2 -> killsExpr var e1 || killsExpr var e2
+        And e1 e2 -> killsExpr var e1 || killsExpr var e2
+        Or e1 e2  -> killsExpr var e1 || killsExpr var e2
+        Eq e1 e2  -> killsExpr var e1 || killsExpr var e2
+        Lt e1 e2  -> killsExpr var e1 || killsExpr var e2
+        Gt e1 e2  -> killsExpr var e1 || killsExpr var e2
+        Le e1 e2  -> killsExpr var e1 || killsExpr var e2
+        Ge e1 e2  -> killsExpr var e1 || killsExpr var e2
+        Ne e1 e2  -> killsExpr var e1 || killsExpr var e2
+        Loc (Scopedvar scp' v') -> scp == scp' && symbol v == symbol v'
+        _ -> False
+
 killsExpr var@(Var s) e = case e of
         Add e1 e2 -> killsExpr var e1 || killsExpr var e2
         Sub e1 e2 -> killsExpr var e1 || killsExpr var e2
@@ -388,12 +405,12 @@ varsUsedInProtoStmt :: ProtoASM -> Set VarMarker
 varsUsedInProtoStmt stmt = case stmt of
         Mov' v _ -> valToVMSet v
         Neg' v -> valToVMSet v
-        And' v _ -> valToVMSet v
-        Or'  v _ -> valToVMSet v
-        Add' v _ -> valToVMSet v
-        Sub' v _ -> valToVMSet v -- TODO: Check semantics
-        Mul' v _ -> valToVMSet v
-        Div' v _ -> valToVMSet v -- TODO: Check semantics
+        And' v v' -> valsToVMSet [v,v']
+        Or'  v v' -> valsToVMSet [v,v']
+        Add' v v' -> valsToVMSet [v,v']
+        Sub' v v' -> valsToVMSet [v,v'] -- TODO: Check semantics
+        Mul' v v' -> valsToVMSet [v,v']
+        Div' v v' -> valsToVMSet [v,v'] -- TODO: Check semantics
         Lt'   v v' -> valsToVMSet [v,v'] -- TODO: Check semantics
         Gt'   v v' -> valsToVMSet [v,v'] -- TODO: Check semantics
         Le'   v v' -> valsToVMSet [v,v'] -- TODO: Check semantics

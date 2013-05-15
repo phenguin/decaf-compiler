@@ -8,6 +8,8 @@ import Data.Generics
 import Configuration
 import Configuration.Types
 import MidIR
+import LowIR
+import Util
 import ControlFlowGraph
 import Data.Maybe
 import Control.Monad.State
@@ -58,8 +60,11 @@ runOpt (Opt dfa@(DFAnalysis updateM updateL _ _ dir) mTrans lTrans) lg@(LGraph e
 globalCSE :: Optimization Statement BranchingStatement AvailExprState
 globalCSE = Opt availableExprAnalysis globalCSEmTrans globalCSElTrans
 
+optGlobalCSE :: LGraph Statement BranchingStatement -> LGraph Statement BranchingStatement
+optGlobalCSE = runOpt globalCSE
+
 mkExprTemp :: Expression -> Variable
-mkExprTemp e = Var $ "temp_for_" ++ filter (/= ' ') (pPrint e) ++ "_"
+mkExprTemp e = Scopedvar [Temp] (Var $ "temp_for_" ++ filter (/= ' ') (pPrint e) ++ "_")
 
 globalCSEmTrans :: AvailExprState -> AvailExprState -> Statement -> [Statement]
 

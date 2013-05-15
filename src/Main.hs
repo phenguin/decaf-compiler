@@ -14,6 +14,7 @@ module Main where
 import Prelude hiding (readFile)
 import qualified Prelude
 
+import Util (compose)
 import Codegen
 import ControlFlowGraph (BranchingStatement,makeCFG,getFunctionParamMap,lgraphSpanningFunctions)
 import CodeGeneration 
@@ -42,6 +43,7 @@ import Transforms (convert)
 import PrettyPrint
 import Semantics (addSymbolTables)
 import Optimization 
+import RegisterAlloc
 import LowIR
 import Codegen
 import CFGConcrete
@@ -138,6 +140,20 @@ checkSemantics configuration input = do
           False -> output
           True -> prependOutput (pPrint irTree) output
 
+
+type Opt m l = LGraph m l -> LGraph m l
+-- List all optimizations you want to run in the specified order here
+
+midIROpts :: [Opt Statement BranchingStatement]
+midIROpts = [optGlobalCSE]
+
+runChosenMidIROpts = compose midIROpts
+
+lowIROpts :: [Opt ProtoASM ProtoBranch]
+lowIROpts = []
+
+runChosenLowIROpts = compose lowIROpts
+
 assembleTree :: Configuration -> String -> Either String [IO ()]
 assembleTree configuration input = do
   let (errors, tokens) = partitionEithers $ Scanner.scan input
@@ -153,10 +169,14 @@ assembleTree configuration input = do
   let funmap = getFunctionParamMap $lgraphFromAGraph  cfg
   let midcfg = lgraphSpanningFunctions cfg
   let	scopedcfg  = scopeMidir midcfg globals funmap
+  -- Should make interface to parallelize as just a regular 
+  -- optimization if possible
   let	parallelcfg  = parallelize scopedcfg
---  Right $ [pprIO parallelcfg]
-  let lowIRCFG = toLowIRCFG parallelcfg
-  let (prolog,asm,epilog) = navigate globals funmap lowIRCFG
+  let optimizedMidCfg = runChosenMidIROpts scopedcfg
+  let lowIRCfg = toLowIRCFG optimizedMidCfg
+  let optimizedLowCfg = runChosenLowIROpts lowIRCfg
+  let lowCfgRegAllocated = doRegisterAllocation optimizedLowCfg
+  let (prolog, asm, epilog) = navigate globals funmap lowCfgRegAllocated
   if debug configuration
 	then Right $ [putStrLn prolog,pprIO asm, putStrLn epilog]
  	else Right [return ()]

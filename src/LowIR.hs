@@ -149,7 +149,7 @@ toLowIRCFG cfg = mapLGraphNodes (mapStmtToAsm) (mapBranchToAsm) cfg
 -- Converts regular statements to the pseudo-asm code
 mapStmtToAsm ::BlockId -> Statement -> [ProtoASM]
 mapStmtToAsm bid x = case x of
-        (Set var expr) -> (mapExprToAsm expr) ++ [Mov' (mkTemp 1) (mkTemp 3)] ++ (mapVarToValue var) 
+        (Set var expr) -> (mapExprToAsm expr) ++ [Mov' (mkTemp 0) (mkTemp 3)] ++ (mapVarToValue var) 
         (DVar (Var str))-> [Dec' (Symbol str)]
         (DVar (Scopedvar scp (Var str)))-> [Dec' $ Scoped scp (Symbol str)]
         (DVar (Varray str (Const i)))-> [Dec' (Array str (Literal i))]

@@ -415,6 +415,6 @@ applyNodeColor coloring val = result
 doRegisterAllocation :: LGraph ProtoASM ProtoBranch -> LGraph ProtoASM ProtoBranch
 doRegisterAllocation lgraph = lgraph''
     where coloring = allocateRegisters vmSpillHeuristic lgraph
-          lgraph' = removeRedundantMoves coloring lgraph
-          lgraph'' = applyColoring coloring lgraph'
+          -- lgraph' = removeRedundantMoves coloring lgraph
+          lgraph'' = applyColoring coloring lgraph
 
