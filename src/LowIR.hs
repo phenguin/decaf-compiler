@@ -344,15 +344,15 @@ mapBranchToAsm bid (LastOther (ForBranch (Var str) startexpr expr bid1 bid2))
 
 mapBranchToAsm bid (LastOther (ParaforBranch (Var str) startexpr expr bid1 bid2))  
 	= (([], expressed ++[(Cmp' (Symbol str) (mkTemp 0)),(Je' bid2)]), LastOther $ Parafor' (Literal 0) (mapExprToAsm expr)  expressed [] [bid1, bid2])
-	where expressed = mapExprToAsm expr
+    	 where expressed = mapExprToAsm expr
 
 mapBranchToAsm bid (LastOther (ForBranch  (Scopedvar scp (Var str)) startexpr expr bid1 bid2))  
-	= (([], expressed++ (mapExprToAsm startexpr)++[(Cmp' (Scoped scp (Symbol str)) (mkTemp 0)),(Je' bid2)]), LastOther $ For' (Literal 0) []  expressed [] [bid1, bid2])
-	where expressed = mapExprToAsm expr
+	= (([],expressed++ (mapExprToAsm startexpr)++[(Cmp' (Scoped scp (Symbol str)) (mkTemp 0)),(Je' bid2)] ++  (mapExprToAsm startexpr)), LastOther $ For' (Literal 0) []  expressed [] [bid1, bid2])
+   	where expressed = mapExprToAsm expr
 
 mapBranchToAsm bid (LastOther (ParaforBranch (Scopedvar scp (Var str)) startexpr expr bid1 bid2))  
 	= (([], expressed ++[(Cmp' (Scoped scp (Symbol str)) (mkTemp 0)),(Je' bid2)]), LastOther $ Parafor' (Literal 0) (mapExprToAsm startexpr)  expressed [] [bid1, bid2])
-	where expressed = mapExprToAsm expr
+    where expressed = mapExprToAsm expr
 
 
 
