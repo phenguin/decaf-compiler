@@ -35,7 +35,10 @@ instance PrettyPrint Int where
     ppr = int
 
 instance (Show a, PrettyPrint a) => PrettyPrint [a] where
-    pPrint = show
+    ppr xs = text "[" <+> ppr' xs <> text "]"
+       where ppr' [] = text ""
+             ppr' (x:xs) = ppr x <> comma <+>
+                           ppr' xs
 
 instance (PrettyPrint a) => PrettyPrint (Set a) where
     ppr set = let xs = Set.toList set in text "{" <+> ppr' xs <> text "}"

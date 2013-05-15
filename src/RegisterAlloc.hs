@@ -32,6 +32,24 @@ import Data.Char (toLower)
 type Var = String
 data Color = CRAX | CRBX | CRCX | CRDX | CRSP | CRBP | CRSI | CRDI | CR8 | CR9 | CR10 | CR11 | CR12 | CR13 | CR14 | CR15 deriving (Eq, Show, Ord, Enum, Data, Typeable)
 
+colorToValue :: Color -> Value
+colorToValue CRAX = RAX
+colorToValue CRBX = RBX
+colorToValue CRCX = RCX
+colorToValue CRDX = RDX
+colorToValue CRSP = RSP
+colorToValue CRBP = RBP
+colorToValue CRSI = RSI
+colorToValue CRDI = RDI
+colorToValue CR8 = R8
+colorToValue CR9 = R9
+colorToValue CR10 = R10
+colorToValue CR11 = R11
+colorToValue CR12 = R12
+colorToValue CR13 = R13
+colorToValue CR14 = R14
+colorToValue CR15= R15
+
 data MemLoc = BasePtrOffset Int deriving (Eq, Ord, Show, Data, Typeable)
 
 instance PrettyPrint MemLoc where
@@ -284,8 +302,28 @@ updateForSpill graph (spillVM, BasePtrOffset i) = trace ("updateForSpill called 
                   return (([],[Mov' (Stack i) newTempVar]), LastOther branch')
               False -> return (([],[]), zl)
           res = mapLGraphNodesM mMapM lMapM graph
-          
 
+keysByValue :: (Ord k, Eq a) => M.Map k a -> [Set k]
+keysByValue lkp = map (fromList . keysWithVal) $ M.elems lkp
+    where keysWithVal a = filter (\k -> M.lookup k lkp == Just a) keys
+          keys = M.keys lkp
+          
+removeRedundantMoves :: Coloring VarMarker -> LGraph ProtoASM ProtoBranch -> LGraph ProtoASM ProtoBranch
+removeRedundantMoves coloring graph = mapLGraphNodes mMap lMap graph
+    where redundant v v' = isSymbol v && isSymbol v' && (any (Set.isSubsetOf (valsToVMSet [v,v'])) $ vertices)
+          vertices = keysByValue coloring
+          isSymbol (Scoped _ (Symbol _)) = True
+          isSymbol _ = False
+          mMap bid stmt = case stmt of
+              Mov' v v' -> if redundant v v' then trace ("redundant" ++ pPrint (v,v')) $ [] else [stmt]
+              CMove' v v' -> if redundant v v' then [] else [stmt]
+              CMovne' v v' -> if redundant v v' then [] else [stmt]
+              CMovl' v v' -> if redundant v v' then [] else [stmt]
+              CMovg' v v' -> if redundant v v' then [] else [stmt]
+              CMovle' v v' -> if redundant v v' then [] else [stmt]
+              CMovge' v v' -> if redundant v v' then [] else [stmt]
+              _ -> [stmt]
+          lMap bid zl = (([],[]), zl)
 
 allocateRegisters :: (Ord a, RegisterAllocatable b) => (InterferenceGraph VarMarker -> IGVertex VarMarker -> a) -> b -> Coloring VarMarker
 allocateRegisters spillHeuristic cfg = case coloringOrSpills of
@@ -295,11 +333,11 @@ allocateRegisters spillHeuristic cfg = case coloringOrSpills of
           (simpleIG, vertexStack) = simplify spillHeuristic initialIG
           coloringOrSpills = select (iEdges simpleIG) vertexStack
           
-select :: (Ord a, PrettyPrint a) => Set (IGEdge a) -> [IGVertex a] -> Either [(IGVertex a, MemLoc)] (Coloring a)
+select :: (Ord a, PrettyPrint a, Show a) => Set (IGEdge a) -> [IGVertex a] -> Either [(IGVertex a, MemLoc)] (Coloring a)
 select iEdges vertexStack = fst $ runState (select' initialGraph M.empty) (vertexStack, [])
     where initialGraph = IG Set.empty iEdges Set.empty
 
-select' :: (Ord a, PrettyPrint a) => InterferenceGraph a -> Coloring a -> State ([IGVertex a], [(IGVertex a, MemLoc)]) (Either [(IGVertex a, MemLoc)] (Coloring a))
+select' :: (Ord a, PrettyPrint a, Show a) => InterferenceGraph a -> Coloring a -> State ([IGVertex a], [(IGVertex a, MemLoc)]) (Either [(IGVertex a, MemLoc)] (Coloring a))
 select' graph colorMap = do
     mbVertex <- popLeft
     spilled <- liftM snd get
@@ -311,7 +349,7 @@ select' graph colorMap = do
                                        neighbors v graph
                       availColors = allColors \\ neighborColors 
                       -- TODO: Remove trace
-                      graph' = trace (pPrint (v, degree v graph)) $ addVertex v graph
+                      graph' = trace (show (v, degree v graph)) $ addVertex v graph
                       BasePtrOffset curBPMax = if null spilled then BasePtrOffset 1 else maximum $ map snd spilled
                       in
                   if null availColors then
@@ -356,4 +394,27 @@ simplify' spillHeuristic ig@(IG vertices iEdges pEdges) = case Set.null vertices
               -- No? Choose the one with the worst spillHeurstic and it is a potential
               -- spill candidate
               True -> (minimumBy (compare `on` (spillHeuristic ig)) $ toList vertices, True)
+
+-- ApplyNodeColor top down on the whole lgraph
+applyColoring :: Coloring VarMarker -> LGraph ProtoASM ProtoBranch -> LGraph ProtoASM ProtoBranch
+applyColoring coloring = everywhere' (mkT (applyNodeColor coloring))
+
+-- This is hideous.. but I'm tired and dont feel like writing it nicer
+applyNodeColor :: Coloring VarMarker -> Value -> Value
+applyNodeColor coloring val = result
+    where maybeVarMarker = case toList (valToVMSet val) of
+                [vm] -> Just vm
+                _ -> Nothing
+          color vm = case M.lookup vm coloring of
+                       Nothing -> error $ "Uncolored node:" ++ pPrint vm
+                       Just c -> Just c
+          result = case maybeVarMarker >>= color of
+                     Nothing -> val
+                     Just c -> colorToValue c
+
+doRegisterAllocation :: LGraph ProtoASM ProtoBranch -> LGraph ProtoASM ProtoBranch
+doRegisterAllocation lgraph = lgraph''
+    where coloring = allocateRegisters vmSpillHeuristic lgraph
+          lgraph' = removeRedundantMoves coloring lgraph
+          lgraph'' = applyColoring coloring lgraph'
 

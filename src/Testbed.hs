@@ -1,6 +1,7 @@
 module Testbed where
 
 import Data.Either
+import qualified Data.Set as Set
 import Control.Monad
 import Control.Monad.State
 import System.IO.Unsafe (unsafePerformIO)
