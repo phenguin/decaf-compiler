@@ -395,7 +395,6 @@ varsDefinedInProtoStmt stmt = case stmt of
     Add' _ v -> valToVMSet v
     Sub' _ v -> valToVMSet v -- TODO: Check semantics
     Mul' _ v -> valToVMSet v
-    Div' v -> valToVMSet v -- TODO: Check semantics
     Not' v -> valToVMSet v
     Pop' v -> valToVMSet v
     CMove' _ v -> valToVMSet v
@@ -419,6 +418,7 @@ varsUsedInProtoStmt stmt = case stmt of
         Add' v v' -> Set.union (valsToVMSet [v,v']) (valsIndicesToVMSet [v,v'])
         Sub' v v' -> Set.union (valsToVMSet [v,v']) (valsIndicesToVMSet [v,v'])
         Mul' v v' -> Set.union (valsToVMSet [v,v']) (valsIndicesToVMSet [v,v'])
+        Mod' v v' -> Set.union (valsToVMSet [v,v']) (valsIndicesToVMSet [v,v'])
         Div' v    -> Set.union (valsToVMSet [v]) (valIndicesToVMSet v)
         Lt'   v v' -> Set.union (valsToVMSet [v,v']) (valsIndicesToVMSet [v,v'])
         Gt'   v v' -> Set.union (valsToVMSet [v,v']) (valsIndicesToVMSet [v,v'])
