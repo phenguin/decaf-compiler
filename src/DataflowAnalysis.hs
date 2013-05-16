@@ -418,7 +418,7 @@ varsUsedInProtoStmt stmt = case stmt of
         Add' v v' -> Set.union (valsToVMSet [v,v']) (valsIndicesToVMSet [v,v'])
         Sub' v v' -> Set.union (valsToVMSet [v,v']) (valsIndicesToVMSet [v,v'])
         Mul' v v' -> Set.union (valsToVMSet [v,v']) (valsIndicesToVMSet [v,v'])
-        Mod' v v' -> Set.union (valsToVMSet [v,v']) (valsIndicesToVMSet [v,v'])
+        Mod' v    -> Set.union (valsToVMSet [v]) (valIndicesToVMSet v)
         Div' v    -> Set.union (valsToVMSet [v]) (valIndicesToVMSet v)
         Lt'   v v' -> Set.union (valsToVMSet [v,v']) (valsIndicesToVMSet [v,v'])
         Gt'   v v' -> Set.union (valsToVMSet [v,v']) (valsIndicesToVMSet [v,v'])
