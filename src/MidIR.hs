@@ -165,7 +165,7 @@ statementIR (MT (_,T.While,st) (cond:body:_)) = [While cond' body']
 	  cond' = expressionIR cond
 	  body' = statementIR body		
 
-statementIR (MT (_,(T.For iD),st) (start:end:body:_)) =[ForLoop i' start' end' body']
+statementIR (MT (_,(T.For iD),st) (start:end:body:_)) = (Set i' start'):[ForLoop i' start' end' body']
 	where
 	  start' = (expressionIR start)
 	  end' = (expressionIR end)

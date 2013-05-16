@@ -402,28 +402,28 @@ mapBranchToAsm bid (LastOther (WhileBranch expr bid1 bid2))
         tmp <- lastTemp
         return $ (([],expressed++[(Cmp' (Literal 0) tmp),(Je' bid2)]), LastOther $ While' [] [bid1, bid2])
 
-mapBranchToAsm bid (LastOther (ForBranch (Var str) startexpr expr bid1 bid2))  
+mapBranchToAsm bid (LastOther (ForBranch v@(Var str) startexpr expr bid1 bid2))  
 	= do
         expressed <- mapExprToAsm expr
-        tmp <- lastTemp
-        return $ (([], expressed++[(Cmp' (Symbol str) tmp),(Je' bid2)]), LastOther $ For' (Literal 0) expressed expressed [] [bid1, bid2])
+	endtmp <- lastTemp
+        return $ ((expressed ++ [(Cmp' (Symbol str) endtmp),(Je' bid2)],[]), LastOther $ For' (Literal 0) [] [] [] [bid1, bid2])
 
 mapBranchToAsm bid (LastOther (ParaforBranch (Var str) startexpr expr bid1 bid2))  
 	= do
         expressed <- mapExprToAsm expr
         tmp <- lastTemp
-        return $ (([], expressed ++[(Cmp' (Symbol str) tmp),(Je' bid2)]), LastOther $ Parafor' (Literal 0) expressed expressed [] [bid1, bid2])
+        return $ (([], expressed ++[(Cmp' (Symbol str) tmp),(Je' bid2)]), LastOther $ Parafor' (Literal 0) [] [] [] [bid1, bid2])
 
 mapBranchToAsm bid (LastOther (ForBranch  v@(Scopedvar scp (Var str)) startexpr expr bid1 bid2))  
 	= do
-        sExpressed <- mapExprToAsm startexpr
-	vExpr <- mapVarToValue v
+       -- sExpressed <- mapExprToAsm startexpr
+	--vExpr <- mapVarToValue v
         expressed <- mapExprToAsm expr
 	endtmp <- lastTemp
 	
        -- sExpressed' <- mapExprToAsm startexpr
-        tmp <- lastTemp 
-        return $ ((sExpressed ++ vExpr ++ expressed , [(Cmp' (Scoped scp (Symbol str)) endtmp),(Je' bid2)]), LastOther $ For' (Literal 0) []  [] [] [bid1, bid2])
+        -- tmp <- Debug.Trace.trace "fasfadfa1231312" lastTemp 
+        return $ (([], expressed ++ [(Cmp' (Scoped scp (Symbol str)) endtmp),(Je' bid2)]), LastOther $ For' (Literal 0) []  [] [] [bid1, bid2])
 
 mapBranchToAsm bid (LastOther (ParaforBranch (Scopedvar scp (Var str)) startexpr expr bid1 bid2))  
 	= do
