@@ -187,40 +187,68 @@ computeIGfromLowIRNode (Left l, liveVars) = case l of
           mapMAsms asms = fst $ runState (mapM middlesMapF (reverse asms)) liveVars
 
 computeIGfromLowIRNode (Right m, liveVars') = case m of
-                Mov' v v' -> addPEdgeOrId v v' $ beforePEdges v' (Just v)
-                CMove' v v' -> addPEdgeOrId v v' $ beforePEdges v' Nothing 
-                CMovne' v v' -> addPEdgeOrId v v' $ beforePEdges v' Nothing
-                CMovg' v v' -> addPEdgeOrId v v' $ beforePEdges v' Nothing
-                CMovl' v v' -> addPEdgeOrId v v' $ beforePEdges v' Nothing
-                CMovge' v v' -> addPEdgeOrId v v' $ beforePEdges v' Nothing
-                CMovle' v v' -> addPEdgeOrId v v' $ beforePEdges v' Nothing
-                Neg' v ->  beforePEdges v Nothing
-                And' _ v ->  beforePEdges v Nothing
-                Or' _ v ->  beforePEdges v Nothing
-                Add' _ v ->  beforePEdges v Nothing
-                Sub' _ v ->  beforePEdges v Nothing
-                Mul' _ v ->  beforePEdges v Nothing
+                Mov' v v' -> addPEdgeOrId v v' $ interfereWithExcept v' (Just v)
+                CMove' v v' -> addPEdgeOrId v v' $ interfereWithExcept v' Nothing 
+                CMovne' v v' -> addPEdgeOrId v v' $ interfereWithExcept v' Nothing
+                CMovg' v v' -> addPEdgeOrId v v' $ interfereWithExcept v' Nothing
+                CMovl' v v' -> addPEdgeOrId v v' $ interfereWithExcept v' Nothing
+                CMovge' v v' -> addPEdgeOrId v v' $ interfereWithExcept v' Nothing
+                CMovle' v v' -> addPEdgeOrId v v' $ interfereWithExcept v' Nothing
+                Neg' v ->  interfereWithExcept v Nothing
+                And' _ v ->  interfereWithExcept v Nothing
+                Or' _ v ->  interfereWithExcept v Nothing
+                Add' _ v ->  interfereWithExcept v Nothing
+                Sub' _ v ->  interfereWithExcept v Nothing
+                Mul' _ v ->  interfereWithExcept v Nothing
                 -- TODO: Needs to interfere with RAX and RDX precolored regs.
-                Div' v -> beforePEdges v Nothing
-                Not' v -> beforePEdges v Nothing
-                Pop' v -> beforePEdges v Nothing
+                Div' v -> interfereWithExcept v Nothing
+                Not' v -> interfereWithExcept v Nothing
+                Pop' v -> interfereWithExcept v Nothing
                 _ -> emptyIG
     where relevantVarNames = Set.filter (not . isArray) $ liveVars
-          beforePEdges defV maybeExclude = foldr (uncurry addIEdge) (discreteOnVertices relevantVarNames) $ toList (interfering defV maybeExclude)
-          interfering (Scoped scp (Symbol s)) maybeExclude = case maybeExclude of
-                    Just (Scoped scp'' (Symbol s'')) -> Set.map (\vm' -> (makeVertex vm, makeVertex vm')) $ 
-                                                             Set.filter (/=(VarMarker s'' Transforms.Single scp'')) $
-                                                             Set.filter (/=vm) $
+          interfereWithExcept defV maybeExclude = foldr (uncurry addIEdge) (discreteOnVertices relevantVarNames) $
+                                                                          toList (interfering defV maybeExclude)
+          interfering vt maybeExclude = case maybeExclude of
+                    Just v -> let vm = valToVMSet' v in 
+                                  if colorableValue v
+                                  then Set.map (\vm' -> (vtm, makeVertex vm')) $ 
+                                                             Set.filter (not . (flip Set.member vm)) $
+                                                             Set.filter (not . (flip Set.member vtm)) $
                                                              relevantVarNames
-                    _ -> Set.map (\vm' ->  (makeVertex vm, makeVertex vm')) $
-                                                           Set.filter (/=vm) $ 
-                                                           relevantVarNames
-                where vm = VarMarker s Transforms.Single scp
+                                  else
+                                  interferingEdges
+                    _ -> interferingEdges
+                where vtm = valToVMSet' vt
+                      interferingEdges = Set.map (\vm' -> (vtm, makeVertex vm')) $ 
+                                                      Set.filter (not . (flip Set.member vtm)) $
+                                                                          relevantVarNames
+                                                                                                                                       
+                      
           interfering _ _ = Set.empty
           liveVars = lowLVUpdateM m liveVars'
           addPEdgeOrId (Scoped scp (Symbol s)) (Scoped scp' (Symbol s')) = addPEdge (makeVertex (VarMarker s Transforms.Single scp))
                                                                                     (makeVertex (VarMarker s' Transforms.Single scp'))
           addPEdgeOrId _ _ = id
+
+colorableValue :: Value -> Bool
+colorableValue (Scoped _ (Symbol _)) = True
+colorableValue RAX = True
+colorableValue RBX = True
+colorableValue RCX = True
+colorableValue RDX = True
+colorableValue RSP = True
+colorableValue RBP = True
+colorableValue RSI = True
+colorableValue RDI = True
+colorableValue R8 = True
+colorableValue R9 = True
+colorableValue R10 = True
+colorableValue R11 = True
+colorableValue R12 = True
+colorableValue R13 = True
+colorableValue R14 = True
+colorableValue R15 = True
+colorableValue _ = False
 
 ------------------------------------------------------------
 -- Implement actual register allocation via graph coloring..
@@ -238,24 +266,21 @@ coalesce ig@(IG vertices iEdges pEdges) = case relevantPEdges of
                                                -- TODO: Should we remove irrelevant pEdges?
                                                [] -> (IG vertices iEdges (fromList validPEdges), False) -- Cant coalesce anything
                                                (e:_) -> (fst $ coalesce $ getNewIG e, True)
-    where validPEdges = toList $ Set.filter valid pEdges -- Cant coalesce interfering vertices
-          valid pEdge = not $ any (conflicts pEdge) $ toList iEdges
-          conflicts pEdge iEdge = (i1 `contains` p1 && i2 `contains` p2) || (i1 `contains` p2 && i2 `contains` p1)
-              where [p1,p2] = toList pEdge
-                    [i1,i2] = toList iEdge
-                    contains = flip Set.isSubsetOf
+    where validPEdges = toList $ Set.filter (not . invalid) pEdges -- Cant coalesce interfering vertices
+          invalid pEdge = (any ((==) pEdge) $ toList iEdges) || (all precolored $ toList pEdge)
           relevantPEdges = filter (\e -> edgeDeg e < numColors) validPEdges
           edgeDeg edge = foldr (+) 0 $ map ((flip degree) ig) (toList edge)
           getVerts e = Set.insert (Set.unions (toList e)) $ Set.difference vertices e
           getIEdges e = Set.map (setReplace e (Set.unions (toList e))) iEdges
           getPEdges e = Set.union inheritedPEdges $ Set.delete e pEdges
-            where inheritedEdgesFor v = if all (\v' -> (fromList [v, v']) `Set.member` pEdges) endpts
-                                          then
-                                          Set.singleton $ fromList [v, (Set.unions (toList e))]
-                                          else
-                                          Set.empty
-                  inheritedPEdges = Set.unions $ map inheritedEdgesFor $ toList (getVerts e)
-                  endpts = toList e
+                where inheritedPEdges = Set.empty -- for now
+                  -- inheritedPEdges = Set.unions $ map inheritedEdgesFor $ toList (getVerts e)
+                  -- endpts = toList e
+            -- where inheritedEdgesFor v = if all (\v' -> (fromList [v, v']) `Set.member` pEdges) endpts
+            --                               then
+            --                               Set.singleton $ fromList [v, (Set.unions (toList e))]
+            --                               else
+            --                               Set.empty
           getNewIG e = IG (getVerts e) (getIEdges e) (getPEdges e)
 
 
