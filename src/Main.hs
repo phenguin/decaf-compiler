@@ -174,19 +174,20 @@ assembleTree configuration input = do
                               (id,id)
                               else
                               (compose lowIROpts, compose midIROpts)
-  let optimizedMidCfg = trace "HEY 1" $ runChosenMidIROpts scopedcfg
-  let lowIRCfg = trace "HEY 2" $ toLowIRCFG optimizedMidCfg
-  let optimizedLowCfg = trace "HEY 3" $ runChosenLowIROpts lowIRCfg
-  let lowCfgRegAllocated = trace "HEY 4" $ doRegisterAllocation optimizedLowCfg
-  let (prolog, asm, epilog) = trace "HEY 5" $ navigate globals funmap lowCfgRegAllocated
-  let ioFuncSeq = trace "HEY 6" $ case outputFileName configuration of
+--  let optimizedMidCfg = runChosenMidIROpts scopedcfg
+  let lowIRCfg = toLowIRCFG scopedcfg -- optimizedMidCfg
+ -- let optimizedLowCfg = runChosenLowIROpts lowIRCfg
+ -- Right [pprIO lowIRCfg ] {-
+  let lowCfgRegAllocated = doRegisterAllocation lowIRCfg --optimizedLowCfg
+  let (prolog, asm, epilog) = navigate globals funmap lowCfgRegAllocated
+  let ioFuncSeq = case outputFileName configuration of
                     Nothing -> repeat putStrLn
                     Just fp -> (writeFile fp):(repeat $ appendFile fp)
   -- Output goes here..
   let output = Right $ zipWith ($) ioFuncSeq $ intersperse "\n" [prolog, pPrint asm, epilog]
       -- Strings you want to output in debug mode go here.
-      debugStrings = [pPrint globals,
-                      pDetail optimizedLowCfg] 
+      debugStrings = [] 
   if debug configuration
 	then compose (map prependOutput debugStrings) output
  	else output
+     --} 

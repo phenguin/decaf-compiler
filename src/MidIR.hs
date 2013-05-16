@@ -116,7 +116,7 @@ statementIR:: SemanticTreeWithSymbols -> [Statement]
 statementIR (MT (_,(T.FD fdType (_,fdId)),st)  forest)= case fdType of
 	T.Single -> [(DVar (Var (T.idString fdId)) )]
 	(T.Array size) -> [(DVar (Varray (T.idString fdId) (Const size)) )] 
-statementIR (MT (_,(T.MD (_,iD)),st)  forest)= [DFun (T.idString iD) params body]
+statementIR (MT (_,(T.MD (_,iD)),st)  forest)= [DFun (T.idString iD) params ((map DVar params)++body)]
 	where 
 	  params = map variableIR $ init forest
 	  body = statementIR $ last forest

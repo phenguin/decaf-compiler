@@ -210,12 +210,18 @@ computeIGfromLowIRNode (Left l, liveVars) = case l of
 
 computeIGfromLowIRNode (Right m, liveVars) = case m of
                 Mov' v v' -> addPEdgeOrId v v' $ beforePEdges v' (Just v)
-                CMove' v v' -> addPEdgeOrId v v' $ beforePEdges v' (Just v)
-                CMovne' v v' -> addPEdgeOrId v v' $ beforePEdges v' (Just v)
-                CMovg' v v' -> addPEdgeOrId v v' $ beforePEdges v' (Just v)
-                CMovl' v v' -> addPEdgeOrId v v' $ beforePEdges v' (Just v)
-                CMovge' v v' -> addPEdgeOrId v v' $ beforePEdges v' (Just v)
-                CMovle' v v' -> addPEdgeOrId v v' $ beforePEdges v' (Just v)
+    --            CMove' _ v' ->  beforePEdges v' (Just v) 
+     --           CMovne' _  v' -> beforePEdges v' (Just v)
+      --          CMovg' _ v' ->  beforePEdges v' (Just v)
+       --         CMovl' _  v' -> beforePEdges v' (Just v)
+        --        CMovge' _  v' ->  beforePEdges v' (Just v)
+         --       CMovle' _  v' ->  beforePEdges v' (Just v)
+                CMove' v v' -> addPEdgeOrId v v' $ beforePEdges v' Nothing 
+                CMovne' v v' -> addPEdgeOrId v v' $ beforePEdges v' Nothing
+                CMovg' v v' -> addPEdgeOrId v v' $ beforePEdges v' Nothing
+                CMovl' v v' -> addPEdgeOrId v v' $ beforePEdges v' Nothing
+                CMovge' v v' -> addPEdgeOrId v v' $ beforePEdges v' Nothing
+                CMovle' v v' -> addPEdgeOrId v v' $ beforePEdges v' Nothing
                 Neg' v ->  beforePEdges v Nothing
                 And' _ v ->  beforePEdges v Nothing
                 Or' _ v ->  beforePEdges v Nothing
@@ -361,12 +367,12 @@ removeRedundantMoves coloring graph = mapLGraphNodes mMap lMap graph
           isSymbol _ = False
           mMap bid stmt = case stmt of
               Mov' v v' -> if redundant v v' then [] else  [stmt]
-              CMove' v v' -> if redundant v v' then [] else  [stmt]
-              CMovne' v v' -> if redundant v v' then [] else [stmt]
-              CMovl' v v' -> if redundant v v' then [] else [stmt]
-              CMovg' v v' -> if redundant v v' then [] else [stmt]
-              CMovle' v v' -> if redundant v v' then [] else [stmt]
-              CMovge' v v' -> if redundant v v' then [] else [stmt]
+--              CMove' v v' -> if redundant v v' then [] else  [stmt]
+ --             CMovne' v v' -> if redundant v v' then [] else [stmt]
+  -- -           CMovl' v v' -> if redundant v v' then [] else [stmt]
+   --           CMovg' v v' -> if redundant v v' then [] else [stmt]
+   --           CMovle' v v' -> if redundant v v' then [] else [stmt]
+   --           CMovge' v v' -> if redundant v v' then [] else [stmt]
               _ -> [stmt]
           lMap bid zl = (([],[]), zl)
 
@@ -461,6 +467,6 @@ doRegisterAllocation :: LGraph ProtoASM ProtoBranch -> LGraph ProtoASM ProtoBran
 doRegisterAllocation lgraph = coloredGraph
     where (coloring, finalGraph) = allocateRegisters vmSpillHeuristic lgraph
           coloring' = M.filterWithKey (\k a -> (not . isArray) k) coloring
-          lgraph' = trace (pPrint finalGraph ++ "\n" ++ pPrint coloring') $ removeRedundantMoves coloring finalGraph
+          --lgraph' = removeRedundantMoves coloring finalGraph
           coloredGraph = applyColoring coloring' finalGraph
 

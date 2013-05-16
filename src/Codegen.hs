@@ -93,7 +93,7 @@ scopeMidir midir globals funmap = fst $ hemorhage midir (scoper funmap) (lfixBra
 			 globalist =  map (\x-> Scopedvar [Global] x)$ globals
 			 standardizeArrays (Varray sym _) = (Varray sym (Const 0))
 		    	 standardizeArrays x = x
-			 globalmap =  insertListMap ( map (\(x) -> ((standardizeArrays x) , MidIR.getScope x)) globalist) $ M.empty
+			 globalmap =  insertListMap ( map (\(x) -> ((standardizeArrays x) , [Global])) globalist) $ M.empty
 		
 
 {-
@@ -298,15 +298,22 @@ replaceBreakContinue last bid scope instrs = do
 scoper funmap bid scope instrs =  do
 	premap <- get
 	varmap <- return $  (updatemap premap) 
-	put  varmap 
+	put$ Debug.Trace.trace (getStr bid ++ (show varmap)) varmap 
 	return $ map (fixStatement (fixExpression (mapswap varmap)) (mapswap varmap)) instrs
 		
 	where
+		mapswap vmp v@(Var str) = Scopedvar prefix v
+			where prefix = fj 8 $ M.lookup v vmp
+		mapswap vmp v@(Varray str va) = Scopedvar prefix v
+			where prefix = case M.lookup (Varray str (Const 0)) vmp of
+				Just x -> x
+				Nothing -> []	
+-- important convention array always RAX in tables!
 	--	mapswap:: M.Map Value String -> Value -> Value
-		mapswap vmp v@(Var str) = Scopedvar (prescope $scopify $ head scope) v
-			where prefix = fj$ M.lookup v vmp
-		mapswap vmp v@(Varray str va) = Scopedvar (prescope $ scopify $ head scope) v
-			where prefix = fj $ M.lookup (Varray str (Const 0)) vmp -- important convention array always RAX in tables!
+--		mapswap vmp v@(Var str) = Scopedvar (prescope $scopify $ head scope) v
+--			where prefix = fj$ M.lookup v vmp
+--		mapswap vmp v@(Varray str va) = Scopedvar (prescope $ scopify $ head scope) v
+--			where prefix = fj $ M.lookup (Varray str (Const 0)) vmp -- important convention array always RAX in tables!
 		mapswap vmp v = v
 		params = extractParams instrs
 		extractParams ((DFun _ v _):xs) = v
@@ -340,9 +347,9 @@ lfixBranch funmap lst scope = do
 			x -> return x
 		where
 			mapswap vmp v@(Var str) = Scopedvar (prescope $scopify $ head scope) v
-				where prefix = fj$ M.lookup v vmp
+				where prefix = fj 20$ M.lookup v vmp
 			mapswap vmp v@(Varray str va) = Scopedvar (prescope $ scopify $ head scope) v
-				where prefix = fj $ M.lookup (Varray str (Const 0)) vmp -- important convention array always RAX in tables!
+				where prefix = fj 21 $ M.lookup (Varray str (Const 0)) vmp -- important convention array always RAX in tables!
 			prescope pre = reverse$ dropWhile (/= pre) $ map scopify scope
 			scopify "global" = Global 
 			scopify x 
@@ -521,16 +528,16 @@ zipThroughB  c b = zipThroughBState [] c b
 zipThroughBState scope c b = case zbTail b of 
 		(ZTail m _) -> ((getBlockId b),m):(zipThroughBState (b:scope) c (nextEdge b))
 		(ZLast (LastOther (Jump' bs) ))->  if not (elem b scope)
-				then zipThroughBState (b:scope) c $ fj $ getBlock c bs 
+				then zipThroughBState (b:scope) c $ fj 10 $ getBlock c bs 
 				else []
 		(ZLast (LastOther (If' expr (b1:b2:_)) ))-> if not (elem b scope) 
-				then (map (\z -> ((getBlockId b), z)) expr) ++ (zipThroughBState (b:scope) c $fj $getBlock c b2 ) ++ (zipThroughBState (b:scope) c $ fj $ getBlock c b1 ) -- fgFocus $ focus b1 c)
+				then (map (\z -> ((getBlockId b), z)) expr) ++ (zipThroughBState (b:scope) c $fj 11 $getBlock c b2 ) ++ (zipThroughBState (b:scope) c $ fj  12$ getBlock c b1 ) -- fgFocus $ focus b1 c)
 				else []
 		(ZLast (LastOther (While' expr (b1:b2:_)) ))-> if not (elem b scope)
-				then (map (\z -> ((getBlockId b), z)) expr) ++ (zipThroughBState (b:scope) c $ fj$ getBlock c b2) ++ (zipThroughBState (b:scope) c $ fj $ getBlock c b1 ) --fgFocus $ focus b1 c)
+				then (map (\z -> ((getBlockId b), z)) expr) ++ (zipThroughBState (b:scope) c $ fj 13$ getBlock c b2) ++ (zipThroughBState (b:scope) c $ fj 14 $ getBlock c b1 ) --fgFocus $ focus b1 c)
 				else []
 		(ZLast (LastOther (InitialBranch' bs )))-> if not (elem b scope) 
-				then concatMap (\x -> zipThroughBState (b:scope) c $ fj $ getBlock c x) bs
+				then concatMap (\x -> zipThroughBState (b:scope) c $ fj 15 $ getBlock c x) bs
 				else []
 		_ -> []
 

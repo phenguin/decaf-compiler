@@ -601,7 +601,7 @@ hemorhage' stop prestate visited scope g blk l ll= (M.insert bid newblock g' ,pr
                                                 then hemorhage' stop' newstate ((BID stop'):bid2:bid1:bid:visited) scope leftg blk2 l ll
                                                 else (leftg,state')
                                         in if unvisited (BID stop')
-                                                then hemorhage' stop newstate ((BID stop'):bid2:bid1:bid:visited) scope rightg (getblk (BID stop') g) l ll
+                                                then hemorhage' stop newstate (bid2:bid1:bid:visited) scope rightg (getblk (BID stop') g) l ll
                                                 else (rightg,state'')
 
 
@@ -618,7 +618,7 @@ hemorhage' stop prestate visited scope g blk l ll= (M.insert bid newblock g' ,pr
                                                 then hemorhage' stop' newstate ((BID stop'):bid2:bid1:bid:visited) scope leftg blk2 l ll
                                                 else (leftg,state')
                                         in if unvisited (BID stop')
-                                                then hemorhage' stop newstate ((BID stop'):bid2:bid1:bid:visited) scope rightg (getblk (BID stop') g) l ll
+                                                then hemorhage' stop newstate (bid2:bid1:bid:visited) scope rightg (getblk (BID stop') g) l ll
                                                 else (rightg,state'')
 
 				(LastOther (ParaforBranch _ _ _ b1 b2)) -> let
@@ -634,7 +634,7 @@ hemorhage' stop prestate visited scope g blk l ll= (M.insert bid newblock g' ,pr
                                                 then hemorhage' stop' newstate ((BID stop'):bid2:bid1:bid:visited) scope leftg blk2 l ll
                                                 else (leftg,state')
                                         in if unvisited (BID stop')
-                                                then hemorhage' stop newstate ((BID stop'):bid2:bid1:bid:visited) scope rightg (getblk (BID stop') g) l ll
+                                                then hemorhage' stop newstate (bid2:bid1:bid:visited) scope rightg (getblk (BID stop') g) l ll
                                                 else (rightg,state'')
 
 
@@ -652,7 +652,7 @@ hemorhage' stop prestate visited scope g blk l ll= (M.insert bid newblock g' ,pr
                                                 then hemorhage' stop' newstate ((BID stop'):bid2:bid1:bid:visited) scope leftg blk2 l ll
                                                 else (leftg, state')
                                         in if unvisited (BID stop')
-                                                then hemorhage' stop newstate ((BID stop'):bid2:bid1:bid:visited) scope rightg (getblk (BID stop') g) l ll
+                                                then hemorhage' stop newstate (bid2:bid1:bid:visited) scope rightg (getblk (BID stop') g) l ll
                                                 else (rightg,state'')
 
 
