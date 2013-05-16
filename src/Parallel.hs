@@ -179,6 +179,15 @@ fornex expr
 
 
 --fornvar:: M m => Variable -> m Variable 
+
+fornvar v@(Varray str expr) =do
+	st@(scp, mp,i) <- get
+	let scope = fromJust $ M.lookup (standardizeArrays v) (mp:: M.Map Variable [Scoped])
+	expr' <- fornex expr
+	return $ Scopedvar scope (Varray str expr')
+
+
+
 fornvar v =do
 	st@(scp, mp,i) <- get
 	let scope = fromJust $ M.lookup (standardizeArrays v) (mp:: M.Map Variable [Scoped])
