@@ -187,10 +187,9 @@ assembleTree configuration input = do
   -- Output goes here..
   let output = Right $ zipWith ($) ioFuncSeq $ intersperse "\n" [prolog, pPrint asm, epilog]
       -- Strings you want to output in debug mode go here.
-      debugStrings = [pPrint $ computeInterferenceGraph lowIRCfg,
-                      pPrint $ augmentWithDFR lowLVAnalysis lowIRCfg,
+      debugStrings = [pPrint $ computeInterferenceGraph lowIRCfg ,
                       pPrint $ (fst . defAllocateRegisters) lowIRCfg ,
-                      pDetail $ lowIRCfg ]
+                      pPrint $ augmentWithDFR lowLVAnalysis lowIRCfg ]
   if debug configuration
 	then compose (map prependOutput debugStrings) output
  	else output

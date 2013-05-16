@@ -412,6 +412,9 @@ varsDefinedInProtoBranch _ = Set.empty
 
 varsUsedInProtoStmt :: ProtoASM -> Set VarMarker
 varsUsedInProtoStmt stmt = case stmt of
+        Mov' (Scoped _ (Array _ v)) (Scoped _ (Array _ v')) -> valsToVMSet [v,v']
+        Mov' (Scoped _ (Array _ v)) _ -> valToVMSet v
+        Mov' _ (Scoped _ (Array _ v')) -> valToVMSet v'
         Mov' v _ -> valToVMSet v
         Neg' v -> valToVMSet v
         And' v v' -> valsToVMSet [v,v']
