@@ -33,8 +33,8 @@ gatherContent (ZTail instruction nextZTail) = instruction : gatherContent nextZT
 --pulls out expressions from the protobranches cuz they make code annoying!
 --degut
 
-fj x = fromJust $ case x of
-	Nothing -> Debug.Trace.traceShow x Nothing
+fj i x = fromJust $ case x of
+	Nothing -> Debug.Trace.trace ((show i) ++ (show x)) Nothing
 	x ->x
 
 ddd x = Debug.Trace.traceShow x x
@@ -43,7 +43,7 @@ insertListMap ((x,y):xs) mp = M.insert x y (insertListMap xs mp)
 insertListMap [] mp = mp
 
 
-cruise g@(LGraph entryId blocks) l = LGraph entryId $ cruise' [] blocks  (fj $ M.lookup (lgEntry g) blocks) l 
+cruise g@(LGraph entryId blocks) l = LGraph entryId $ cruise' [] blocks  (fj 1 $ M.lookup (lgEntry g) blocks) l 
 
 cruise':: [BlockId] -> BlockLookup ProtoASM ProtoBranch-> Block ProtoASM ProtoBranch -> (BlockId ->[ProtoASM] -> [ProtoASM]) -> BlockLookup ProtoASM ProtoBranch
 cruise' visited g blk l =M.insert bid newblock g' 
@@ -136,7 +136,7 @@ cruise' visited g blk l =M.insert bid newblock g'
 
 kruise g@(LGraph entryId blocks) l i  = (LGraph entryId outmap , state)
 	where 
-	  (outmap,state) = kruise' i [] ["global"] blocks  (fj $ M.lookup (lgEntry g) blocks) l
+	  (outmap,state) = kruise' i [] ["global"] blocks  (fj 7 $ M.lookup (lgEntry g) blocks) l
 
 
 --kruise':: [BlockId] -> BlockLookup ProtoASM ProtoBranch-> Block ProtoASM ProtoBranch -> (BlockId ->[ProtoASM] -> [ProtoASM]) -> BlockLookup ProtoASM ProtoBranch
@@ -229,7 +229,7 @@ kruise' prestate visited scope g blk l = (M.insert bid newblock g' ,stateout)
 
 trickle g@(LGraph entryId blocks) l i  = (LGraph entryId outmap , state)
 	where 
-	  (outmap,state) = trickle' "" i [] ["global"] blocks  (fj $ start) l
+	  (outmap,state) = trickle' "" i [] ["global"] blocks  (fj 2 $ start) l
           start = case M.lookup (lgEntry g) blocks of
 		Nothing -> Debug.Trace.trace "FIRE!" Nothing
 		x	-> x
@@ -333,46 +333,47 @@ bid2scope bid = endlabel name
       where
 	name = getStr bid
 	endlabel str  
-		| isPrefixOf ".if_true_" str = "if" ++  drop 8 str
-		| isPrefixOf ".if_false_" str = "if" ++  drop 9 str
-		| isPrefixOf ".loop_body_" str = "loop" ++  drop 10 str
-		| isPrefixOf ".loop_test_" str = "loop" ++  drop 10 str
-		| isPrefixOf ".loop_end_" str = "loop" ++  drop 9 str
-		| isPrefixOf ".for_end_" str = "for" ++  drop 8 str
-		| isPrefixOf ".for_body_" str = "for" ++  drop 9 str
-		| isPrefixOf ".for_test_" str = "for" ++  drop 9 str
-		| isPrefixOf ".parafor_end_" str = "parafor" ++  drop 12 str
-		| isPrefixOf ".parafor_body_" str = "parafor" ++  drop 13 str
-		| isPrefixOf ".parafor_test_" str = "parafor" ++  drop 13 str
+		| isPrefixOf ".if_true" str = "if" ++  drop 7 str
+		| isPrefixOf ".if_false" str = "if" ++  drop 8 str
+		| isPrefixOf ".loop_body" str = "loop" ++  drop 9 str
+		| isPrefixOf ".loop_test" str = "loop" ++  drop 9 str
+		| isPrefixOf ".loop_end" str = "loop" ++  drop 8 str
+		| isPrefixOf ".for_end" str = "for" ++  drop 7 str
+		| isPrefixOf ".for_body" str = "for" ++  drop 8 str
+		| isPrefixOf ".for_test" str = "for" ++  drop 8 str
+		| isPrefixOf ".parafor_end" str = "parafor" ++  drop 11 str
+		| isPrefixOf ".parafor_body" str = "parafor" ++  drop 12 str
+		| isPrefixOf ".parafor_test" str = "parafor" ++  drop 12 str
 	
 testLabel bid = testlabel name  
       where
 	name = getStr bid
 	testlabel str  
-		| isPrefixOf ".loop_body_" str = ".loop_test_" ++  drop 11 str
-		| isPrefixOf ".loop_test_" str = ".loop_test_" ++  drop 11 str
-		| isPrefixOf ".loop_end_" str = ".loop_test_" ++  drop 10 str
+		| isPrefixOf ".loop_body" str = ".loop_test" ++  drop 10 str
+		| isPrefixOf ".loop_test" str = ".loop_test" ++  drop 10 str
+		| isPrefixOf ".loop_end" str = ".loop_test" ++  drop 9 str
 
 
 endLabel bid = endlabel name  
       where
 	name = getStr bid
 	endlabel str  
-		| isPrefixOf ".if_true_" str = ".endif_" ++  drop 9 str
-		| isPrefixOf ".if_false_" str = ".endif_" ++  drop 10 str
-		| isPrefixOf ".loop_body_" str = ".loop_end_" ++  drop 11 str
-		| isPrefixOf ".loop_test_" str = ".loop_end_" ++  drop 11 str
-		| isPrefixOf ".loop_end_" str = ".loop_end_" ++  drop 10 str
-		| isPrefixOf ".for_end_" str = ".for_end_" ++  drop 9 str
-		| isPrefixOf ".for_body_" str = ".for_end_" ++  drop 10 str
-		| isPrefixOf ".for_test_" str = ".for_end_" ++  drop 10 str
-		| isPrefixOf ".parafor_end_" str = ".parafor_end_" ++  drop 13 str
-		| isPrefixOf ".parafor_body_" str = ".parafor_end_" ++  drop 14 str
-		| isPrefixOf ".parafor_test_" str = ".parafor_end_" ++  drop 14 str
+		| isPrefixOf ".if_true" str = ".endif" ++  drop 8 str
+		| isPrefixOf ".if_false" str = ".endif" ++  drop 9 str
+		| isPrefixOf ".loop_body" str = ".loop_end" ++  drop 10 str
+		| isPrefixOf ".loop_test" str = ".loop_end" ++  drop 10 str
+		| isPrefixOf ".loop_end" str = ".loop_end" ++  drop 9 str
+		| isPrefixOf ".for_end" str = ".for_end" ++  drop 8 str
+		| isPrefixOf ".for_body" str = ".for_end" ++  drop 9 str
+		| isPrefixOf ".for_test" str = ".for_end" ++  drop 9 str
+		| isPrefixOf ".parafor_end" str = ".parafor_end" ++  drop 12 str
+		| isPrefixOf ".parafor_body" str = ".parafor_end" ++  drop 13 str
+		| isPrefixOf ".parafor_test" str = ".parafor_end" ++  drop 13 str
+		| otherwise = error $ name
 
 trickleLast g@(LGraph entryId blocks) l i  = (LGraph entryId outmap , state)
 	where 
-	  (outmap,state) = trickleL' "" i [] ["global"] blocks  (fj $ start) l
+	  (outmap,state) = trickleL' "" i [] ["global"] blocks  (fj 3 $ start) l
           start = case M.lookup (lgEntry g) blocks of
 		Nothing -> Debug.Trace.trace "FIRE!" Nothing
 		x	-> x
@@ -472,7 +473,7 @@ trickleL' stop prestate visited scope g blk l = if (BID stop) == bid
 
 esiurk g@(LGraph entryId blocks) l i  = (LGraph entryId outmap , state)
 	where 
-	  (outmap,state) = esiurk' i [] ["global"] blocks  (fj $ M.lookup (lgEntry g) blocks) l
+	  (outmap,state) = esiurk' i [] ["global"] blocks  (fj 4 $ M.lookup (lgEntry g) blocks) l
 
 
 --kruise':: [BlockId] -> BlockLookup ProtoASM ProtoBranch-> Block ProtoASM ProtoBranch -> (BlockId ->[ProtoASM] -> [ProtoASM]) -> BlockLookup ProtoASM ProtoBranch
@@ -569,11 +570,11 @@ esiurk' prestate visited scope g blk l = (M.insert bid newblock g' ,newstate)
 -- fuck it Ill make it specific to scoping
 hemorhage g@(LGraph entryId blocks) l ll i = (LGraph entryId outmap , state)
         where
-          (outmap,state) = hemorhage' "" i [] ["global"] blocks  (fj $ M.lookup (lgEntry g) blocks) l ll
+          (outmap,state) = hemorhage' "" i [] ["global"] blocks  (fj 5$ M.lookup (lgEntry g) blocks) l ll
 
 hemorhage' stop prestate visited scope g blk l ll= if (BID stop) == bid
                         then (g,prestate)
-                        else (M.insert bid newblock g' ,newstate)
+                        else (M.insert bid newblock g' ,prestate)
                 where
                         newblock = Block bid $ newZtail content last
                         (content,newstate) =  let pkg= gatherContent $ bTail blk
@@ -656,7 +657,7 @@ hemorhage' stop prestate visited scope g blk l ll= if (BID stop) == bid
                                 (LastOther (Jump b)) -> if unvisited b
                                                 then  hemorhage' stop newstate (bid:visited) scope g (getblk b g) l ll
                                                 else (g,newstate)
-                                (LastOther (InitialBranch bs)) -> let cruz stt elm = hemorhage' stop (snd stt) ((bId $getblk elm $fst stt):bid:visited) ((getStr elm):scope)(fst stt) (getblk elm (fst stt)) l ll
+                                (LastOther (InitialBranch bs)) -> let cruz stt elm = hemorhage' stop (prestate) ((bId $getblk elm $fst stt):bid:visited) ((getStr elm):scope)(fst stt) (getblk elm (fst stt)) l ll
                                         in skewer (g,newstate) cruz bs
                                 _ -> (g,newstate) 
                         unvisited id = not $ elem id visited
