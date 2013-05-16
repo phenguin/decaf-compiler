@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 module LowIR where 
 
+import Varmarker
 import MidIR
 import MonadUniqueEnv
 import Control.Monad
@@ -21,6 +22,24 @@ data Value = Symbol {name::String} | Array {name::String ,index::Value} | Litera
 		| RAX | RBX | RCX | RDX | RSP | RBP | RSI | RDI | R8 | R9 | R10 | R11 
 		| R12 | R13 | R14 | R15 | Scoped {getScope::[Scoped] , getValue::Value}
 		deriving (Show,Eq,Ord,Data,Typeable)
+
+colorToValue :: Color -> Value
+colorToValue CRAX = RAX
+colorToValue CRBX = RBX
+colorToValue CRCX = RCX
+colorToValue CRDX = RDX
+colorToValue CRSP = RSP
+colorToValue CRBP = RBP
+colorToValue CRSI = RSI
+colorToValue CRDI = RDI
+colorToValue CR8 = R8
+colorToValue CR9 = R9
+colorToValue CR10 = R10
+colorToValue CR11 = R11
+colorToValue CR12 = R12
+colorToValue CR13 = R13
+colorToValue CR14 = R14
+colorToValue CR15= R15
 
 isRegister x = elem x [RAX ,RBX,RCX,RDX,RSP,RBP,RSI,RDI,R8,R9,R10,R11,R12,R13,R14,R15]	
 data ProtoASM = Dec' Value
@@ -86,10 +105,26 @@ scopedValToVMSet v = Set.filter isScoped (valToVMSet v)
 
 valToVMSet :: Value -> Set VarMarker
 valToVMSet v = Set.filter isScoped $ valToVMSet' v
+
 valToVMSet' (Symbol s) = Set.singleton $ VarMarker s Transforms.Single []
 valToVMSet' (Array s _) = Set.singleton $ VarMarker s (Transforms.Array 0) []
-
 valToVMSet' yada@(Scoped scp v) = Set.map (setScope scp) $ valToVMSet' v
+valToVMSet' RAX  = Set.singleton $ Precolored CRAX
+valToVMSet' RBX  = Set.singleton $ Precolored CRBX
+valToVMSet' RCX  = Set.singleton $ Precolored CRCX
+valToVMSet' RDX  = Set.singleton $ Precolored CRDX
+valToVMSet' RSP  = Set.singleton $ Precolored CRSP
+valToVMSet' RBP  = Set.singleton $ Precolored CRBP
+valToVMSet' RSI  = Set.singleton $ Precolored CRSI
+valToVMSet' RDI  = Set.singleton $ Precolored CRDI
+valToVMSet' R8  = Set.singleton $ Precolored CR8
+valToVMSet' R9  = Set.singleton $ Precolored CR9
+valToVMSet' R10  = Set.singleton $ Precolored CR10
+valToVMSet' R11  = Set.singleton $ Precolored CR11
+valToVMSet' R12  = Set.singleton $ Precolored CR12
+valToVMSet' R13  = Set.singleton $ Precolored CR13
+valToVMSet' R14  = Set.singleton $ Precolored CR14
+valToVMSet' R15  = Set.singleton $ Precolored CR15
 valToVMSet' _ = Set.empty
 
 valsToVMSet :: [Value] -> Set VarMarker
@@ -110,6 +145,22 @@ vmToVal :: VarMarker -> Value
 vmToVal (VarMarker s Transforms.Single scp) = Scoped scp (Symbol s)
 -- TODO: Is this correct behavior? Dont have enough info to reconstruct
 vmToVal (VarMarker s (Transforms.Array _) scp) = Scoped scp (Array s (Literal 0))
+vmToVal (Precolored CRAX) = RAX  
+vmToVal (Precolored CRBX) = RBX  
+vmToVal (Precolored CRCX) = RCX  
+vmToVal (Precolored CRDX) = RDX  
+vmToVal (Precolored CRSP) = RSP  
+vmToVal (Precolored CRBP) = RBP  
+vmToVal (Precolored CRSI) = RSI  
+vmToVal (Precolored CRDI) = RDI  
+vmToVal (Precolored CR8) = R8  
+vmToVal (Precolored CR9) = R9  
+vmToVal (Precolored CR10) = R10  
+vmToVal (Precolored CR11) = R11  
+vmToVal (Precolored CR12) = R12  
+vmToVal (Precolored CR13) = R13  
+vmToVal (Precolored CR14) = R14  
+vmToVal (Precolored CR15) = R15  
 
 selectVarByName :: VarMarker -> Value -> Bool
 selectVarByName vm val = val == vmToVal vm

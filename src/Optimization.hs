@@ -1,6 +1,7 @@
 module Optimization where
 
 import DataflowAnalysis
+import Varmarker
 import Debug.Trace (trace)
 import Data.Data
 import Data.Typeable

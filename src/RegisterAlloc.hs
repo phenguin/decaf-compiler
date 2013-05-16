@@ -2,6 +2,7 @@
 
 module RegisterAlloc where 
 
+import Varmarker
 import Debug.Trace (trace)
 import LowIR
 import MidIR
@@ -30,38 +31,11 @@ import DataflowAnalysis
 import Data.Char (toLower)
 
 type Var = String
-data Color = CRCX | CRDX | CRSI | CRDI | CR8 | CR9 | CRSP | CRBP | CRAX | CRBX | CR10 | CR11 | CR12 | CR13 | CR14 | CR15 deriving (Eq, Show, Ord, Enum, Data, Typeable)
-
-allColors = [CRBX .. CR15]
-
-numColors :: Integer
-numColors = fromIntegral $ length allColors
-
-colorToValue :: Color -> Value
-colorToValue CRAX = RAX
-colorToValue CRBX = RBX
-colorToValue CRCX = RCX
-colorToValue CRDX = RDX
-colorToValue CRSP = RSP
-colorToValue CRBP = RBP
-colorToValue CRSI = RSI
-colorToValue CRDI = RDI
-colorToValue CR8 = R8
-colorToValue CR9 = R9
-colorToValue CR10 = R10
-colorToValue CR11 = R11
-colorToValue CR12 = R12
-colorToValue CR13 = R13
-colorToValue CR14 = R14
-colorToValue CR15= R15
 
 data MemLoc = BasePtrOffset Int deriving (Eq, Ord, Show, Data, Typeable)
 
 instance PrettyPrint MemLoc where
     ppr (BasePtrOffset i) = int (i*8) <> lparen <> text "%rbp" <> rparen
-
-instance PrettyPrint Color where
-    ppr = text . ('%':) . tail . map toLower . show
 
 -- Should be only a set of two elements.. might fix this to make it
 -- required by the type system later if it turns out to matter at all.
@@ -213,40 +187,68 @@ computeIGfromLowIRNode (Left l, liveVars) = case l of
           mapMAsms asms = fst $ runState (mapM middlesMapF (reverse asms)) liveVars
 
 computeIGfromLowIRNode (Right m, liveVars') = case m of
-                Mov' v v' -> addPEdgeOrId v v' $ beforePEdges v' (Just v)
-                CMove' v v' -> addPEdgeOrId v v' $ beforePEdges v' Nothing 
-                CMovne' v v' -> addPEdgeOrId v v' $ beforePEdges v' Nothing
-                CMovg' v v' -> addPEdgeOrId v v' $ beforePEdges v' Nothing
-                CMovl' v v' -> addPEdgeOrId v v' $ beforePEdges v' Nothing
-                CMovge' v v' -> addPEdgeOrId v v' $ beforePEdges v' Nothing
-                CMovle' v v' -> addPEdgeOrId v v' $ beforePEdges v' Nothing
-                Neg' v ->  beforePEdges v Nothing
-                And' _ v ->  beforePEdges v Nothing
-                Or' _ v ->  beforePEdges v Nothing
-                Add' _ v ->  beforePEdges v Nothing
-                Sub' _ v ->  beforePEdges v Nothing
-                Mul' _ v ->  beforePEdges v Nothing
+                Mov' v v' -> addPEdgeOrId v v' $ interfereWithExcept v' (Just v)
+                CMove' v v' -> addPEdgeOrId v v' $ interfereWithExcept v' Nothing 
+                CMovne' v v' -> addPEdgeOrId v v' $ interfereWithExcept v' Nothing
+                CMovg' v v' -> addPEdgeOrId v v' $ interfereWithExcept v' Nothing
+                CMovl' v v' -> addPEdgeOrId v v' $ interfereWithExcept v' Nothing
+                CMovge' v v' -> addPEdgeOrId v v' $ interfereWithExcept v' Nothing
+                CMovle' v v' -> addPEdgeOrId v v' $ interfereWithExcept v' Nothing
+                Neg' v ->  interfereWithExcept v Nothing
+                And' _ v ->  interfereWithExcept v Nothing
+                Or' _ v ->  interfereWithExcept v Nothing
+                Add' _ v ->  interfereWithExcept v Nothing
+                Sub' _ v ->  interfereWithExcept v Nothing
+                Mul' _ v ->  interfereWithExcept v Nothing
                 -- TODO: Needs to interfere with RAX and RDX precolored regs.
-                Div' v -> beforePEdges v Nothing
-                Not' v -> beforePEdges v Nothing
-                Pop' v -> beforePEdges v Nothing
+                Div' v -> interfereWithExcept v Nothing
+                Not' v -> interfereWithExcept v Nothing
+                Pop' v -> interfereWithExcept v Nothing
                 _ -> emptyIG
     where relevantVarNames = Set.filter (not . isArray) $ liveVars
-          beforePEdges defV maybeExclude = foldr (uncurry addIEdge) (discreteOnVertices relevantVarNames) $ toList (interfering defV maybeExclude)
-          interfering (Scoped scp (Symbol s)) maybeExclude = case maybeExclude of
-                    Just (Scoped scp'' (Symbol s'')) -> Set.map (\vm' -> (makeVertex vm, makeVertex vm')) $ 
-                                                             Set.filter (/=(VarMarker s'' Transforms.Single scp'')) $
-                                                             Set.filter (/=vm) $
+          interfereWithExcept defV maybeExclude = foldr (uncurry addIEdge) (discreteOnVertices relevantVarNames) $
+                                                                          toList (interfering defV maybeExclude)
+          interfering vt maybeExclude = case maybeExclude of
+                    Just v -> let vm = valToVMSet' v in 
+                                  if colorableValue v
+                                  then Set.map (\vm' -> (vtm, makeVertex vm')) $ 
+                                                             Set.filter (not . (flip Set.member vm)) $
+                                                             Set.filter (not . (flip Set.member vtm)) $
                                                              relevantVarNames
-                    _ -> Set.map (\vm' ->  (makeVertex vm, makeVertex vm')) $
-                                                           Set.filter (/=vm) $ 
-                                                           relevantVarNames
-                where vm = VarMarker s Transforms.Single scp
+                                  else
+                                  interferingEdges
+                    _ -> interferingEdges
+                where vtm = valToVMSet' vt
+                      interferingEdges = Set.map (\vm' -> (vtm, makeVertex vm')) $ 
+                                                      Set.filter (not . (flip Set.member vtm)) $
+                                                                          relevantVarNames
+                                                                                                                                       
+                      
           interfering _ _ = Set.empty
           liveVars = lowLVUpdateM m liveVars'
           addPEdgeOrId (Scoped scp (Symbol s)) (Scoped scp' (Symbol s')) = addPEdge (makeVertex (VarMarker s Transforms.Single scp))
                                                                                     (makeVertex (VarMarker s' Transforms.Single scp'))
           addPEdgeOrId _ _ = id
+
+colorableValue :: Value -> Bool
+colorableValue (Scoped _ (Symbol _)) = True
+colorableValue RAX = True
+colorableValue RBX = True
+colorableValue RCX = True
+colorableValue RDX = True
+colorableValue RSP = True
+colorableValue RBP = True
+colorableValue RSI = True
+colorableValue RDI = True
+colorableValue R8 = True
+colorableValue R9 = True
+colorableValue R10 = True
+colorableValue R11 = True
+colorableValue R12 = True
+colorableValue R13 = True
+colorableValue R14 = True
+colorableValue R15 = True
+colorableValue _ = False
 
 ------------------------------------------------------------
 -- Implement actual register allocation via graph coloring..
@@ -259,29 +261,26 @@ hasSigDegree v ig@(IG vertices iEdges _) = degree v ig >= numColors
 
 -- Tries to coalesce nodes with a preference edge between them and returns the 
 -- coalesced graph along with whether or not anything was changed.
-coalesce :: (Ord a, PrettyPrint a) => InterferenceGraph a -> (InterferenceGraph a, Bool)
+coalesce :: (IGNode a, PrettyPrint a) => InterferenceGraph a -> (InterferenceGraph a, Bool)
 coalesce ig@(IG vertices iEdges pEdges) = case relevantPEdges of
                                                -- TODO: Should we remove irrelevant pEdges?
                                                [] -> (IG vertices iEdges (fromList validPEdges), False) -- Cant coalesce anything
                                                (e:_) -> (fst $ coalesce $ getNewIG e, True)
-    where validPEdges = toList $ Set.filter valid pEdges -- Cant coalesce interfering vertices
-          valid pEdge = not $ any (conflicts pEdge) $ toList iEdges
-          conflicts pEdge iEdge = (i1 `contains` p1 && i2 `contains` p2) || (i1 `contains` p2 && i2 `contains` p1)
-              where [p1,p2] = toList pEdge
-                    [i1,i2] = toList iEdge
-                    contains = flip Set.isSubsetOf
+    where validPEdges = toList $ Set.filter (not . invalid) pEdges -- Cant coalesce interfering vertices
+          invalid pEdge = (any ((==) pEdge) $ toList iEdges) || (all precolored $ toList pEdge)
           relevantPEdges = filter (\e -> edgeDeg e < numColors) validPEdges
           edgeDeg edge = foldr (+) 0 $ map ((flip degree) ig) (toList edge)
           getVerts e = Set.insert (Set.unions (toList e)) $ Set.difference vertices e
           getIEdges e = Set.map (setReplace e (Set.unions (toList e))) iEdges
           getPEdges e = Set.union inheritedPEdges $ Set.delete e pEdges
-            where inheritedEdgesFor v = if all (\v' -> (fromList [v, v']) `Set.member` pEdges) endpts
-                                          then
-                                          Set.singleton $ fromList [v, (Set.unions (toList e))]
-                                          else
-                                          Set.empty
-                  inheritedPEdges = Set.unions $ map inheritedEdgesFor $ toList (getVerts e)
-                  endpts = toList e
+                where inheritedPEdges = Set.empty -- for now
+                  -- inheritedPEdges = Set.unions $ map inheritedEdgesFor $ toList (getVerts e)
+                  -- endpts = toList e
+            -- where inheritedEdgesFor v = if all (\v' -> (fromList [v, v']) `Set.member` pEdges) endpts
+            --                               then
+            --                               Set.singleton $ fromList [v, (Set.unions (toList e))]
+            --                               else
+            --                               Set.empty
           getNewIG e = IG (getVerts e) (getIEdges e) (getPEdges e)
 
 
@@ -303,6 +302,16 @@ defAllocateRegisters = allocateRegisters vmSpillHeuristic
 class RegisterAllocatable a where
     computeInterferenceGraph :: a -> InterferenceGraph VarMarker
     updateForSpills :: [(IGVertex VarMarker, MemLoc)] -> a -> a
+
+class (Ord a) => IGNode a where
+    precolored :: IGVertex a -> Bool
+
+instance IGNode VarMarker where
+    precolored vms = not $ Set.null $ Set.filter predicate vms
+        where predicate (Precolored _) = True
+              predicate _ = False
+    
+    precolored _ = False
 
 instance RegisterAllocatable (LGraph Statement BranchingStatement) where
     computeInterferenceGraph = buildIGFromMidCfg
@@ -357,7 +366,7 @@ keysByValue :: (Ord k, Eq a) => M.Map k a -> [Set k]
 keysByValue lkp = map (fromList . keysWithVal) $ M.elems lkp
     where keysWithVal a = filter (\k -> M.lookup k lkp == Just a) keys
           keys = M.keys lkp
-          
+
 removeRedundantMoves :: Coloring VarMarker -> LGraph ProtoASM ProtoBranch -> LGraph ProtoASM ProtoBranch
 removeRedundantMoves coloring graph = mapLGraphNodes mMap lMap graph
     where redundant v v' = isSymbol v && isSymbol v' && (any (Set.isSubsetOf (valsToVMSet [v,v'])) $ vertices)
@@ -384,11 +393,11 @@ allocateRegisters spillHeuristic cfg = case coloringOrSpills of
           (simpleIG, vertexStack) = simplify spillHeuristic initialIG
           coloringOrSpills = select (iEdges simpleIG) vertexStack
           
-select :: (Ord a, PrettyPrint a, Show a) => Set (IGEdge a) -> [IGVertex a] -> Either [(IGVertex a, MemLoc)] (Coloring a)
+select :: (IGNode a, PrettyPrint a, Show a) => Set (IGEdge a) -> [IGVertex a] -> Either [(IGVertex a, MemLoc)] (Coloring a)
 select iEdges vertexStack = fst $ runState (select' initialGraph M.empty) (vertexStack, [])
     where initialGraph = IG Set.empty iEdges Set.empty
 
-select' :: (Ord a, PrettyPrint a, Show a) => InterferenceGraph a -> Coloring a -> State ([IGVertex a], [(IGVertex a, MemLoc)]) (Either [(IGVertex a, MemLoc)] (Coloring a))
+select' :: (IGNode a, PrettyPrint a, Show a) => InterferenceGraph a -> Coloring a -> State ([IGVertex a], [(IGVertex a, MemLoc)]) (Either [(IGVertex a, MemLoc)] (Coloring a))
 select' graph colorMap = do
     mbVertex <- popLeft
     spilled <- liftM snd get
@@ -413,14 +422,14 @@ setReplace olds new set = Set.map replaceFunc set
                               True -> new
                               False -> x
 
-defSimplify :: (Ord a, PrettyPrint a) => InterferenceGraph a -> (InterferenceGraph a, [IGVertex a])
+defSimplify :: (IGNode a, PrettyPrint a) => InterferenceGraph a -> (InterferenceGraph a, [IGVertex a])
 defSimplify = simplify ((const . const) 1)
     
 simplify spillHeuristic ig = runState (simplify' spillHeuristic ig) []
 
 -- TODO: Optimize this later if you have time..
-simplify' :: (Ord a, Ord b, PrettyPrint a) => (InterferenceGraph a -> IGVertex a -> b) -> InterferenceGraph a -> State [IGVertex a] (InterferenceGraph a)
-simplify' spillHeuristic ig@(IG vertices iEdges pEdges) = case Set.null vertices of
+simplify' :: (IGNode a, Ord b, PrettyPrint a) => (InterferenceGraph a -> IGVertex a -> b) -> InterferenceGraph a -> State [IGVertex a] (InterferenceGraph a)
+simplify' spillHeuristic ig@(IG vertices iEdges pEdges) = case Set.null (Set.filter (not . precolored) vertices) of
     -- If empty.. nothing to do.. proceed to coloring
     True -> return ig
     -- Otherwise.. remove chosen vertex and do it again
@@ -434,16 +443,17 @@ simplify' spillHeuristic ig@(IG vertices iEdges pEdges) = case Set.null vertices
         else do
             push colorNext
             simplify' spillHeuristic (removeFromVertexSet colorNext ig)
-    where canSimplify v = not $ (hasSigDegree v ig || isMoveRelated v) -- TODO: Also ensure not move related
+    where canSimplify v = not $ (precolored v || hasSigDegree v ig || isMoveRelated v) -- TODO: Also ensure not move related
           removeFromVertexSet v (IG vs ies pes) = IG (Set.delete v vs) ies pes
           isMoveRelated v = any (Set.member v) $ toList pEdges
           simplifiable = Set.filter canSimplify vertices
+          spillable = Set.filter (not . precolored) vertices
           (colorNext, isSpill) = case Set.null simplifiable of -- Any candidates for simplification?
               -- Yes? Pick an arbitrary one
               False -> (head $ toList simplifiable, False)
               -- No? Choose the one with the worst spillHeurstic and it is a potential
               -- spill candidate
-              True -> (minimumBy (compare `on` (spillHeuristic ig)) $ toList vertices, True)
+              True -> (minimumBy (compare `on` (spillHeuristic ig)) $ toList spillable, True)
 
 -- ApplyNodeColor top down on the whole lgraph
 applyColoring :: Coloring VarMarker -> LGraph ProtoASM ProtoBranch -> LGraph ProtoASM ProtoBranch
@@ -466,6 +476,6 @@ doRegisterAllocation :: LGraph ProtoASM ProtoBranch -> LGraph ProtoASM ProtoBran
 doRegisterAllocation lgraph = coloredGraph
     where (coloring, finalGraph) = allocateRegisters vmSpillHeuristic lgraph
           coloring' = M.filterWithKey (\k a -> (not . isArray) k) coloring
-          lgraph' = removeRedundantMoves coloring finalGraph
+          lgraph' = removeRedundantMoves coloring' finalGraph
           coloredGraph = applyColoring coloring' lgraph'
 

@@ -2,6 +2,7 @@
 module DataflowAnalysis where
 
 import CFGConcrete
+import Varmarker
 import Util
 import LowIR
 import Data.Typeable
