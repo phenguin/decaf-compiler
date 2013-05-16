@@ -85,7 +85,7 @@ forn stmt
 				return $ ForLoop i' start' end' (evalState (fornbod bod) st) 
 	| DVar x <- stmt = do
 		st@(scp,mp,i)<-get
-		put $(scp,(M.insert x scp mp),i)
+		put $(scp,(M.insert (standardizeArrays x) scp mp),i)
 		x'<-fornvar x 
 		return $ DVar x'
 	| Set var expr <- stmt = do 
@@ -182,9 +182,8 @@ fornvar v =do
 	st@(scp, mp,i) <- get
 	let scope = fromJust $ M.lookup (standardizeArrays v) (mp:: M.Map Variable [Scoped])
 	return $ Scopedvar scope v
-	where
-		standardizeArrays (Varray str _) = (Varray str (Const 0))
-		standardizeArrays x = x
+standardizeArrays (Varray str _) = (Varray str (Const 0))
+standardizeArrays x = x
 
 
 

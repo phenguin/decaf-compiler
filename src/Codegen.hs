@@ -31,9 +31,9 @@ navigate globals funmap cfg = unsafePerformIO $ do
 		let (_,vars') = kruise cfg extractVars []
 		let vars = nub vars'
 
-		
+				
 		let appendGlobalLabel x = Scoped [Global] x
-		let vardata = (concatMap datifyVars (vars ++ map (appendGlobalLabel.var2val) globals) )
+		let vardata = ddd (concatMap datifyVars ( vars ++ map (appendGlobalLabel.var2val) (globals)) )
 			
 		-- handles strings strings
 		strings <- return $ nub $ map (\(EvilString x) -> x)$findAllStrings cfg
@@ -86,6 +86,7 @@ navigate globals funmap cfg = unsafePerformIO $ do
 		prolog = ".global main\n"
 		var2val (Var str) = Symbol str
 		var2val (Varray str (Const i)) = Array str (Literal i)
+		var2val (Scopedvar s x) = (Scoped s (var2val x))
 
 
 scopeMidir midir globals funmap = fst $ hemorhage midir (scoper funmap) (lfixBranch funmap) globalmap
@@ -260,6 +261,7 @@ valuesNoStack instr = case instr of
 
 isvar x@(Symbol _) = True
 isvar x@(Array _ _) = True
+isvar (Scoped _ _) = True
 isvar x = False
 
 
@@ -271,8 +273,17 @@ extractVars bid scope p = do
 datifyVars y = case y of 
 	(Symbol y') -> ".comm " ++ y'++", 8\n"
 	(Array y' (Literal x')) -> ".comm "  ++ y' ++ ", " ++(show $ x' *8 ) ++"\n"  
-	_ ->"" 
-		
+	(Scoped scope (Array y' (Literal x'))) ->  ".comm "  ++ namify y ++ ", " ++(show $ x' *8 ) ++"\n"  
+	(Scoped scope (Symbol y')) -> ".comm "  ++ namify y ++ ", 8\n "  
+	(Scoped scope x ) -> datifyVars x  
+	_ -> "" -- (show x)  ++ "\n"
+
+namify (Scoped scope y) = namify' scope y
+namify' (s:ss) y' 
+	| Global  <- s = "global_" ++ namify' ss y'
+	| Func st <- s = st ++ "_" ++ namify' ss y'
+	| Loop st <- s = st ++ "_" ++ namify' ss y'
+namify' _ y' = name y'
 
 
 replaceBreakContinue last bid scope instrs = do
@@ -402,6 +413,7 @@ stVarsCollect bid scope p = do
 	 newvars = filter isVar allvals
 	 isVar x@(Symbol _) = True
 	 isVar x@(Array _ _) = True
+	 isVar (Scoped _ _) = True
 	 isVar x = False
 
 

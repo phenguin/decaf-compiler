@@ -161,6 +161,7 @@ assembleTree configuration input = do
   let irTree = convert parseTree 
   let irTreeWithST = addSymbolTables irTree 
   let midir = snoper $MidIR.toMidIR irTreeWithST
+--  Right [putStrLn $ show midir] {-
   --let paramidir = treeParallelize midir
   let globals = MidIR.scrapeGlobals midir ---paramidir
   let cfg = makeCFG midir
@@ -178,7 +179,6 @@ assembleTree configuration input = do
 --  let optimizedMidCfg = runChosenMidIROpts scopedcfg
   let lowIRCfg = toLowIRCFG midcfg -- optimizedMidCfg
  -- let optimizedLowCfg = runChosenLowIROpts lowIRCfg
- -- Right [pprIO lowIRCfg ] {-
   let lowCfgRegAllocated = doRegisterAllocation lowIRCfg --optimizedLowCfg
   let (prolog, asm, epilog) = navigate globals funmap lowCfgRegAllocated
   let ioFuncSeq = case outputFileName configuration of
