@@ -412,32 +412,28 @@ varsDefinedInProtoBranch _ = Set.empty
 
 varsUsedInProtoStmt :: ProtoASM -> Set VarMarker
 varsUsedInProtoStmt stmt = case stmt of
-        Mov' (Scoped _ (Array _ v)) (Scoped _ (Array _ v')) -> valsToVMSet [v,v']
-        Mov' (Scoped _ (Array _ v)) _ -> valToVMSet v
-        Mov' _ (Scoped _ (Array _ v')) -> valToVMSet v'
-        Mov' v _ -> valToVMSet v
-        Neg' v -> valToVMSet v
-        And' v v' -> valsToVMSet [v,v']
-        Or'  v v' -> valsToVMSet [v,v']
-        Add' v v' -> valsToVMSet [v,v']
-        Sub' v v' -> valsToVMSet [v,v'] -- TODO: Check semantics
-        Mul' v v' -> valsToVMSet [v,v']
-        Div' v    -> valsToVMSet [v] -- TODO: Check semantics
-        Lt'   v v' -> valsToVMSet [v,v'] -- TODO: Check semantics
-        Gt'   v v' -> valsToVMSet [v,v'] -- TODO: Check semantics
-        Le'   v v' -> valsToVMSet [v,v'] -- TODO: Check semantics
-        Ge'   v v' -> valsToVMSet [v,v'] -- TODO: Check semantics
-        Eq'   v v' -> valsToVMSet [v,v'] -- TODO: Check semantics
-        Ne'   v v' -> valsToVMSet [v,v'] -- TODO: Check semantics
-        Not'  v  -> valToVMSet v
-        Cmp' v v' -> valsToVMSet [v,v']
-        Push' v -> valToVMSet v
-        CMove' v _ -> valToVMSet v
-        CMovne' v _ -> valToVMSet v
-        CMovg' v _ -> valToVMSet v
-        CMovl' v _ -> valToVMSet v
-        CMovge' v _ -> valToVMSet v
-        CMovle' v _ -> valToVMSet v
+        Mov' v v' -> Set.union (valToVMSet v) (valsIndicesToVMSet [v,v'])
+        Neg' v -> Set.union (valToVMSet v) (valIndicesToVMSet v)
+        And' v v' -> Set.union (valsToVMSet [v,v']) (valsIndicesToVMSet [v,v'])
+        Or'  v v' -> Set.union (valsToVMSet [v,v']) (valsIndicesToVMSet [v,v'])
+        Add' v v' -> Set.union (valsToVMSet [v,v']) (valsIndicesToVMSet [v,v'])
+        Sub' v v' -> Set.union (valsToVMSet [v,v']) (valsIndicesToVMSet [v,v'])
+        Mul' v v' -> Set.union (valsToVMSet [v,v']) (valsIndicesToVMSet [v,v'])
+        Div' v    -> Set.union (valsToVMSet [v]) (valIndicesToVMSet v)
+        Lt'   v v' -> Set.union (valsToVMSet [v,v']) (valsIndicesToVMSet [v,v'])
+        Gt'   v v' -> Set.union (valsToVMSet [v,v']) (valsIndicesToVMSet [v,v'])
+        Le'   v v' -> Set.union (valsToVMSet [v,v']) (valsIndicesToVMSet [v,v'])
+        Ge'   v v' -> Set.union (valsToVMSet [v,v']) (valsIndicesToVMSet [v,v'])
+        Eq'   v v' -> Set.union (valsToVMSet [v,v']) (valsIndicesToVMSet [v,v'])
+        Ne'   v v' -> Set.union (valsToVMSet [v,v']) (valsIndicesToVMSet [v,v'])
+        Not'  v  -> Set.union (valToVMSet v) (valIndicesToVMSet v)
+        Cmp' v v' -> Set.union (valsToVMSet [v,v']) (valsIndicesToVMSet [v,v'])
+        CMove' v v' -> Set.union (valToVMSet v) (valsIndicesToVMSet [v,v'])
+        CMovne' v v' -> Set.union (valToVMSet v) (valsIndicesToVMSet [v,v'])
+        CMovg' v v' -> Set.union (valToVMSet v) (valsIndicesToVMSet [v,v'])
+        CMovl' v v' -> Set.union (valToVMSet v) (valsIndicesToVMSet [v,v'])
+        CMovge' v v' -> Set.union (valToVMSet v) (valsIndicesToVMSet [v,v'])
+        CMovle' v v' -> Set.union (valToVMSet v) (valsIndicesToVMSet [v,v'])
         _ -> Set.empty
 
 varsUsedInProtoBranch :: ProtoBranch -> Set VarMarker

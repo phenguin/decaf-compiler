@@ -106,6 +106,15 @@ scopedValToVMSet v = Set.filter isScoped (valToVMSet v)
 valToVMSet :: Value -> Set VarMarker
 valToVMSet v = Set.filter isScoped $ valToVMSet' v
 
+valsIndicesToVMSet :: [Value] -> Set VarMarker
+valsIndicesToVMSet vals = foldl Set.union Set.empty $ map valIndicesToVMSet vals
+
+
+valIndicesToVMSet :: Value -> Set VarMarker
+valIndicesToVMSet (Array s v) = valToVMSet' v
+valIndicesToVMSet (Scoped scp v) = Set.map (setScope scp) $ valIndicesToVMSet v
+valIndicesToVMSet _ = Set.empty
+
 valToVMSet' (Symbol s) = Set.singleton $ VarMarker s Transforms.Single []
 valToVMSet' (Array s _) = Set.singleton $ VarMarker s (Transforms.Array 0) []
 valToVMSet' yada@(Scoped scp v) = Set.map (setScope scp) $ valToVMSet' v
