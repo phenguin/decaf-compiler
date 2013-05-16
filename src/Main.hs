@@ -50,7 +50,7 @@ import LowIR
 import Codegen
 import CFGConcrete
 import CFGConstruct
-import Parallel(parallelize, treeParallelize)
+import Parallel(snoper,parallelize, treeParallelize)
 ------------------------ Impure code: Fun with ErrorT -------------------------
 
 main :: IO ()
@@ -159,13 +159,13 @@ assembleTree configuration input = do
   parseTree <- mungeErrorMessage configuration $ Parser.parse tokens
   let irTree = convert parseTree 
   let irTreeWithST = addSymbolTables irTree 
-  let midir = MidIR.toMidIR irTreeWithST
+  let midir = snoper $MidIR.toMidIR irTreeWithST
   --let paramidir = treeParallelize midir
   let globals = MidIR.scrapeGlobals midir ---paramidir
   let cfg = makeCFG midir
   let funmap = getFunctionParamMap $lgraphFromAGraph  cfg
   let midcfg = lgraphSpanningFunctions cfg
-  let	scopedcfg  = scopeMidir midcfg globals funmap
+  ---let	scopedcfg  = scopeMidir midcfg globals funmap
   -- Should make interface to parallelize as just a regular 
   -- optimization if possible
 --  let	parallelcfg  = parallelize scopedcfg
@@ -175,7 +175,7 @@ assembleTree configuration input = do
                               else
                               (compose lowIROpts, compose midIROpts)
 --  let optimizedMidCfg = runChosenMidIROpts scopedcfg
-  let lowIRCfg = toLowIRCFG scopedcfg -- optimizedMidCfg
+  let lowIRCfg = toLowIRCFG midcfg -- optimizedMidCfg
  -- let optimizedLowCfg = runChosenLowIROpts lowIRCfg
  -- Right [pprIO lowIRCfg ] {-
   let lowCfgRegAllocated = doRegisterAllocation lowIRCfg --optimizedLowCfg

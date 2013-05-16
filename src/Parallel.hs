@@ -13,10 +13,11 @@ import Control.Monad.State
 import LowIR
 import Data.IORef
 import Data.Maybe
+import Control.Monad.State
 import Data.List
 import Santiago
 import Numeric.LinearProgramming
-
+import qualified Data.Map as M
 
 firefuel = "HI"
 
@@ -38,6 +39,148 @@ earTag bid scope p = do
 		return p
 		where newloop 	| isPrefixOf ".for_test_" (getStr bid) = [bid] 
 			  	| otherwise = [bid]
+
+
+snoper prg = evalState (snipe prg)  ([Global] , M.empty ,0)
+
+snipe (Prg code) = do
+	code' <- mapM forn code-- ([Global] , M.empty ,0)
+	return$ Prg code'
+
+fornbod bd = mapM forn bd
+
+
+
+--forn:: State ([Scoped], (M.Map Variable [Scoped]) , Int) m => Statement -> m Statement
+forn stmt 	
+        | DFun name params bod		<- stmt = do
+				st'@(scp, mp,i) <- get
+				st <- return $ ((scp++[Func name]),mp,i+1)
+				put $ (scp, mp ,i+1)
+				return $ DFun name  [] (evalState (fornbod ((map (DVar) params) ++bod)) st )
+        | If expression thens elses 	<- stmt = do
+				st'@(scp , mp,i) <- get
+				st <- return $((scp++[Loop (show i)]),mp,i+1)
+				put $ (scp, mp ,i+1)
+				exp' <- fornex expression
+				return $ If (exp') (evalState (fornbod thens) st) (evalState (fornbod elses) st)
+        | While cond bod		<- stmt = do
+				st'@(scp, mp,i) <- get
+				st <- return $((scp++[Loop (show i)]),mp,i+1)
+				put $ (scp, mp ,i+1)
+				cond' <- fornex cond
+				return $ While (cond') (evalState (fornbod bod) st) 
+        | ForLoop v start end bod 	<- stmt = do
+				st'@(scp, mp,i) <- get
+				st <- return $((scp++[Loop (show i)]),mp,i+1)
+				put $ (scp, mp ,i+1)
+				i' <- fornvar v 
+				start' <- fornex start
+				end' <- fornex end
+				return $ ForLoop i' start' end' (evalState (fornbod bod) st) 
+	| DVar x <- stmt = do
+		st@(scp,mp,i)<-get
+		put $(scp,(M.insert x scp mp),i)
+		x'<-fornvar x 
+		return $ DVar x'
+	| Set var expr <- stmt = do 
+		var'<- fornvar var
+		expr' <- fornex expr
+		return $ (Set var' expr')
+	| Return expr <- stmt = do
+		expr' <- fornex expr
+		return $ Return expr' 
+	| Callout f exprs <- stmt = do
+		exprs' <- mapM fornex exprs
+		return $ Callout f exprs'
+	| Function f exprs <- stmt = do
+		exprs' <- mapM fornex exprs
+		return $ Function f exprs'
+	| otherwise 				= do 
+				return stmt
+
+fornex expr
+	| (Loc xp)      <- expr  = do
+			xp' <- fornvar xp
+			return (Loc xp')
+	| Not xp <-expr 	= do
+			xp' <- fornex xp
+			return (Not xp')
+	| Neg xp <-expr 	= do
+			xp' <- fornex xp
+			return (Neg xp')
+	| Str _ <-expr 		= do 
+				return expr
+	| Const _ <-expr 	= do
+				return expr
+	| FuncCall st exprs <-expr 	= do
+				exprs' <- mapM fornex exprs
+				return $ FuncCall st exprs'
+	| Add x y <- expr	= do
+				x' <- fornex x
+				y' <- fornex y
+				return $ Add  x'  y'
+	| Sub x y <- expr	= do
+				x' <- fornex x
+				y' <- fornex y
+				return $ Add   x'  y'
+	| Mul x y <- expr	=do
+				x' <- fornex x
+				y' <- fornex y
+				return $  Mul  x'  y'
+	| Div x y <- expr	= do
+				x' <- fornex x
+				y' <- fornex y
+				return $  Div   x'  y'
+	| Mod x y <- expr	= do
+				x' <- fornex x
+				y' <- fornex y
+				return $  Mod   x'  y'
+	| And x y <- expr	= do
+				x' <- fornex x
+				y' <- fornex y
+				return $  And   x'  y'
+	| Or x y <- expr	= do
+				x' <- fornex x
+				y' <- fornex y
+				return $  Or  x'  y'
+	| Eq x y <- expr	= do
+				x' <- fornex x
+				y' <- fornex y
+				return $  Eq   x'  y'
+	| Lt x y <- expr	= do
+				x' <- fornex x
+				y' <- fornex y
+				return $  Lt   x'  y'
+	| Gt x y <- expr	= do
+				x' <- fornex x
+				y' <- fornex y
+				return $  Gt   x'  y'
+	| Le x y <- expr	= do
+				x' <- fornex x
+				y' <- fornex y
+				return $  Le   x'  y'
+	| Ge x y <- expr	= do
+				x' <- fornex x
+				y' <- fornex y
+				return $  Ge   x'  y'
+	| Ne x y <- expr	= do
+				x' <- fornex x
+				y' <- fornex y
+				return $  Ne   x'  y'
+	| otherwise		= do
+				return expr
+
+
+--fornvar:: M m => Variable -> m Variable 
+fornvar v =do
+	st@(scp, mp,i) <- get
+	let scope = fromJust $ M.lookup (standardizeArrays v) (mp:: M.Map Variable [Scoped])
+	return $ Scopedvar scope v
+	where
+		standardizeArrays (Varray str _) = (Varray str (Const 0))
+		standardizeArrays x = x
+
 
 
 stripper (Prg code) = do
