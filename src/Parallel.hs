@@ -1,5 +1,6 @@
 module Parallel where
 import MidIR
+import Varmarker
 import Util
 import qualified Data.Map as M
 import ControlFlowGraph
