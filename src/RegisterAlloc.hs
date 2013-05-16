@@ -462,5 +462,5 @@ doRegisterAllocation lgraph = coloredGraph
     where (coloring, finalGraph) = allocateRegisters vmSpillHeuristic lgraph
           coloring' = M.filterWithKey (\k a -> (not . isArray) k) coloring
           lgraph' = trace (pPrint finalGraph ++ "\n" ++ pPrint coloring') $ removeRedundantMoves coloring finalGraph
-          coloredGraph = applyColoring coloring' lgraph'
+          coloredGraph = applyColoring coloring' finalGraph
 

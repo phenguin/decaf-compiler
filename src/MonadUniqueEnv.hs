@@ -54,6 +54,6 @@ checkCounter = do
 getUniqString :: String -> UniqStringEnv String
 getUniqString s = do
         i <- getUniq s
-        return (s ++ "_" ++ show i)
+        return (s ++ show i)
 
 

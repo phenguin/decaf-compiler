@@ -173,11 +173,12 @@ instance LastNode ProtoBranch where
 
 --cse:: ControlFlowGraph -> Either a [IO()]
 
-mkTemp :: Int -> Value
+mkTemp :: Integer -> Value
 mkTemp i = (Scoped [Temp] (Symbol $ "t" ++ show i))
 
 freshTemp :: UniqStringEnv Value
-freshTemp = do
+freshTemp = freshTemp' >> lastTemp
+freshTemp' = do
     temp <- getUniqString "t"
     return (Scoped [Temp] (Symbol $ temp ))
 
@@ -185,7 +186,7 @@ lastTemp :: UniqStringEnv Value
 lastTemp = do
     uMap <- get
     let i = M.findWithDefault 0 "t" uMap
-    return i
+    return $ mkTemp i
 
 type LowCFG = LGraph ProtoASM ProtoBranch
 
@@ -216,7 +217,7 @@ mapStmtToAsm bid x = case x of
             exprAsm <- mapExprToAsm expr
             res <- lastTemp
             return $ [Mov' res RAX, Ret']
-        _ -> Debug.Trace.trace ("!!STMT!" ++ (show x)) []
+        _ -> Debug.Trace.trace ("!!STMT!" ++ (show x)) $ return []
    where vartoval (Var str) = (Symbol str)
          vartoval (Scopedvar scp (Var str)) = (Scoped scp (Symbol str))
 -- failure here indicates a lastexit is thrown meaning that a break and continue
@@ -229,22 +230,24 @@ mapStmtToAsm bid x = case x of
 --	 handleContinue (LastOther (Jump b1)) = [(Jmp' b1)]
 
 mapVarToValue :: Variable -> UniqStringEnv [ProtoASM]
-mapVarToValue (Var str) = lastTemp >>= (\res -> return [Mov' res (Symbol str)])
+mapVarToValue (Var str) = lastTemp >>= (\res -> freshTemp >> return [Mov' res (Symbol str)])
 mapVarToValue (Varray str expr) = do  
+        res1 <- lastTemp
         exprAsms <- mapExprToAsm expr
-        res <- lastTemp
-        ret <- freshTemp
-        return $ exprAsms ++ [Mov' res ret]
+        res2 <- lastTemp
+        freshTemp
+        return $ exprAsms ++ [Mov' res1 (Array str res2)]
 
-mapVarToValue (Scopedvar scp (Var str)) = lastTemp >>= (\res -> return [Mov' res (Scoped scp $Symbol str)])
+mapVarToValue (Scopedvar scp (Var str)) = lastTemp >>= (\res -> freshTemp >> return [Mov' res (Scoped scp $Symbol str)])
 
 mapVarToValue (Scopedvar scp (Varray str expr)) = do
+    res1 <- lastTemp
     exprAsm <- mapExprToAsm expr
-    res <- lastTemp
-    ret <- freshTemp
-    return $ [Mov' res (Scoped scp $ Array str ret)]
+    res2 <- lastTemp
+    freshTemp
+    return $ exprAsm ++ [Mov' res1 (Scoped scp $ Array str res2)]
 
-mapVarToValue x = Debug.Trace.trace ("!!VAR!" ++ (show x)) [Mov' (Symbol "OHFUCK") (Symbol "ERROR")]
+mapVarToValue x = Debug.Trace.trace ("!!VAR!" ++ (show x)) $ return [Mov' (Symbol "OHFUCK") (Symbol "ERROR")]
 
 mapExprToAsm::Expression -> UniqStringEnv [ProtoASM]
 mapExprToAsm xet = case xet of
@@ -280,20 +283,22 @@ mapExprToAsm xet = case xet of
 
                 (Str str)       -> freshTemp >>= (\t -> return [Mov' (EvilString str) t])
 
-                (FuncCall n p )	-> freshTemp >>= (\t -> return $ protoMethodCall xet ++ [Mov' RAX t])
+                (FuncCall n p )	-> do
+                    asms <- protoMethodCall xet
+                    ret <- freshTemp
+                    return $ asms ++ [Mov' RAX ret]
 
-                _ 	-> Debug.Trace.trace ( "!EXPR!!" ++ (show xet)) []
+                _ 	-> Debug.Trace.trace ( "!EXPR!!" ++ (show xet)) $ return []
                 where
                         binop op x y = do
                             px <- process x
                             res1 <- lastTemp
+                            freshTemp
                             py <- process y
                             res2 <- lastTemp
-                            t1 <- freshTemp
-                            t2 <- freshTemp
-                            return $ px ++ py ++ [Mov' res1 t1, 
-                                                  Mov' res2 t2, 
-                                                  op t1 t2] 
+                            ret <- freshTemp
+                            return $ px ++ py ++ [ Mov' res2 ret, 
+                                                  op res1 ret] 
                         uniop op x = do
                             px <- process x
                             res <- lastTemp
@@ -332,33 +337,41 @@ mapExprToAsm xet = case xet of
                                                         Mov' tmp2 RDX ]
 
 protoMethodCall:: Expression -> UniqStringEnv [ProtoASM]
-protoMethodCall (FuncCall name midParam) = freshTemp >>= (\tmp -> return $
-    	save
-        ++ makeparam tmp midParam 0
+protoMethodCall (FuncCall name midParam) = do
+    params <- makeparam midParam 0
+    return $ save
+        ++ params
         ++ (if name == "printf" then [Mov' (Literal 0) RAX] else [])
 --	++ reverse ( take (minimum [6,(length midParam)]) ( reverse [(Pop' R9),(Pop' R8),(Pop' RCX),(Pop' RDX),(Pop' RSI),(Pop' RDI)]))
         ++ [Call' name]
         ++ [(Pop' RBX) | x<- [1..((length midParam) - 6)]]
-    	++ restore)
-    where params =  makeparam midParam 0
-          makeparam ((Str str):xs) i =
-                  flipAfter5 i [param i $ (EvilString str) ] (makeparam xs (i+1))
-          makeparam ((Const n):xs) i =
-                  flipAfter5 i [param i $ (Literal n)] (makeparam xs (i+1))
-          makeparam t ys i = case ys of
-                    (x:xs) -> (mapExprToAsm x) ++ [param i t] ++ makeparam xs (i+1)
-                    [] -> []
-          flipAfter5 i a b
-                  | i > 5      = (b ++ a)
-                  | otherwise  = (a ++ b)
-          param i dtsrc = case i of
-                  0 -> (Mov' dtsrc RDI)
-                  1 -> (Mov' dtsrc RSI)
-                  2 -> (Mov' dtsrc RDX)
-                  3 -> (Mov' dtsrc RCX)
-                  4 -> (Mov' dtsrc R8)
-                  5 -> (Mov' dtsrc R9)
-                  otherwise -> (Push' dtsrc)
+    	++ restore
+                where   params =  makeparam midParam 0
+                        makeparam ((Str str):xs) i = do
+                            p <- makeparam xs (i+1)
+                            return $ flipAfter5 i [param i $ (EvilString str) ] p
+                        makeparam ((Const n):xs) i = do
+                            p <- makeparam xs (i+1)
+                            return $ flipAfter5 i [param i $ (Literal n)] p
+                        makeparam ys i = case ys of
+                                  (x:xs) -> do
+                                      expressed <- mapExprToAsm x 
+                                      tmp <- lastTemp
+                                      p <- makeparam xs (i+1)
+                                      return $ expressed ++ [param i tmp] ++ p
+                                  [] -> return []
+                        flipAfter5 i a b
+                                | i > 5      = (b ++ a)
+                                | otherwise  = (a ++ b)
+                        param i dtsrc = case i of
+                                0 -> (Mov' dtsrc RDI)
+                                1 -> (Mov' dtsrc RSI)
+                                2 -> (Mov' dtsrc RDX)
+                                3 -> (Mov' dtsrc RCX)
+                                4 -> (Mov' dtsrc R8)
+                                5 -> (Mov' dtsrc R9)
+                                otherwise -> (Push' dtsrc)
+
 
 
 
@@ -372,14 +385,14 @@ protoMethodCall (FuncCall name midParam) = freshTemp >>= (\tmp -> return $
 -- -- possibly some additional preamble.  probably will want to return
 -- -- ([], BranchSeq <stuff>)
 
-mapBranchToAsm :: BlockId-> ZLast BranchingStatement -> (([ProtoASM],[ProtoASM]), ZLast ProtoBranch)
+mapBranchToAsm :: BlockId-> ZLast BranchingStatement -> UniqStringEnv (([ProtoASM],[ProtoASM]), ZLast ProtoBranch)
 mapBranchToAsm bid (LastOther (IfBranch expr bid1 bid2))  
 	= do
         expressed <- mapExprToAsm expr
         tmp <- lastTemp
-        return $ (([],(expressed++[(Cmp' (Literal 0) tmp),(Je' bid2)])), LastOther $ If' [] [bid1, bid2])
+        return $ (([],expressed++[Cmp' (Literal 0) tmp,Je' bid2]), LastOther $ If' [] [bid1, bid2])
 
-mapBranchToAsm bid (LastOther (Jump bid1))  = (([],[Jmp' bid1]), LastOther $ Jump' bid1)
+mapBranchToAsm bid (LastOther (Jump bid1))  = return $ (([],[Jmp' bid1]), LastOther $ Jump' bid1)
 mapBranchToAsm bid (LastOther (WhileBranch expr bid1 bid2))  
 	= do
         expressed <- mapExprToAsm expr
@@ -390,32 +403,35 @@ mapBranchToAsm bid (LastOther (ForBranch (Var str) startexpr expr bid1 bid2))
 	= do
         expressed <- mapExprToAsm expr
         tmp <- lastTemp
-        (([], expressed++[(Cmp' (Symbol str) tmp),(Je' bid2)]), LastOther $ For' (Literal 0) (mapExprToAsm expr) expressed [] [bid1, bid2])
+        return $ (([], expressed++[(Cmp' (Symbol str) tmp),(Je' bid2)]), LastOther $ For' (Literal 0) expressed expressed [] [bid1, bid2])
 
 mapBranchToAsm bid (LastOther (ParaforBranch (Var str) startexpr expr bid1 bid2))  
 	= do
         expressed <- mapExprToAsm expr
         tmp <- lastTemp
-        (([], expressed ++[(Cmp' (Symbol str) tmp),(Je' bid2)]), LastOther $ Parafor' (Literal 0) (mapExprToAsm expr)  expressed [] [bid1, bid2])
+        return $ (([], expressed ++[(Cmp' (Symbol str) tmp),(Je' bid2)]), LastOther $ Parafor' (Literal 0) expressed expressed [] [bid1, bid2])
 
 mapBranchToAsm bid (LastOther (ForBranch  (Scopedvar scp (Var str)) startexpr expr bid1 bid2))  
 	= do
+        sExpressed <- mapExprToAsm startexpr
         expressed <- mapExprToAsm expr
-        tmp <- LastTemp 
-        return $ (([],(mapExprToAsm startexpr)++ expressed++[(Cmp' (Scoped scp (Symbol str)) (mkTemp 0)),(Je' bid2)] ++  (mapExprToAsm startexpr)), LastOther $ For' (Literal 0) []  expressed [] [bid1, bid2])
+        sExpressed' <- mapExprToAsm startexpr
+        tmp <- lastTemp 
+        return $ (([],sExpressed ++ expressed ++[(Cmp' (Scoped scp (Symbol str)) tmp),(Je' bid2)] ++ sExpressed'), LastOther $ For' (Literal 0) []  expressed [] [bid1, bid2])
 
 mapBranchToAsm bid (LastOther (ParaforBranch (Scopedvar scp (Var str)) startexpr expr bid1 bid2))  
 	= do
         expressed <- mapExprToAsm expr
+        sExpressed <- mapExprToAsm startexpr
         tmp <- lastTemp
-        (([], expressed ++[(Cmp' (Scoped scp (Symbol str)) tmp),(Je' bid2)]), LastOther $ Parafor' (Literal 0) (mapExprToAsm startexpr)  expressed [] [bid1, bid2])
+        return $ (([], expressed ++ [(Cmp' (Scoped scp (Symbol str)) tmp),(Je' bid2)]), LastOther $ Parafor' (Literal 0) sExpressed  expressed [] [bid1, bid2])
 
 
 
 
-mapBranchToAsm bid (LastOther (InitialBranch bids)) = (([],[]), (LastOther (InitialBranch' bids)))
+mapBranchToAsm bid (LastOther (InitialBranch bids)) = return (([],[]), (LastOther (InitialBranch' bids)))
 
-mapBranchToAsm bid (LastExit) = (([],[]),LastExit)
+mapBranchToAsm bid (LastExit) = return (([],[]),LastExit)
 
 
 -- Pretty Printing
