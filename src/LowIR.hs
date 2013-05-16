@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 module LowIR where 
 
+import Varmarker
 import MidIR
 import MonadUniqueEnv
 import Control.Monad
@@ -21,6 +22,24 @@ data Value = Symbol {name::String} | Array {name::String ,index::Value} | Litera
 		| RAX | RBX | RCX | RDX | RSP | RBP | RSI | RDI | R8 | R9 | R10 | R11 
 		| R12 | R13 | R14 | R15 | Scoped {getScope::[Scoped] , getValue::Value}
 		deriving (Show,Eq,Ord,Data,Typeable)
+
+colorToValue :: Color -> Value
+colorToValue CRAX = RAX
+colorToValue CRBX = RBX
+colorToValue CRCX = RCX
+colorToValue CRDX = RDX
+colorToValue CRSP = RSP
+colorToValue CRBP = RBP
+colorToValue CRSI = RSI
+colorToValue CRDI = RDI
+colorToValue CR8 = R8
+colorToValue CR9 = R9
+colorToValue CR10 = R10
+colorToValue CR11 = R11
+colorToValue CR12 = R12
+colorToValue CR13 = R13
+colorToValue CR14 = R14
+colorToValue CR15= R15
 
 isRegister x = elem x [RAX ,RBX,RCX,RDX,RSP,RBP,RSI,RDI,R8,R9,R10,R11,R12,R13,R14,R15]	
 data ProtoASM = Dec' Value

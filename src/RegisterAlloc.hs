@@ -2,6 +2,7 @@
 
 module RegisterAlloc where 
 
+import Varmarker
 import Debug.Trace (trace)
 import LowIR
 import MidIR
@@ -30,38 +31,11 @@ import DataflowAnalysis
 import Data.Char (toLower)
 
 type Var = String
-data Color = CRCX | CRDX | CRSI | CRDI | CR8 | CR9 | CRSP | CRBP | CRAX | CRBX | CR10 | CR11 | CR12 | CR13 | CR14 | CR15 deriving (Eq, Show, Ord, Enum, Data, Typeable)
-
-allColors = [CRBX .. CR15]
-
-numColors :: Integer
-numColors = fromIntegral $ length allColors
-
-colorToValue :: Color -> Value
-colorToValue CRAX = RAX
-colorToValue CRBX = RBX
-colorToValue CRCX = RCX
-colorToValue CRDX = RDX
-colorToValue CRSP = RSP
-colorToValue CRBP = RBP
-colorToValue CRSI = RSI
-colorToValue CRDI = RDI
-colorToValue CR8 = R8
-colorToValue CR9 = R9
-colorToValue CR10 = R10
-colorToValue CR11 = R11
-colorToValue CR12 = R12
-colorToValue CR13 = R13
-colorToValue CR14 = R14
-colorToValue CR15= R15
 
 data MemLoc = BasePtrOffset Int deriving (Eq, Ord, Show, Data, Typeable)
 
 instance PrettyPrint MemLoc where
     ppr (BasePtrOffset i) = int (i*8) <> lparen <> text "%rbp" <> rparen
-
-instance PrettyPrint Color where
-    ppr = text . ('%':) . tail . map toLower . show
 
 -- Should be only a set of two elements.. might fix this to make it
 -- required by the type system later if it turns out to matter at all.

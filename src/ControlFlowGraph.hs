@@ -2,6 +2,7 @@
 module ControlFlowGraph where
 
 
+import Varmarker
 import CFGConcrete
 import Data.Set (Set)
 import qualified Data.Set as Set
