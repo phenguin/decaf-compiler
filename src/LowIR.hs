@@ -52,6 +52,7 @@ data ProtoASM = Dec' Value
 	| Sub' Value Value
 	| Mul' Value Value
 	| Div' Value
+	| Mod' Value
 	| Lt'   Value Value
 	| Gt'   Value Value
 	| Le'   Value Value
@@ -313,6 +314,7 @@ mapExprToAsm xet = case xet of
                 (Add x y)       -> binop (Add') x y
                 (Mul x y)       -> binop (Mul') x y
                 (Div x y)       -> idiv x y
+                (Mod x y)       -> imod x y
                 (And x y)       -> binop (And') x y
                 (Or x y)        -> binop (Or') x y
                 (Lt x y)        -> comparison (CMovl') x y
@@ -379,7 +381,24 @@ mapExprToAsm xet = case xet of
                                                   Mov' (Literal 0) ret,
                                                   Mov' (Literal 1) tmp,
                                                   op tmp ret]
+                        imod y x = do
+                                 px <- process x
+                                 res1 <- lastTemp
+                                 py <- process y
+                                 res2 <- lastTemp
+                                 tmp1 <- freshTemp
+                                 tmp2 <- freshTemp
+                                 ret <- freshTemp
+                                 return $ px ++ py ++ [ Mov' RAX tmp1,
+                                                        Mov' RDX tmp2,
+                                                        Mov' (Literal 0) RDX,
+                                                        Mov' res2 RAX,
+                                                        Div' res1,
+                                                        Mov' RDX ret,
+                                                        Mov' tmp1 RAX,
+                                                        Mov' tmp2 RDX ]
 
+p
                         idiv y x = do
                                  px <- process x
                                  res1 <- lastTemp
