@@ -423,7 +423,7 @@ mapBranchToAsm bid (LastOther (ForBranch  v@(Scopedvar scp (Var str)) startexpr 
 	
        -- sExpressed' <- mapExprToAsm startexpr
         tmp <- lastTemp 
-        return $ (([],sExpressed ++ vExpr ++ expressed ++[(Cmp' (Scoped scp (Symbol str)) endtmp),(Je' bid2)]), LastOther $ For' (Literal 0) []  expressed [] [bid1, bid2])
+        return $ ((sExpressed ++ vExpr ++ expressed , [(Cmp' (Scoped scp (Symbol str)) endtmp),(Je' bid2)]), LastOther $ For' (Literal 0) []  [] [] [bid1, bid2])
 
 mapBranchToAsm bid (LastOther (ParaforBranch (Scopedvar scp (Var str)) startexpr expr bid1 bid2))  
 	= do
