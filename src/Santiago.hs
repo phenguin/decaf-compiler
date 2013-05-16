@@ -572,9 +572,11 @@ hemorhage g@(LGraph entryId blocks) l ll i = (LGraph entryId outmap , state)
         where
           (outmap,state) = hemorhage' "" i [] ["global"] blocks  (fj 5$ M.lookup (lgEntry g) blocks) l ll
 
-hemorhage' stop prestate visited scope g blk l ll= if (BID stop) == bid
-                        then (g,prestate)
-                        else (M.insert bid newblock g' ,prestate)
+hemorhage' stop prestate visited scope g blk l ll= (M.insert bid newblock g' ,prestate)
+
+--if (BID stop) == bid
+ --                       then (g,prestate)
+  --                      else (M.insert bid newblock g' ,prestate)
                 where
                         newblock = Block bid $ newZtail content last
                         (content,newstate) =  let pkg= gatherContent $ bTail blk
