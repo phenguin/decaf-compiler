@@ -345,16 +345,16 @@ lfixBranch funmap lst scope = do
 			(ForBranch v s e b1 b2) -> return $ ForBranch (lv v) (le s) (le e) b1 b2
 			(ParaforBranch v s e b1 b2) -> return $ ParaforBranch (lv v) (le s) (le e) b1 b2
 			x -> return x
-		where
-			mapswap vmp v@(Var str) = Scopedvar (prescope $scopify $ head scope) v
-				where prefix = fj 20$ M.lookup v vmp
-			mapswap vmp v@(Varray str va) = Scopedvar (prescope $ scopify $ head scope) v
-				where prefix = fj 21 $ M.lookup (Varray str (Const 0)) vmp -- important convention array always RAX in tables!
-			prescope pre = reverse$ dropWhile (/= pre) $ map scopify scope
-			scopify "global" = Global 
-			scopify x 
-				| Just _ <-M.lookup x funmap = Func x
-				| otherwise = Loop x 
+    where mapswap vmp v@(Var str) = Scopedvar (prescope $scopify $ head scope) v
+            where prefix = fj 20$ M.lookup v vmp
+          mapswap vmp v@(Varray str va) = Scopedvar (prescope $ scopify $ head scope) v
+            where prefix = fj 21 $ M.lookup (Varray str (Const 0)) vmp -- important convention array always RAX in tables!
+          mapswap vmp v = v
+          prescope pre = reverse$ dropWhile (/= pre) $ map scopify scope
+          scopify "global" = Global 
+          scopify x 
+            | Just _ <-M.lookup x funmap = Func x
+            | otherwise = Loop x 
 		
 
 fixStatement le lv stmt   

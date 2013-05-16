@@ -14,6 +14,7 @@ module Main where
 import Prelude hiding (readFile)
 import qualified Prelude
 
+import DataflowAnalysis
 import Data.List (intersperse)
 import Debug.Trace (trace)
 import Util (compose)
@@ -186,7 +187,9 @@ assembleTree configuration input = do
   -- Output goes here..
   let output = Right $ zipWith ($) ioFuncSeq $ intersperse "\n" [prolog, pPrint asm, epilog]
       -- Strings you want to output in debug mode go here.
-      debugStrings = [] 
+      debugStrings = [pPrint $ computeInterferenceGraph lowIRCfg,
+                      pPrint $ defAllocateRegisters lowIRCfg, 
+                      pPrint $ augmentWithDFR lowLVAnalysis lowIRCfg ] 
   if debug configuration
 	then compose (map prependOutput debugStrings) output
  	else output
