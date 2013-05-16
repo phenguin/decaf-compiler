@@ -397,8 +397,6 @@ mapExprToAsm xet = case xet of
                                                         Mov' RDX ret,
                                                         Mov' tmp1 RAX,
                                                         Mov' tmp2 RDX ]
-
-p
                         idiv y x = do
                                  px <- process x
                                  res1 <- lastTemp
