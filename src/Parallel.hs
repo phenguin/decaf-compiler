@@ -58,7 +58,7 @@ forn stmt
 				st <- return $ ((scp++[Func name]),mp,i+1)
 				put $ (scp, mp ,i+1)
 				params' <- mapM fornvar params
-				return $ DFun name params (evalState (fornbod bod) st)
+				return $ DFun name params' (evalState (fornbod bod) st)
         | If expression thens elses 	<- stmt = do
 				st'@(scp , mp,i) <- get
 				st <- return $((scp++[Loop (show i)]),mp,i+1)
