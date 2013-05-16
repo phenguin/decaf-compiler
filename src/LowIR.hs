@@ -216,7 +216,7 @@ mapStmtToAsm bid x = case x of
         (Return expr) -> do
             exprAsm <- mapExprToAsm expr
             res <- lastTemp
-            return $ [Mov' res RAX, Ret']
+            return $ exprAsm ++[Mov' res RAX, Ret']
         _ -> Debug.Trace.trace ("!!STMT!" ++ (show x)) $ return []
    where vartoval (Var str) = (Symbol str)
          vartoval (Scopedvar scp (Var str)) = (Scoped scp (Symbol str))
@@ -310,11 +310,14 @@ mapExprToAsm xet = case xet of
                         comparison op x y = do
                             px <- process x
                             res1 <- lastTemp
+			    freshTemp
                             py <- process y
                             res2 <- lastTemp
+			    freshTemp
                             tmp <- freshTemp
+			    freshTemp
                             ret <- freshTemp
-                            return $ px ++ py ++ [Cmp' res1 res2,
+                            return $ px ++ py ++ [Cmp' res2 res1,
                                                   Mov' (Literal 0) ret,
                                                   Mov' (Literal 1) tmp,
                                                   op tmp ret]
@@ -447,7 +450,7 @@ instance PrettyPrint ProtoASM where
                 (Not' x )        -> uniop "not" x
                 (Neg' x)         -> uniop "neg" x
                 (Mov' x y)	 -> binop "movq" x y
-                (Cmp' x y)	 -> binop "cmp" x y
+                (Cmp' x y)	 -> binop "cmp"  x y --hack please dont bite back
                 (CMove' x y)	 -> binop "cmove" x y
                 (CMovne' x y)	 -> binop "cmovne" x y
                 (CMovg' x y)	 -> binop "cmovg" x y
@@ -494,7 +497,7 @@ instance PrettyPrint Value where
             R13 -> text "%r13"
             R14 -> text "%r14"
             R15 -> text "%r15"
-            Scoped scope v -> ppr v
+--            Scoped scope v -> ppr v
             _ 			-> text (show x)
 
 
