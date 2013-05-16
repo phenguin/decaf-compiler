@@ -11,7 +11,7 @@ data VarMarker = VarMarker {
     varName :: String,
     varType :: Transforms.FDType,
     varScope :: [Scoped]
-    } | Precolored deriving (Show, Eq, Ord, Data, Typeable)
+    } | Precolored Color deriving (Show, Eq, Ord, Data, Typeable)
 
 data Color = CRCX | CRDX | CRSI | CRDI | CR8 | CR9 | CRSP | CRBP | CRAX | CRBX | CR10 | CR11 | CR12 | CR13 | CR14 | CR15 deriving (Eq, Show, Ord, Enum, Data, Typeable)
 
@@ -40,3 +40,4 @@ isScoped _ = True
 instance PrettyPrint VarMarker where
     ppr (VarMarker name Transforms.Single _) = text name
     ppr (VarMarker name (Transforms.Array _) _) = text name <> lbrack <> rbrack
+    ppr (Precolored color) = ppr color
