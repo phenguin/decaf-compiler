@@ -128,7 +128,7 @@ fornex expr
 	| Sub x y <- expr	= do
 				x' <- fornex x
 				y' <- fornex y
-				return $ Add   x'  y'
+				return $ Sub   x'  y
 	| Mul x y <- expr	=do
 				x' <- fornex x
 				y' <- fornex y
