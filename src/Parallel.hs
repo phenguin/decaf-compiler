@@ -50,7 +50,11 @@ snipe (Prg code) = do
 
 fornbod bd = mapM forn bd
 
-
+fornfunc params bod = do
+	mapM forn (map DVar params)
+	params' <- mapM fornvar params
+	bod' <- fornbod bod
+	return (params',bod')
 
 --forn:: State ([Scoped], (M.Map Variable [Scoped]) , Int) m => Statement -> m Statement
 forn stmt 	
@@ -58,8 +62,8 @@ forn stmt
 				st'@(scp, mp,i) <- get
 				st <- return $ ((scp++[Func name]),mp,i+1)
 				put $ (scp, mp ,i+1)
-				params' <- mapM fornvar params
-				return $ DFun name params' (evalState (fornbod bod) st)
+				let (params',bod') = evalState (fornfunc params bod) st
+				return $ DFun name params' bod'
         | If expression thens elses 	<- stmt = do
 				st'@(scp , mp,i) <- get
 				st <- return $((scp++[Loop (show i)]),mp,i+1)
@@ -82,7 +86,7 @@ forn stmt
 				return $ ForLoop i' start' end' (evalState (fornbod bod) st) 
 	| DVar x <- stmt = do
 		st@(scp,mp,i)<-get
-		put $(scp,(M.insert x scp mp),i)
+		put $(scp,(M.insert (standardizeArrays x) scp mp),i)
 		x'<-fornvar x 
 		return $ DVar x'
 	| Set var expr <- stmt = do 
@@ -125,7 +129,7 @@ fornex expr
 	| Sub x y <- expr	= do
 				x' <- fornex x
 				y' <- fornex y
-				return $ Add   x'  y'
+				return $ Sub   x'  y
 	| Mul x y <- expr	=do
 				x' <- fornex x
 				y' <- fornex y
@@ -179,9 +183,8 @@ fornvar v =do
 	st@(scp, mp,i) <- get
 	let scope = fromJust $ M.lookup (standardizeArrays v) (mp:: M.Map Variable [Scoped])
 	return $ Scopedvar scope v
-	where
-		standardizeArrays (Varray str _) = (Varray str (Const 0))
-		standardizeArrays x = x
+standardizeArrays (Varray str _) = (Varray str (Const 0))
+standardizeArrays x = x
 
 
 

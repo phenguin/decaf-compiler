@@ -465,13 +465,16 @@ mapBranchToAsm bid (LastOther (ParaforBranch (Var str) startexpr expr bid1 bid2)
         tmp <- lastTemp
         return $ (([], expressed ++[(Cmp' (Symbol str) tmp),(Je' bid2)]), LastOther $ Parafor' (Literal 0) expressed expressed [] [bid1, bid2])
 
-mapBranchToAsm bid (LastOther (ForBranch  (Scopedvar scp (Var str)) startexpr expr bid1 bid2))  
+mapBranchToAsm bid (LastOther (ForBranch  v@(Scopedvar scp (Var str)) startexpr expr bid1 bid2))  
 	= do
         sExpressed <- mapExprToAsm startexpr
+	vExpr <- mapVarToValue v
         expressed <- mapExprToAsm expr
-        sExpressed' <- mapExprToAsm startexpr
+	endtmp <- lastTemp
+	
+       -- sExpressed' <- mapExprToAsm startexpr
         tmp <- lastTemp 
-        return $ (([],sExpressed ++ expressed ++[(Cmp' (Scoped scp (Symbol str)) tmp),(Je' bid2)] ++ sExpressed'), LastOther $ For' (Literal 0) []  expressed [] [bid1, bid2])
+        return $ (([],sExpressed ++ vExpr ++ expressed ++[(Cmp' (Scoped scp (Symbol str)) endtmp),(Je' bid2)]), LastOther $ For' (Literal 0) []  expressed [] [bid1, bid2])
 
 mapBranchToAsm bid (LastOther (ParaforBranch (Scopedvar scp (Var str)) startexpr expr bid1 bid2))  
 	= do
@@ -548,8 +551,17 @@ instance PrettyPrint Value where
             R13 -> text "%r13"
             R14 -> text "%r14"
             R15 -> text "%r15"
-            Scoped scope v -> ppr v
+            Scoped scope v -> text $ namifyy x 
             _ 			-> text (show x)
+
+
+namifyy (Scoped scope y) = namifyy' scope y
+namifyy' (s:ss) y'
+        | Global  <- s = "global_" ++ namifyy' ss y'
+        | Func st <- s = st ++ "_" ++ namifyy' ss y'
+        | Loop st <- s = st ++ "_" ++ namifyy' ss y'
+namifyy' _ y' = name y'
+
 
 
 instance PrettyPrint ProtoBranch where

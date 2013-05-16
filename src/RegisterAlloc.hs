@@ -476,6 +476,6 @@ doRegisterAllocation :: LGraph ProtoASM ProtoBranch -> LGraph ProtoASM ProtoBran
 doRegisterAllocation lgraph = coloredGraph
     where (coloring, finalGraph) = allocateRegisters vmSpillHeuristic lgraph
           coloring' = M.filterWithKey (\k a -> (not . isArray) k) coloring
-          lgraph' = removeRedundantMoves coloring finalGraph
+          lgraph' = removeRedundantMoves coloring' finalGraph
           coloredGraph = applyColoring coloring' lgraph'
 
