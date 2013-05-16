@@ -286,7 +286,6 @@ mapVarToValue (Varray str expr) = do
         res1 <- lastTemp
         exprAsms <- mapExprToAsm expr
         res2 <- lastTemp
-        freshTemp
         return $ exprAsms ++ [Mov' res1 (Array str res2)]
 
 mapVarToValue (Scopedvar scp (Var str)) = lastTemp >>= (\res -> freshTemp >> return [Mov' res (Scoped scp $Symbol str)])
@@ -295,7 +294,6 @@ mapVarToValue (Scopedvar scp (Varray str expr)) = do
     res1 <- lastTemp
     exprAsm <- mapExprToAsm expr
     res2 <- lastTemp
-    freshTemp
     return $ exprAsm ++ [Mov' res1 (Scoped scp $ Array str res2)]
 
 mapVarToValue x = Debug.Trace.trace ("!!VAR!" ++ (show x)) $ return [Mov' (Symbol "OHFUCK") (Symbol "ERROR")]
@@ -344,7 +342,7 @@ mapExprToAsm xet = case xet of
                         binop op x y = do
                             px <- process x
                             res1 <- lastTemp
-                            freshTemp
+    --                        freshTemp
                             py <- process y
                             res2 <- lastTemp
                             ret <- freshTemp
@@ -361,12 +359,12 @@ mapExprToAsm xet = case xet of
                         comparison op x y = do
                             px <- process x
                             res1 <- lastTemp
-			    freshTemp
+--			    freshTemp
                             py <- process y
                             res2 <- lastTemp
-			    freshTemp
+--			    freshTemp
                             tmp <- freshTemp
-			    freshTemp
+--			    freshTemp
                             ret <- freshTemp
                             return $ px ++ py ++ [Cmp' res2 res1,
                                                   Mov' (Literal 0) ret,
@@ -551,16 +549,18 @@ instance PrettyPrint Value where
             R13 -> text "%r13"
             R14 -> text "%r14"
             R15 -> text "%r15"
-            Scoped scope v -> text $ namifyy x 
+            Scoped scope (Symbol str) -> ppr (Symbol (namifyy' scope str))
+            Scoped scope (Array str i) -> ppr (Array (namifyy' scope str) i)
+            Scoped scope vy@(Scoped _ _) -> ppr vy
             _ 			-> text (show x)
 
 
-namifyy (Scoped scope y) = namifyy' scope y
+--namifyy (Scoped scope y) = namifyy' scope y
 namifyy' (s:ss) y'
         | Global  <- s = "global_" ++ namifyy' ss y'
         | Func st <- s = st ++ "_" ++ namifyy' ss y'
         | Loop st <- s = st ++ "_" ++ namifyy' ss y'
-namifyy' _ y' = name y'
+namifyy' _ y' =  y'
 
 
 
