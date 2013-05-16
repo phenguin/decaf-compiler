@@ -49,7 +49,11 @@ snipe (Prg code) = do
 
 fornbod bd = mapM forn bd
 
-
+fornfunc params bod = do
+	mapM forn (map DVar params)
+	params' <- mapM fornvar params
+	bod' <- fornbod bod
+	return (params',bod')
 
 --forn:: State ([Scoped], (M.Map Variable [Scoped]) , Int) m => Statement -> m Statement
 forn stmt 	
@@ -57,8 +61,8 @@ forn stmt
 				st'@(scp, mp,i) <- get
 				st <- return $ ((scp++[Func name]),mp,i+1)
 				put $ (scp, mp ,i+1)
-				params' <- mapM fornvar params
-				return $ DFun name params' (evalState (fornbod bod) st)
+				let (params',bod') = evalState (fornfunc params bod) st
+				return $ DFun name params' bod'
         | If expression thens elses 	<- stmt = do
 				st'@(scp , mp,i) <- get
 				st <- return $((scp++[Loop (show i)]),mp,i+1)
