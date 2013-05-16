@@ -201,7 +201,6 @@ computeIGfromLowIRNode (Right m, liveVars') = case m of
                 Sub' _ v ->  interfereWithExcept v Nothing
                 Mul' _ v ->  interfereWithExcept v Nothing
                 -- TODO: Needs to interfere with RAX and RDX precolored regs.
-                Div' v -> interfereWithExcept v Nothing
                 Not' v -> interfereWithExcept v Nothing
                 Pop' v -> interfereWithExcept v Nothing
                 _ -> emptyIG
