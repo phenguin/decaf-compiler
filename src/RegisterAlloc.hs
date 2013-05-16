@@ -198,24 +198,22 @@ buildIGFromLowCfg cfg = unionIG (discreteOnVertices (allNonArrayVarsForLowCfg cf
 
 computeIGfromLowIRNode :: (Either ProtoBranch ProtoASM, LiveVarState) -> InterferenceGraph VarMarker
 computeIGfromLowIRNode (Left l, liveVars) = case l of
-        If' asms bids -> unionIGs $ map middlesMapF asms
-        While' asms bids -> unionIGs $ map middlesMapF asms
+        If' asms bids -> unionIGs $ mapMAsms asms
+        While' asms bids -> unionIGs $ mapMAsms asms
         -- TODO: Check on how structure relates to for loop semantics
-        For' v asms1 asms2 asms3 bids -> unionIGs $ map middlesMapF (concat [asms1, asms2, asms3])
-        Parafor' v asms1 asms2 asms3 bids -> unionIGs $ map middlesMapF (concat [asms1, asms2, asms3])
+        For' v asms1 asms2 asms3 bids -> unionIGs $ mapMAsms (concat [asms1, asms2, asms3])
+        Parafor' v asms1 asms2 asms3 bids -> unionIGs $ mapMAsms (concat [asms1, asms2, asms3])
         InitialBranch' bids -> emptyIG
         Jump' _ -> emptyIG
         Nil -> emptyIG
-    where middlesMapF = \m -> computeIGfromLowIRNode (Right m, liveVars)
+    where middlesMapF m = do
+              liveVarSt <- get
+              modify (lowLVUpdateM m)
+              return $ computeIGfromLowIRNode (Right m, liveVarSt)
+          mapMAsms asms = fst $ runState (mapM middlesMapF (reverse asms)) liveVars
 
-computeIGfromLowIRNode (Right m, liveVars) = case m of
+computeIGfromLowIRNode (Right m, liveVars') = case m of
                 Mov' v v' -> addPEdgeOrId v v' $ beforePEdges v' (Just v)
-    --            CMove' _ v' ->  beforePEdges v' (Just v) 
-     --           CMovne' _  v' -> beforePEdges v' (Just v)
-      --          CMovg' _ v' ->  beforePEdges v' (Just v)
-       --         CMovl' _  v' -> beforePEdges v' (Just v)
-        --        CMovge' _  v' ->  beforePEdges v' (Just v)
-         --       CMovle' _  v' ->  beforePEdges v' (Just v)
                 CMove' v v' -> addPEdgeOrId v v' $ beforePEdges v' Nothing 
                 CMovne' v v' -> addPEdgeOrId v v' $ beforePEdges v' Nothing
                 CMovg' v v' -> addPEdgeOrId v v' $ beforePEdges v' Nothing
@@ -245,6 +243,7 @@ computeIGfromLowIRNode (Right m, liveVars) = case m of
                                                            relevantVarNames
                 where vm = VarMarker s Transforms.Single scp
           interfering _ _ = Set.empty
+          liveVars = lowLVUpdateM m liveVars'
           addPEdgeOrId (Scoped scp (Symbol s)) (Scoped scp' (Symbol s')) = addPEdge (makeVertex (VarMarker s Transforms.Single scp))
                                                                                     (makeVertex (VarMarker s' Transforms.Single scp'))
           addPEdgeOrId _ _ = id
@@ -467,6 +466,6 @@ doRegisterAllocation :: LGraph ProtoASM ProtoBranch -> LGraph ProtoASM ProtoBran
 doRegisterAllocation lgraph = coloredGraph
     where (coloring, finalGraph) = allocateRegisters vmSpillHeuristic lgraph
           coloring' = M.filterWithKey (\k a -> (not . isArray) k) coloring
-          --lgraph' = removeRedundantMoves coloring finalGraph
-          coloredGraph = applyColoring coloring' finalGraph
+          lgraph' = removeRedundantMoves coloring finalGraph
+          coloredGraph = applyColoring coloring' lgraph'
 
