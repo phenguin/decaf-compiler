@@ -204,7 +204,6 @@ computeIGfromLowIRNode (Right m, liveVars') = case m of
                 Mul' _ v ->  interfereWith v
                 -- TODO: Needs to interfere with RAX and RDX precolored regs.
                 Not' v -> interfereWith v
-                Pop' v -> interfereWith v
                 _ -> emptyIG
     where relevantVarNames = Set.filter (not . isArray) $ liveVars
 
@@ -218,7 +217,10 @@ computeIGfromLowIRNode (Right m, liveVars') = case m of
                                                                           toList (interfering relevantVarNames defV)
 
           interfering candidates v = case maybeVM of 
-                               Just vm -> Set.map (\vm' -> (makeVertex vm, makeVertex vm')) $ Set.filter (not . (== vm)) candidates
+                               Just vm -> if isArray vm then
+                                                        Set.empty
+                                                        else
+                                                        Set.map (\vm' -> (makeVertex vm, makeVertex vm')) $ Set.filter (not . (== vm)) candidates
                                Nothing -> Set.empty
             where maybeVM = maybeValToVM v
 
@@ -426,7 +428,7 @@ simplify spillHeuristic ig = runState (simplify' spillHeuristic ig) []
 
 -- TODO: Optimize this later if you have time..
 simplify' :: (IGNode a, Ord b, PrettyPrint a, Show a) => (InterferenceGraph a -> IGVertex a -> b) -> InterferenceGraph a -> State [IGVertex a] (InterferenceGraph a)
-simplify' spillHeuristic ig@(IG vertices iEdges pEdges) = trace (pPrint ig) $ case Set.null (Set.filter (not . precolored) vertices) of
+simplify' spillHeuristic ig@(IG vertices iEdges pEdges) = case Set.null (Set.filter (not . precolored) vertices) of
     -- If empty.. nothing to do.. proceed to coloring
     True -> return ig
     -- Otherwise.. remove chosen vertex and do it again
