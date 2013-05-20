@@ -52,17 +52,17 @@ data InterferenceGraph a = IG {
     pEdges :: (Set (IGEdge a))
     } deriving (Eq, Show, Ord, Data, Typeable)
 
-instance (Ord a, PrettyPrint a) => PrettyPrint (InterferenceGraph a) where
+instance (Ord a, PrettyPrint a, Show a) => PrettyPrint (InterferenceGraph a) where
     ppr (IG vertices iEdges pEdges) = text "" $$
                          text "Interference Graph ===========================" $$
                          text "Vertices:" <+> hsep (map showSet (toList vertices)) $$ text "" $$
                          text "Interference Edges:" <+> vcat (map id $ 
-                                                 map (\(v1:v2:vs) -> lparen <> showSet v1 <> comma <+> showSet v2 <> rparen) $ 
+                                                 map displayF $ 
                                                  sort $ 
                                                  map toList $ 
                                                  toList iEdges) $$
                          text "Preference Edges:" <+> vcat (map id $ 
-                                                 map (\(v1:v2:vs) -> lparen <> showSet v1 <> comma <+> showSet v2 <> rparen) $ 
+                                                 map displayF $ 
                                                  sort $ 
                                                  map toList $ 
                                                  toList pEdges) $$
@@ -70,6 +70,8 @@ instance (Ord a, PrettyPrint a) => PrettyPrint (InterferenceGraph a) where
                          text ""
        where showSet set = lbrace <> withCommas (toList set) <> rbrace
              withCommas = foldl (\acc x -> acc <+> ppr x <> comma) (text "")
+             displayF (v1:v2:vs) = lparen <> showSet v1 <> comma <+> showSet v2 <> rparen
+             displayF confusingInput = (text . show) confusingInput
                         
 
 isVertex :: (Ord a) => IGVertex a -> InterferenceGraph a -> Bool
@@ -187,43 +189,39 @@ computeIGfromLowIRNode (Left l, liveVars) = case l of
           mapMAsms asms = fst $ runState (mapM middlesMapF (reverse asms)) liveVars
 
 computeIGfromLowIRNode (Right m, liveVars') = case m of
-                Mov' v v' -> addPEdgeOrId v v' $ interfereWithExcept v' (Just v)
-                CMove' v v' -> addPEdgeOrId v v' $ interfereWithExcept v' Nothing 
-                CMovne' v v' -> addPEdgeOrId v v' $ interfereWithExcept v' Nothing
-                CMovg' v v' -> addPEdgeOrId v v' $ interfereWithExcept v' Nothing
-                CMovl' v v' -> addPEdgeOrId v v' $ interfereWithExcept v' Nothing
-                CMovge' v v' -> addPEdgeOrId v v' $ interfereWithExcept v' Nothing
-                CMovle' v v' -> addPEdgeOrId v v' $ interfereWithExcept v' Nothing
-                Neg' v ->  interfereWithExcept v Nothing
-                And' _ v ->  interfereWithExcept v Nothing
-                Or' _ v ->  interfereWithExcept v Nothing
-                Add' _ v ->  interfereWithExcept v Nothing
-                Sub' _ v ->  interfereWithExcept v Nothing
-                Mul' _ v ->  interfereWithExcept v Nothing
+                Mov' v v' -> addPEdgeOrId v v' $ interfereWithExcept v' v
+                CMove' v v' -> addPEdgeOrId v v' $ interfereWith v' 
+                CMovne' v v' -> addPEdgeOrId v v' $ interfereWith v'
+                CMovg' v v' -> addPEdgeOrId v v' $ interfereWith v'
+                CMovl' v v' -> addPEdgeOrId v v' $ interfereWith v'
+                CMovge' v v' -> addPEdgeOrId v v' $ interfereWith v'
+                CMovle' v v' -> addPEdgeOrId v v' $ interfereWith v'
+                Neg' v ->  interfereWith v
+                And' _ v ->  interfereWith v
+                Or' _ v ->  interfereWith v
+                Add' _ v ->  interfereWith v
+                Sub' _ v ->  interfereWith v
+                Mul' _ v ->  interfereWith v
                 -- TODO: Needs to interfere with RAX and RDX precolored regs.
-                Not' v -> interfereWithExcept v Nothing
-                Pop' v -> interfereWithExcept v Nothing
+                Not' v -> interfereWith v
+                Pop' v -> interfereWith v
                 _ -> emptyIG
     where relevantVarNames = Set.filter (not . isArray) $ liveVars
-          interfereWithExcept defV maybeExclude = foldr (uncurry addIEdge) (discreteOnVertices relevantVarNames) $
-                                                                          toList (interfering defV maybeExclude)
-          interfering vt maybeExclude = case maybeExclude of
-                    Just v -> let vm = valToVMSet' v in 
-                                  if colorableValue v
-                                  then Set.map (\vm' -> (vtm, makeVertex vm')) $ 
-                                                             Set.filter (not . (flip Set.member vm)) $
-                                                             Set.filter (not . (== vtm)) $
-                                                             relevantVarNames
-                                  else
-                                  interferingEdges
-                    _ -> interferingEdges
-                where vtm = valToVMSet' vt
-                      interferingEdges = Set.map (\vm' -> (vtm, makeVertex vm')) $ 
-                                                      Set.filter (not . (== vtm)) $
-                                                                          relevantVarNames
-                                                                                                                                       
-                      
-          interfering _ _ = Set.empty
+
+          interfereWithExcept defV exclude = foldr (uncurry addIEdge) (discreteOnVertices relevantVarNames) $
+                                                                          toList (interfering relevantVarNamesExcluding defV)
+            where relevantVarNamesExcluding = case maybeValToVM exclude of
+                      Nothing -> relevantVarNames
+                      Just excludeVM -> Set.filter (/= excludeVM) relevantVarNames
+
+          interfereWith defV = foldr (uncurry addIEdge) (discreteOnVertices relevantVarNames) $
+                                                                          toList (interfering relevantVarNames defV)
+
+          interfering candidates v = case maybeVM of 
+                               Just vm -> Set.map (\vm' -> (makeVertex vm, makeVertex vm')) $ Set.filter (not . (== vm)) candidates
+                               Nothing -> Set.empty
+            where maybeVM = maybeValToVM v
+
           liveVars = lowLVUpdateM m liveVars'
           addPEdgeOrId (Scoped scp (Symbol s)) (Scoped scp' (Symbol s')) = addPEdge (makeVertex (VarMarker s Transforms.Single scp))
                                                                                     (makeVertex (VarMarker s' Transforms.Single scp'))
@@ -260,7 +258,7 @@ hasSigDegree v ig@(IG vertices iEdges _) = degree v ig >= numColors
 
 -- Tries to coalesce nodes with a preference edge between them and returns the 
 -- coalesced graph along with whether or not anything was changed.
-coalesce :: (IGNode a, PrettyPrint a) => InterferenceGraph a -> (InterferenceGraph a, Bool)
+coalesce :: (IGNode a, PrettyPrint a, Show a) => InterferenceGraph a -> (InterferenceGraph a, Bool)
 coalesce ig@(IG vertices iEdges pEdges) = case relevantPEdges of
                                                -- TODO: Should we remove irrelevant pEdges?
                                                [] -> (IG vertices iEdges (fromList validPEdges), False) -- Cant coalesce anything
@@ -421,13 +419,13 @@ setReplace olds new set = Set.map replaceFunc set
                               True -> new
                               False -> x
 
-defSimplify :: (IGNode a, PrettyPrint a) => InterferenceGraph a -> (InterferenceGraph a, [IGVertex a])
+defSimplify :: (IGNode a, PrettyPrint a, Show a) => InterferenceGraph a -> (InterferenceGraph a, [IGVertex a])
 defSimplify = simplify ((const . const) 1)
     
 simplify spillHeuristic ig = runState (simplify' spillHeuristic ig) []
 
 -- TODO: Optimize this later if you have time..
-simplify' :: (IGNode a, Ord b, PrettyPrint a) => (InterferenceGraph a -> IGVertex a -> b) -> InterferenceGraph a -> State [IGVertex a] (InterferenceGraph a)
+simplify' :: (IGNode a, Ord b, PrettyPrint a, Show a) => (InterferenceGraph a -> IGVertex a -> b) -> InterferenceGraph a -> State [IGVertex a] (InterferenceGraph a)
 simplify' spillHeuristic ig@(IG vertices iEdges pEdges) = trace (pPrint ig) $ case Set.null (Set.filter (not . precolored) vertices) of
     -- If empty.. nothing to do.. proceed to coloring
     True -> return ig

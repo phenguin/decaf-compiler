@@ -105,37 +105,39 @@ scopedValToVMSet :: Value -> Set VarMarker
 scopedValToVMSet v = Set.filter isScoped (valToVMSet v)
 
 valToVMSet :: Value -> Set VarMarker
-valToVMSet v = Set.filter isScoped $ valToVMSet' v
+valToVMSet v = case maybeValToVM v of
+                    Just vm -> Set.singleton vm 
+                    Nothing -> Set.empty
 
 valsIndicesToVMSet :: [Value] -> Set VarMarker
 valsIndicesToVMSet vals = foldl Set.union Set.empty $ map valIndicesToVMSet vals
 
 
 valIndicesToVMSet :: Value -> Set VarMarker
-valIndicesToVMSet (Array s v) = valToVMSet' v
+valIndicesToVMSet (Array s v) = valToVMSet v
 valIndicesToVMSet (Scoped scp v) = Set.map (setScope scp) $ valIndicesToVMSet v
 valIndicesToVMSet _ = Set.empty
 
-valToVMSet' (Symbol s) = Set.singleton $ VarMarker s Transforms.Single []
-valToVMSet' (Array s _) = Set.singleton $ VarMarker s (Transforms.Array 0) []
-valToVMSet' yada@(Scoped scp v) = Set.map (setScope scp) $ valToVMSet' v
-valToVMSet' RAX  = Set.singleton $ Precolored CRAX
-valToVMSet' RBX  = Set.singleton $ Precolored CRBX
-valToVMSet' RCX  = Set.singleton $ Precolored CRCX
-valToVMSet' RDX  = Set.singleton $ Precolored CRDX
-valToVMSet' RSP  = Set.singleton $ Precolored CRSP
-valToVMSet' RBP  = Set.singleton $ Precolored CRBP
-valToVMSet' RSI  = Set.singleton $ Precolored CRSI
-valToVMSet' RDI  = Set.singleton $ Precolored CRDI
-valToVMSet' R8  = Set.singleton $ Precolored CR8
-valToVMSet' R9  = Set.singleton $ Precolored CR9
-valToVMSet' R10  = Set.singleton $ Precolored CR10
-valToVMSet' R11  = Set.singleton $ Precolored CR11
-valToVMSet' R12  = Set.singleton $ Precolored CR12
-valToVMSet' R13  = Set.singleton $ Precolored CR13
-valToVMSet' R14  = Set.singleton $ Precolored CR14
-valToVMSet' R15  = Set.singleton $ Precolored CR15
-valToVMSet' _ = Set.empty
+maybeValToVM (Symbol s) = Just $ VarMarker s Transforms.Single []
+maybeValToVM (Array s _) = Just $ VarMarker s (Transforms.Array 0) []
+maybeValToVM yada@(Scoped scp v) = liftM (setScope scp) $ maybeValToVM v
+maybeValToVM RAX  = Just $ Precolored CRAX
+maybeValToVM RBX  = Just $ Precolored CRBX
+maybeValToVM RCX  = Just $ Precolored CRCX
+maybeValToVM RDX  = Just $ Precolored CRDX
+maybeValToVM RSP  = Just $ Precolored CRSP
+maybeValToVM RBP  = Just $ Precolored CRBP
+maybeValToVM RSI  = Just $ Precolored CRSI
+maybeValToVM RDI  = Just $ Precolored CRDI
+maybeValToVM R8  = Just $ Precolored CR8
+maybeValToVM R9  = Just $ Precolored CR9
+maybeValToVM R10  = Just $ Precolored CR10
+maybeValToVM R11  = Just $ Precolored CR11
+maybeValToVM R12  = Just $ Precolored CR12
+maybeValToVM R13  = Just $ Precolored CR13
+maybeValToVM R14  = Just $ Precolored CR14
+maybeValToVM R15  = Just $ Precolored CR15
+maybeValToVM _ = Nothing
 
 valsToVMSet :: [Value] -> Set VarMarker
 valsToVMSet vals = foldl Set.union Set.empty $ map valToVMSet vals
