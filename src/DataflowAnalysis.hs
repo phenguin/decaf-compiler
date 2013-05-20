@@ -396,7 +396,6 @@ varsDefinedInProtoStmt stmt = case stmt of
     Sub' _ v -> valToVMSet v -- TODO: Check semantics
     Mul' _ v -> valToVMSet v
     Not' v -> valToVMSet v
-    Pop' v -> valToVMSet v
     CMove' _ v -> valToVMSet v
     CMovne' _ v -> valToVMSet v
     CMovg' _ v -> valToVMSet v

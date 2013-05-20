@@ -237,17 +237,36 @@ instance LastNode ProtoBranch where
 mkTemp :: Integer -> Value
 mkTemp i = (Scoped [Temp] (Symbol $ "t" ++ show i))
 
-freshTemp :: UniqStringEnv Value
-freshTemp = freshTemp' >> lastTemp
-freshTemp' = do
-    temp <- getUniqString "t"
-    return (Scoped [Temp] (Symbol $ temp ))
+-- freshTemp :: UniqStringEnv Value
+-- freshTemp = freshTemp' >> lastTemp
+-- freshTemp' = do
+--     i <- M.findWithDefault 0 "t" uMap
+--     return (Scoped [Temp] (Symbol $ temp ))
 
-lastTemp :: UniqStringEnv Value
-lastTemp = do
+type Uniq a = UniqCounter a
+
+fresh :: Uniq Integer
+fresh = fresh' >> peek
+fresh' = do
     uMap <- get
-    let i = M.findWithDefault 0 "t" uMap
-    return $ mkTemp i
+    let i = M.findWithDefault 0 0 uMap
+    modify (M.insert 0 (i+1))
+    return (i `mod` 1)
+
+freshTemp = liftM mkTemp fresh
+lastTemp = liftM mkTemp peek
+
+peek :: Uniq Integer
+peek = do
+    uMap <- get
+    let i = M.findWithDefault 0 0 uMap
+    return (i `mod` 1)
+
+-- lastTemp :: UniqCounter Value
+-- lastTemp = do
+--     uMap <- get
+--     let i = M.findWithDefault 0 "t" uMap
+--     return $ mkTemp i
 
 type LowCFG = LGraph ProtoASM ProtoBranch
 
@@ -255,7 +274,7 @@ type LowCFG = LGraph ProtoASM ProtoBranch
 toLowIRCFG cfg = removeUniqEnv $ mapLGraphNodesM mapStmtToAsm mapBranchToAsm cfg
 
 -- Converts regular statements to the pseudo-asm code
-mapStmtToAsm ::BlockId -> Statement -> UniqStringEnv [ProtoASM]
+mapStmtToAsm ::BlockId -> Statement -> UniqCounter [ProtoASM]
 mapStmtToAsm bid x = case x of
         (Set var expr) -> do
             exprAsm <- mapExprToAsm expr
@@ -290,7 +309,7 @@ mapStmtToAsm bid x = case x of
 --	 handleContinue (LastOther (WhileBranch _ b1 b2)) = [(Jmp' b2)]
 --	 handleContinue (LastOther (Jump b1)) = [(Jmp' b1)]
 
-mapVarToValue :: Variable -> UniqStringEnv [ProtoASM]
+mapVarToValue :: Variable -> UniqCounter [ProtoASM]
 mapVarToValue (Var str) = lastTemp >>= (\res -> freshTemp >> return [Mov' res (Symbol str)])
 mapVarToValue (Varray str expr) = do  
         res1 <- lastTemp
@@ -308,7 +327,7 @@ mapVarToValue (Scopedvar scp (Varray str expr)) = do
 
 mapVarToValue x = Debug.Trace.trace ("!!VAR!" ++ (show x)) $ return [Mov' (Symbol "OHFUCK") (Symbol "ERROR")]
 
-mapExprToAsm::Expression -> UniqStringEnv [ProtoASM]
+mapExprToAsm::Expression -> UniqCounter [ProtoASM]
 mapExprToAsm xet = case xet of
                 (Sub x y)       -> binop (Sub') y x
                 (Add x y)       -> binop (Add') x y
@@ -414,7 +433,7 @@ mapExprToAsm xet = case xet of
                                                         Mov' tmp1 RAX,
                                                         Mov' tmp2 RDX ]
 
-protoMethodCall:: Expression -> UniqStringEnv [ProtoASM]
+protoMethodCall:: Expression -> UniqCounter [ProtoASM]
 protoMethodCall (FuncCall name midParam) = do
     params <- makeparam midParam 0
     return $ save
@@ -463,7 +482,7 @@ protoMethodCall (FuncCall name midParam) = do
 -- -- possibly some additional preamble.  probably will want to return
 -- -- ([], BranchSeq <stuff>)
 
-mapBranchToAsm :: BlockId-> ZLast BranchingStatement -> UniqStringEnv (([ProtoASM],[ProtoASM]), ZLast ProtoBranch)
+mapBranchToAsm :: BlockId-> ZLast BranchingStatement -> UniqCounter (([ProtoASM],[ProtoASM]), ZLast ProtoBranch)
 mapBranchToAsm bid (LastOther (IfBranch expr bid1 bid2))  
 	= do
         expressed <- mapExprToAsm expr

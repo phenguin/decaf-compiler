@@ -212,14 +212,14 @@ computeIGfromLowIRNode (Right m, liveVars') = case m of
                                   if colorableValue v
                                   then Set.map (\vm' -> (vtm, makeVertex vm')) $ 
                                                              Set.filter (not . (flip Set.member vm)) $
-                                                             Set.filter (not . (flip Set.member vtm)) $
+                                                             Set.filter (not . (== vtm)) $
                                                              relevantVarNames
                                   else
                                   interferingEdges
                     _ -> interferingEdges
                 where vtm = valToVMSet' vt
                       interferingEdges = Set.map (\vm' -> (vtm, makeVertex vm')) $ 
-                                                      Set.filter (not . (flip Set.member vtm)) $
+                                                      Set.filter (not . (== vtm)) $
                                                                           relevantVarNames
                                                                                                                                        
                       
@@ -336,7 +336,7 @@ mkSpillTemp (VarMarker name _ scp) i = Scoped [Temp] (Symbol $ vmStr ++ "_" ++ s
           vmStr = scpStr scp ++ name
 
 updateForSpill :: LGraph ProtoASM ProtoBranch -> (VarMarker, MemLoc) -> State (Int,Int) (LGraph ProtoASM ProtoBranch)
-updateForSpill graph (spillVM, BasePtrOffset i) = res
+updateForSpill graph (spillVM, BasePtrOffset i) = trace ("spill: " ++ pPrint spillVM) $ res
     where isDec (Dec' _) = True
           isDec _ = False
           mMapM = \_ asm -> case asm `usesVariable` spillVM && (not . isDec) asm of
@@ -428,7 +428,7 @@ simplify spillHeuristic ig = runState (simplify' spillHeuristic ig) []
 
 -- TODO: Optimize this later if you have time..
 simplify' :: (IGNode a, Ord b, PrettyPrint a) => (InterferenceGraph a -> IGVertex a -> b) -> InterferenceGraph a -> State [IGVertex a] (InterferenceGraph a)
-simplify' spillHeuristic ig@(IG vertices iEdges pEdges) = case Set.null (Set.filter (not . precolored) vertices) of
+simplify' spillHeuristic ig@(IG vertices iEdges pEdges) = trace (pPrint ig) $ case Set.null (Set.filter (not . precolored) vertices) of
     -- If empty.. nothing to do.. proceed to coloring
     True -> return ig
     -- Otherwise.. remove chosen vertex and do it again

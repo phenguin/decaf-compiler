@@ -179,7 +179,7 @@ assembleTree configuration input = do
 --  let optimizedMidCfg = runChosenMidIROpts scopedcfg
   let lowIRCfg = toLowIRCFG midcfg -- optimizedMidCfg
  -- let optimizedLowCfg = runChosenLowIROpts lowIRCfg
-  let lowCfgRegAllocated = doRegisterAllocation lowIRCfg --optimizedLowCfg
+  let lowCfgRegAllocated = trace (pPrint lowIRCfg) $ doRegisterAllocation lowIRCfg --optimizedLowCfg
   let (prolog, asm, epilog) = navigate globals funmap lowCfgRegAllocated
   let ioFuncSeq = case outputFileName configuration of
                     Nothing -> repeat putStrLn
